@@ -22,29 +22,23 @@ ITOps Agent Platform is an enterprise-grade IT operations automation platform wh
 
 ### Backend API Server
 ```bash
-# Latest tag
-docker pull registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:itops-backend-latest
-
-# Versioned tag
+# Versioned tag (Recommended)
 docker pull registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:itops-backend-v3.0.1
 ```
 
 ### Frontend Web UI
 ```bash
-# Latest tag
-docker pull registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:itops-frontend-latest
-
-# Versioned tag
+# Versioned tag (Recommended)
 docker pull registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:itops-frontend-v3.0.1
 ```
 
 ### Simplified Version (Lightweight)
 ```bash
 # Backend simplified version
-docker pull registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:backend-simple-latest
+docker pull registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:backend-simple-v3.0.1
 
 # Frontend (same as standard)
-docker pull registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:itops-frontend-latest
+docker pull registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:itops-frontend-v3.0.1
 ```
 
 ## 🚀 Quick Start
@@ -139,18 +133,18 @@ docker run -d \
 
 ## 📚 Documentation
 
-- **Full Documentation:** [GitHub Repository](https://github.com/your-org/ITOpsAgent)
-- **API Reference:** [API Docs](https://github.com/your-org/ITOpsAgent/blob/main/docs/API.md)
-- **Deployment Guide:** [Deployment Guide](https://github.com/your-org/ITOpsAgent/blob/main/DEPLOYMENT.md)
-- **Quick Deployment:** [Quick Deployment](https://github.com/your-org/ITOpsAgent/blob/main/QUICK_DEPLOY.md)
-- **Architecture:** [Architecture Docs](https://github.com/your-org/ITOpsAgent/blob/main/docs/ARCHITECTURE.md)
-- **Development Guide:** [Development Guide](https://github.com/your-org/ITOpsAgent/blob/main/docs/DEVELOPMENT.md)
+- **Full Documentation:** [GitHub Repository](https://github.com/qinshihu/itops-agent-platform)
+- **API Reference:** [API Docs](https://github.com/qinshihu/itops-agent-platform/blob/main/docs/API.md)
+- **Deployment Guide:** [Deployment Guide](https://github.com/qinshihu/itops-agent-platform/blob/main/DEPLOYMENT.md)
+- **Quick Deployment:** [Quick Deployment](https://github.com/qinshihu/itops-agent-platform/blob/main/QUICK_DEPLOY.md)
+- **Architecture:** [Architecture Docs](https://github.com/qinshihu/itops-agent-platform/blob/main/docs/ARCHITECTURE.md)
+- **Development Guide:** [Development Guide](https://github.com/qinshihu/itops-agent-platform/blob/main/docs/DEVELOPMENT.md)
 
 ## 🔧 Building from Source
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/ITOpsAgent.git
+git clone https://github.com/qinshihu/itops-agent-platform.git
 cd ITOpsAgent
 
 # Build images (standard version)

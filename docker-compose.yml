@@ -13,8 +13,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.backend
-    # For using pre-built images from registry (uncomment and replace with your registry):
-    # image: your-username/itops-backend:latest
+    # For using pre-built images from registry (uncomment):
+    # image: registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:itops-backend-v3.0.1
     container_name: itops-backend
     networks:
       - itops-network
@@ -57,8 +57,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.frontend
-    # For using pre-built images from registry (uncomment and replace with your registry):
-    # image: your-username/itops-frontend:latest
+    # For using pre-built images from registry (uncomment):
+    # image: registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:itops-frontend-v3.0.1
     container_name: itops-frontend
     networks:
       - itops-network
