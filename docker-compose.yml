@@ -14,7 +14,7 @@ services:
     #   context: .
     #   dockerfile: docker/Dockerfile.backend
     # For using pre-built images from registry:
-    image: registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:IT_Onlin-ITOps-backend-v3.0.2
+    image: registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:IT_Onlin-ITOps-backend-v3.0.3
     container_name: itops-backend
     networks:
       - itops-network
@@ -64,7 +64,7 @@ services:
     #   context: .
     #   dockerfile: docker/Dockerfile.frontend
     # For using pre-built images from registry:
-    image: registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:IT_Onlin-ITOps-frontend-v3.0.2
+    image: registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:IT_Onlin-ITOps-frontend-v3.0.3
     container_name: itops-frontend
     networks:
       - itops-network

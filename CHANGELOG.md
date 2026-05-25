@@ -4,6 +4,29 @@
 
 ## [Unreleased]
 
+## [3.0.3] — 2026-05-25
+
+### CI/CD 流水线
+- 新增完整的 GitHub Actions CI/CD 流水线
+- `release.yml`：推送 tag 自动构建 Docker 多架构镜像（amd64 + arm64）并推送阿里云
+- 每个版本同时推送 3 个标签：版本号 / latest / Git SHA
+- `mirror.yml`：Push 到 main 自动同步代码到 Gitee/Gitcode
+- `ci.yml`：Push/PR 自动触发 Lint + TypeScript 检查 + 测试 + Docker 构建验证
+- Quality Gates 使用 `continue-on-error`，测试失败不阻塞镜像构建
+- Build 任务使用 `if: always()` 确保不受 Quality Gates 影响
+- npm 缓存使用 `cache-dependency-path` 指向正确的 lock 文件位置
+
+### 镜像命名规则
+- 后端：`IT_Onlin-ITOps-backend-{version}` / `backend-latest` / `backend-{git SHA}`
+- 前端：`IT_Onlin-ITOps-frontend-{version}` / `frontend-latest` / `frontend-{git SHA}`
+- 仓库地址：`registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub`
+
+### 文档更新
+- `docker-compose.yml` 默认镜像地址更新到最新版本
+- README.md、QUICK_DEPLOY.md、docker/README.md 同步更新
+- CHANGELOG.md 记录 CI/CD 配置变更
+- 新增 `docs/CICD_SETUP.md` 完整配置指南
+
 ## [3.0.2] — 2026-05-25
 
 ### 安全加固
