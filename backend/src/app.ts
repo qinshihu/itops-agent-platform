@@ -52,6 +52,8 @@ import { logger } from './utils/logger';
 import { initTokenBlacklist } from './services/tokenBlacklist';
 import { healthService } from './services/healthService';
 import { backupService } from './services/backupService';
+import { setServerInstances } from './services/restartService';
+import importExportRouter from './routes/importExportRoutes';
 
 const app = express();
 const httpServer = createServer(app);
@@ -60,8 +62,13 @@ const io = new SocketIOServer(httpServer, {
   cors: {
     origin: env.ALLOWED_ORIGINS,
     methods: ['GET', 'POST']
-  }
+  },
+  maxHttpBufferSize: 1e6, // 1MB max message size to prevent memory exhaustion
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
+
+setServerInstances(httpServer, io);
 
 app.use(helmet());
 app.use(traceMiddleware);
@@ -161,6 +168,7 @@ app.use('/api/remediation-executions', rateLimiter, remediationExecutionRoutes);
 app.use('/api/backups', rateLimiter, backupRoutes);
 app.use('/api/database', rateLimiter, databaseRoutes);
 app.use('/api/knowledge/qanything', rateLimiter, knowledgeQAnythingRoutes);
+app.use('/api/import-export', rateLimiter, importExportRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

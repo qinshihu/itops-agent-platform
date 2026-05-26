@@ -3,7 +3,7 @@ import db from '../models/database';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { createAuditLog } from '../services/auditService';
-import { requireRole, authenticateToken } from '../middleware/auth';
+import { requireRole, authenticateToken, invalidateUserCache } from '../middleware/auth';
 
 const router = Router();
 
@@ -114,6 +114,8 @@ router.put('/:id', requireRole('admin'), async (req: Request, res: Response) => 
       params.push(new Date().toISOString(), id);
       
       db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+      
+      invalidateUserCache(id);
     }
     
     const reqUser = (req as { user?: { id: string } }).user;
@@ -141,6 +143,8 @@ router.delete('/:id', requireRole('admin'), (req: Request, res: Response) => {
     }
     
     db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    
+    invalidateUserCache(id);
     
     const reqUser = (req as { user?: { id: string } }).user;
     createAuditLog({

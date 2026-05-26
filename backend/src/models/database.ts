@@ -45,8 +45,8 @@ db.pragma('foreign_keys = ON');
 // 3. 忙等待超时 - 避免锁竞争时立即失败，等待5秒
 db.pragma('busy_timeout = 5000');
 
-// 4. 同步模式 - NORMAL平衡性能和安全性
-db.pragma('synchronous = NORMAL');
+// 4. 同步模式 - FULL确保断电/崩溃时事务不丢失（生产环境推荐）
+db.pragma('synchronous = FULL');
 
 // 5. 临时表存储 - 使用内存提升排序/临时查询性能
 db.pragma('temp_store = MEMORY');

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Clock, User, Database, FileText, Eye, Search } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../lib/api';
+import { ImportExport } from '../components/ImportExport';
 
 interface AuditLog {
   id: string;

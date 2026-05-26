@@ -47,8 +47,14 @@ class QAnythingService {
    * 获取标准化后的 apiBase（去除末尾斜杠）
    */
   private normalizeApiBase(apiBase: string): string {
-    if (!apiBase) throw new Error('API base URL is not configured');
-    return apiBase.replace(/\/+$/, '');
+    if (!apiBase || !apiBase.trim()) {
+      throw new Error('API base URL is not configured. Please configure it in Settings.');
+    }
+    const normalized = apiBase.trim().replace(/\/+$/, '');
+    if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+      throw new Error(`Invalid API base URL: "${apiBase}". Must start with http:// or https://`);
+    }
+    return normalized;
   }
 
   /**
@@ -75,7 +81,19 @@ class QAnythingService {
   }
 
   /**
-   * 查询知识库
+   * 检查 API Key 是否有效（非脱敏值）
+   */
+  private isApiKeyValid(apiKey: string): boolean {
+    if (!apiKey || apiKey.length === 0) return false;
+    // 脱敏值通常包含 **** 或 ... 模式
+    if (apiKey.includes('****') || apiKey.includes('...')) return false;
+    // 太短的值也不可能是有效 Key
+    if (apiKey.length < 8) return false;
+    return true;
+  }
+
+  /**
+   * 查询知识库（带重试机制）
    * @param question 用户问题
    * @param topK 返回的最多相关片段数
    * @returns 检索到的相关知识内容
@@ -86,70 +104,95 @@ class QAnythingService {
       throw new Error('QAnything is not enabled');
     }
 
+    if (!this.isApiKeyValid(config.apiKey)) {
+      logger.warn('⚠️ QAnything API Key is invalid or masked, falling back to local knowledge base');
+      throw new Error('QAnything API Key is not properly configured');
+    }
+
     const k = topK || config.topK || 5;
     const apiBase = this.normalizeApiBase(config.apiBase);
 
-    try {
-      logger.info(`🔍 Querying QAnything knowledge base: ${question.substring(0, Math.min(question.length, 100))}`);
+    const maxRetries = 2;
+    let lastError: Error | null = null;
 
-      const response = await axios.post(
-        `${apiBase}/api/local_doc_qa/local_doc_chat`,
-        {
-          user_id: 'itops_agent',
-          kb_ids: [config.kbId],
-          question,
-          top_k: k
-        },
-        {
-          headers: {
-            'Authorization': config.apiKey,
-            'Content-Type': 'application/json'
+    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+      try {
+        if (attempt > 1) {
+          const delay = Math.pow(2, attempt - 1) * 1000;
+          logger.info(`🔄 QAnything query retry ${attempt - 1}/${maxRetries}, waiting ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+        logger.info(`🔍 Querying QAnything knowledge base: ${question.substring(0, Math.min(question.length, 100))}`);
+
+        const response = await axios.post(
+          `${apiBase}/api/local_doc_qa/local_doc_chat`,
+          {
+            user_id: 'itops_agent',
+            kb_ids: [config.kbId],
+            question,
+            top_k: k
           },
-          timeout: 30000
-        }
-      );
+          {
+            headers: {
+              'Authorization': config.apiKey,
+              'Content-Type': 'application/json'
+            },
+            timeout: 30000
+          }
+        );
 
-      if (response.data.code !== 200) {
-        throw new Error(`QAnything API error: ${response.data.msg || response.data.message || 'Unknown error'}`);
+        if (response.data.code !== 200) {
+          throw new Error(`QAnything API error: ${response.data.msg || response.data.message || 'Unknown error'}`);
+        }
+
+        // 提取检索结果
+        const data = response.data.data;
+        let context = '';
+
+        if (data && data.response) {
+          // 处理字符串响应
+          if (typeof data.response === 'string') {
+            context = data.response.trim();
+          }
+          // 处理数组响应（chunks）
+          else if (Array.isArray(data.response)) {
+            const chunks = data.response.map((chunk: any) => {
+              if (typeof chunk === 'string') return chunk.trim();
+              const content = chunk.content || chunk.text || '';
+              return typeof content === 'string' ? content.trim() : '';
+            }).filter(Boolean);
+            context = chunks.join('\n\n');
+          }
+          // 处理对象响应 - 避免 JSON.stringify 输出无用内容
+          else if (typeof data.response === 'object') {
+            const textContent = data.response.content || data.response.text || '';
+            context = typeof textContent === 'string' ? textContent.trim() : '';
+          }
+        }
+
+        if (!context) {
+          logger.info('📭 No relevant knowledge found in QAnything');
+          return '';
+        }
+
+        logger.info(`📚 Found relevant knowledge from QAnything (length: ${context.length})`);
+        return context;
+
+      } catch (error: any) {
+        lastError = error;
+        logger.error(`❌ QAnything query attempt ${attempt} failed: ${error.message}`);
+        
+        // 如果是认证错误或配置错误，不重试
+        if (error.message.includes('API Key') || 
+            error.message.includes('not configured') ||
+            error.message.includes('not properly configured')) {
+          throw error;
+        }
       }
-
-      // 提取检索结果
-      const data = response.data.data;
-      let context = '';
-
-      if (data && data.response) {
-        // 处理字符串响应
-        if (typeof data.response === 'string') {
-          context = data.response.trim();
-        }
-        // 处理数组响应（chunks）
-        else if (Array.isArray(data.response)) {
-          const chunks = data.response.map((chunk: any) => {
-            if (typeof chunk === 'string') return chunk.trim();
-            const content = chunk.content || chunk.text || '';
-            return typeof content === 'string' ? content.trim() : '';
-          }).filter(Boolean);
-          context = chunks.join('\n\n');
-        }
-        // 处理对象响应 - 避免 JSON.stringify 输出无用内容
-        else if (typeof data.response === 'object') {
-          const textContent = data.response.content || data.response.text || '';
-          context = typeof textContent === 'string' ? textContent.trim() : '';
-        }
-      }
-
-      if (!context) {
-        logger.info('📭 No relevant knowledge found in QAnything');
-        return '';
-      }
-
-      logger.info(`📚 Found relevant knowledge from QAnything (length: ${context.length})`);
-      return context;
-
-    } catch (error: any) {
-      logger.error('❌ QAnything query failed:', error.message);
-      throw error;
     }
+
+    throw lastError || new Error('QAnything query failed after retries');
   }
 
   /**
@@ -162,6 +205,10 @@ class QAnythingService {
     const config = this.getConfig();
     if (!config || !config.enabled) {
       throw new Error('QAnything is not enabled');
+    }
+
+    if (!this.isApiKeyValid(config.apiKey)) {
+      throw new Error('QAnything API Key is not properly configured');
     }
 
     try {

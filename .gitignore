@@ -58,3 +58,5 @@ Thumbs.db
 
 # Publishing / Marketing (keep local, not in repo)
 docs/WECHAT_ARTICLE.md
+docs/项目全面审查报告*
+local-dev/*

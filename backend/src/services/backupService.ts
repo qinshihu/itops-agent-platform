@@ -7,6 +7,7 @@ import Database from 'better-sqlite3';
 import db from '../models/database';
 import { logger } from '../utils/logger';
 import { env } from '../utils/env';
+import { gracefulRestart } from './restartService';
 
 async function runGzip(src: string, dest: string): Promise<void> {
   const srcStream = fs.createReadStream(src);
@@ -368,7 +369,16 @@ export class BackupService {
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   }
 
-  async restoreBackup(backupId: string): Promise<boolean> {
+  private isRestoring = false;
+
+  async restoreBackup(backupId: string): Promise<{ success: boolean; requiresRestart?: boolean; message?: string }> {
+    if (this.isRunning) {
+      throw new Error('Cannot restore while backup is in progress');
+    }
+    if (this.isRestoring) {
+      throw new Error('Restore already in progress');
+    }
+
     const backup = this.backupHistory.find(b => b.id === backupId);
     if (!backup) {
       throw new Error('Backup not found');
@@ -378,8 +388,10 @@ export class BackupService {
       throw new Error('Backup file not found on disk');
     }
 
+    this.isRestoring = true;
     let restorePath = backup.filePath;
     let tempDbPath: string | null = null;
+    const dbPath = env.DATABASE_PATH;
 
     try {
       if (backup.filePath.endsWith('.gz')) {
@@ -400,14 +412,31 @@ export class BackupService {
         throw new Error(`Backup integrity check failed: ${integrity[0]?.integrity_check}`);
       }
 
-      db.backup(restorePath);
+      const walPath = `${dbPath}-wal`;
+      const shmPath = `${dbPath}-shm`;
+      const backupPath = `${dbPath}.pre-restore-${Date.now()}`;
 
-      logger.info('Backup restored successfully', { backupId, backupFile: backup.filename });
-      return true;
+      logger.info('⚠️ Backing up current database before restore...');
+      fs.copyFileSync(dbPath, backupPath);
+      if (fs.existsSync(walPath)) fs.copyFileSync(walPath, `${backupPath}-wal`);
+      if (fs.existsSync(shmPath)) fs.copyFileSync(shmPath, `${backupPath}-shm`);
+      logger.info(`📦 Current database backed up to: ${backupPath}`);
+
+      fs.copyFileSync(restorePath, dbPath);
+      if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+      if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+      logger.info('✅ Database file restored from backup');
+
+      logger.info('🔄 Database restored successfully. Starting graceful restart...');
+      setTimeout(() => {
+        gracefulRestart();
+      }, 1000);
+      return { success: true, requiresRestart: true, message: '数据库已恢复，系统将在1秒后自动重启' };
     } finally {
       if (tempDbPath && fs.existsSync(tempDbPath)) {
         fs.unlinkSync(tempDbPath);
       }
+      this.isRestoring = false;
     }
   }
 

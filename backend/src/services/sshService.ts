@@ -30,6 +30,273 @@ export interface CommandResult {
 const DEFAULT_CONNECT_TIMEOUT = 10000;
 const DEFAULT_COMMAND_TIMEOUT = 30000;
 
+// 连接池配置
+const POOL_CONFIG = {
+  maxConnectionsPerServer: 5, // 每台服务器最大连接数
+  idleTimeout: 300000, // 空闲连接超时 5 分钟
+  healthCheckInterval: 60000, // 健康检查间隔 1 分钟
+  maxTotalConnections: 50 // 全局最大连接数
+};
+
+interface PooledConnection {
+  client: Client;
+  serverId: string;
+  createdAt: number;
+  lastUsedAt: number;
+  inUse: boolean;
+  healthCheckFailed: number;
+}
+
+// SSH 连接池管理类
+class SSHConnectionPool {
+  private pool: Map<string, PooledConnection[]> = new Map();
+  private totalConnections = 0;
+  private healthCheckTimer: NodeJS.Timeout | null = null;
+
+  constructor() {
+    this.startHealthCheck();
+    this.setupCleanupOnShutdown();
+  }
+
+  private setupCleanupOnShutdown(): void {
+    const cleanup = () => {
+      this.closeAllConnections();
+      if (this.healthCheckTimer) {
+        clearInterval(this.healthCheckTimer);
+      }
+    };
+
+    process.on('SIGTERM', cleanup);
+    process.on('SIGINT', cleanup);
+    process.on('beforeExit', cleanup);
+  }
+
+  private startHealthCheck(): void {
+    this.healthCheckTimer = setInterval(() => {
+      this.performHealthCheck();
+    }, POOL_CONFIG.healthCheckInterval);
+  }
+
+  private performHealthCheck(): void {
+    const now = Date.now();
+    
+    for (const [serverId, connections] of this.pool.entries()) {
+      for (let i = connections.length - 1; i >= 0; i--) {
+        const conn = connections[i];
+        
+        // 清理空闲超时连接
+        if (!conn.inUse && (now - conn.lastUsedAt) > POOL_CONFIG.idleTimeout) {
+          logger.debug(`🗑️ Closing idle SSH connection for server ${serverId}`);
+          this.closeConnection(conn);
+          connections.splice(i, 1);
+          this.totalConnections--;
+          continue;
+        }
+
+        // 健康检查：如果连续失败多次，关闭连接
+        if (conn.healthCheckFailed >= 3) {
+          logger.warn(`⚠️ Closing unhealthy SSH connection for server ${serverId}`);
+          this.closeConnection(conn);
+          connections.splice(i, 1);
+          this.totalConnections--;
+        }
+      }
+
+      // 清理空数组
+      if (connections.length === 0) {
+        this.pool.delete(serverId);
+      }
+    }
+  }
+
+  private closeConnection(conn: PooledConnection): void {
+    try {
+      conn.client.end();
+    } catch {
+      // Connection may already be closed
+    }
+  }
+
+  private closeAllConnections(): void {
+    for (const connections of this.pool.values()) {
+      for (const conn of connections) {
+        this.closeConnection(conn);
+      }
+    }
+    this.pool.clear();
+    this.totalConnections = 0;
+    logger.info('🔌 All SSH connections closed');
+  }
+
+  private getConnectionKey(serverId: string, hostname: string, port: number, username: string): string {
+    return `${serverId}:${hostname}:${port}:${username}`;
+  }
+
+  async acquire(serverId: string): Promise<Client> {
+    const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(serverId) as ServerInfo;
+    if (!server) {
+      throw new Error('Server not found');
+    }
+
+    const key = this.getConnectionKey(serverId, server.hostname, server.port || 22, server.username);
+    const connections = this.pool.get(key) || [];
+
+    // 查找可用的空闲连接
+    for (const conn of connections) {
+      if (!conn.inUse) {
+        conn.inUse = true;
+        conn.lastUsedAt = Date.now();
+        logger.debug(`♻️ Reusing SSH connection for server ${serverId}`);
+        return conn.client;
+      }
+    }
+
+    // 检查是否超过限制
+    if (this.totalConnections >= POOL_CONFIG.maxTotalConnections) {
+      throw new Error('SSH connection pool exhausted. Total connections: ' + this.totalConnections);
+    }
+
+    const serverConnections = this.pool.get(key) || [];
+    if (serverConnections.length >= POOL_CONFIG.maxConnectionsPerServer) {
+      throw new Error(`Max connections reached for server ${serverId} (${POOL_CONFIG.maxConnectionsPerServer})`);
+    }
+
+    // 创建新连接
+    logger.debug(`🔌 Creating new SSH connection for server ${serverId}`);
+    const newClient = await this.createConnection(server, serverId);
+    
+    const pooledConn: PooledConnection = {
+      client: newClient,
+      serverId,
+      createdAt: Date.now(),
+      lastUsedAt: Date.now(),
+      inUse: true,
+      healthCheckFailed: 0
+    };
+
+    if (!this.pool.has(key)) {
+      this.pool.set(key, []);
+    }
+    this.pool.get(key)!.push(pooledConn);
+    this.totalConnections++;
+
+    return newClient;
+  }
+
+  release(client: Client, success: boolean = true): void {
+    for (const connections of this.pool.values()) {
+      for (const conn of connections) {
+        if (conn.client === client) {
+          conn.inUse = false;
+          conn.lastUsedAt = Date.now();
+          
+          if (!success) {
+            conn.healthCheckFailed++;
+          } else {
+            conn.healthCheckFailed = 0;
+          }
+          
+          return;
+        }
+      }
+    }
+  }
+
+  private async createConnection(server: ServerInfo, serverId: string): Promise<Client> {
+    const decryptedPassword = server.password ? decrypt(server.password) : undefined;
+    const decryptedPrivateKey = server.private_key ? decrypt(server.private_key) : undefined;
+
+    return new Promise((resolve, reject) => {
+      const conn = new Client();
+      let connectTimeout: NodeJS.Timeout | null = null;
+      let isResolved = false;
+
+      const safeResolve = (client: Client) => {
+        if (!isResolved) {
+          isResolved = true;
+          if (connectTimeout) clearTimeout(connectTimeout);
+          resolve(client);
+        }
+      };
+
+      const safeReject = (error: Error) => {
+        if (!isResolved) {
+          isResolved = true;
+          if (connectTimeout) clearTimeout(connectTimeout);
+          try {
+            conn.end();
+          } catch {
+            // Connection may not be established
+          }
+          reject(error);
+        }
+      };
+
+      connectTimeout = setTimeout(() => {
+        safeReject(new Error('SSH connection timeout'));
+      }, DEFAULT_CONNECT_TIMEOUT);
+
+      conn.on('ready', () => {
+        logger.debug(`✅ SSH connection established to ${server.hostname}:${server.port || 22}`);
+        safeResolve(conn);
+      }).on('error', (err) => {
+        safeReject(new Error(`SSH connection error: ${err.message}`));
+      }).on('timeout', () => {
+        safeReject(new Error('SSH connection timeout'));
+      });
+
+      const connectConfig: Record<string, unknown> = {
+        host: server.hostname,
+        port: server.port || 22,
+        username: server.username,
+        readyTimeout: DEFAULT_CONNECT_TIMEOUT,
+        keepaliveInterval: 10000,
+        keepaliveCountMax: 3
+      };
+
+      if (server.use_ssh_key && decryptedPrivateKey) {
+        connectConfig.privateKey = decryptedPrivateKey;
+      } else if (decryptedPassword) {
+        connectConfig.password = decryptedPassword;
+      } else {
+        safeReject(new Error('No authentication method configured'));
+        return;
+      }
+
+      conn.connect(connectConfig);
+    });
+  }
+
+  getPoolStats(): { total: number; inUse: number; idle: number; byServer: Record<string, number> } {
+    let total = 0;
+    let inUse = 0;
+    let idle = 0;
+    const byServer: Record<string, number> = {};
+
+    for (const [key, connections] of this.pool.entries()) {
+      const serverId = key.split(':')[0];
+      byServer[serverId] = (byServer[serverId] || 0) + connections.length;
+      
+      for (const conn of connections) {
+        total++;
+        if (conn.inUse) {
+          inUse++;
+        } else {
+          idle++;
+        }
+      }
+    }
+
+    return { total, inUse, idle, byServer };
+  }
+}
+
+// 全局连接池实例
+const sshPool = new SSHConnectionPool();
+
+// 导出连接池供外部使用（如监控、管理）
+export { sshPool };
+
 // 预定义的合规检查
 const complianceCheckList = [
   { name: 'CPU Usage', command: 'top -bn1 | head -20' },
@@ -90,155 +357,93 @@ export async function executeCommand(
   const startTime = Date.now();
   const timeout = options.timeout || DEFAULT_COMMAND_TIMEOUT;
   const logHistory = options.logHistory !== false;
-  
-  try {
-    const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(serverId) as ServerInfo;
-    if (!server) {
-      throw new Error('Server not found');
+  let conn: Client | null = null;
+  let connAcquired = false;
+
+  const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(serverId) as ServerInfo;
+  if (!server) {
+    const result: CommandResult = {
+      success: false,
+      stdout: '',
+      stderr: 'Server not found',
+      command,
+      duration: Date.now() - startTime
+    };
+    if (logHistory) {
+      logCommandHistory(serverId, command, result, options.executedBy || 'system');
     }
+    return result;
+  }
 
-    const decryptedPassword = server.password ? decrypt(server.password) : undefined;
-    const decryptedPrivateKey = server.private_key ? decrypt(server.private_key) : undefined;
+  try {
+    conn = await sshPool.acquire(serverId);
+    connAcquired = true;
 
-    return new Promise((resolve) => {
-      const conn = new Client();
+    const result = await new Promise<CommandResult>((resolve) => {
       let commandTimeout: NodeJS.Timeout | null = null;
       let isResolved = false;
       
-      const safeResolve = (result: CommandResult) => {
+      const safeResolve = (res: CommandResult) => {
         if (!isResolved) {
           isResolved = true;
-          cleanup();
-          handleResult(result);
+          if (commandTimeout) clearTimeout(commandTimeout);
+          resolve(res);
         }
       };
 
-      const cleanup = () => {
-        if (commandTimeout) {
-          clearTimeout(commandTimeout);
-          commandTimeout = null;
-        }
-      };
-
-      const handleResult = (result: CommandResult) => {
-        cleanup();
-        
-        if (logHistory) {
-          logCommandHistory(serverId, command, result, options.executedBy || 'system');
-        }
-        
-        if (result.success) {
-          updateLastConnected(serverId);
-        }
-        
-        resolve(result);
-      };
-
-      conn.on('ready', () => {
-        conn.exec(command, (err, stream) => {
-          if (err) {
-            conn.end();
-            safeResolve({
-              success: false,
-              stdout: '',
-              stderr: err.message,
-              command,
-              duration: Date.now() - startTime
-            });
-            return;
-          }
-
-          let stdout = '';
-          let stderr = '';
-
-          commandTimeout = setTimeout(() => {
-            try {
-              stream.destroy();
-            } catch {
-              // stream already destroyed
-            }
-            conn.end();
-            safeResolve({
-              success: false,
-              stdout: '',
-              stderr: 'Command timeout',
-              command,
-              duration: Date.now() - startTime
-            });
-          }, timeout);
-
-          stream.on('close', (code: number | null) => {
-            conn.end();
-            safeResolve({
-              success: code === 0,
-              stdout,
-              stderr,
-              command,
-              duration: Date.now() - startTime
-            });
-          }).on('data', (data: Buffer) => {
-            stdout += data.toString();
-          }).stderr.on('data', (data: Buffer) => {
-            stderr += data.toString();
-          }).on('error', (err) => {
-            stderr += `Stream error: ${err.message}\n`;
+      conn!.exec(command, (err, stream) => {
+        if (err) {
+          safeResolve({
+            success: false,
+            stdout: '',
+            stderr: err.message,
+            command,
+            duration: Date.now() - startTime
           });
-        });
-      }).on('error', (err) => {
-        try {
-          conn.end();
-        } catch {
-          // connection may not be established
+          return;
         }
-        safeResolve({
-          success: false,
-          stdout: '',
-          stderr: err.message,
-          command,
-          duration: Date.now() - startTime
-        });
-      }).on('timeout', () => {
-        try {
-          conn.end();
-        } catch {
-          // connection may not be established
-        }
-        safeResolve({
-          success: false,
-          stdout: '',
-          stderr: 'Connection timeout',
-          command,
-          duration: Date.now() - startTime
+
+        let stdout = '';
+        let stderr = '';
+
+        commandTimeout = setTimeout(() => {
+          try { stream.destroy(); } catch { /* ignore */ }
+          safeResolve({
+            success: false,
+            stdout: '',
+            stderr: 'Command timeout',
+            command,
+            duration: Date.now() - startTime
+          });
+        }, timeout);
+
+        stream.on('close', (code: number | null) => {
+          safeResolve({
+            success: code === 0,
+            stdout,
+            stderr,
+            command,
+            duration: Date.now() - startTime
+          });
+        }).on('data', (data: Buffer) => {
+          stdout += data.toString();
+        }).stderr.on('data', (data: Buffer) => {
+          stderr += data.toString();
+        }).on('error', (err) => {
+          stderr += `Stream error: ${err.message}\n`;
         });
       });
-
-      const connectConfig: Record<string, unknown> = {
-        host: server.hostname,
-        port: server.port || 22,
-        username: server.username,
-        readyTimeout: DEFAULT_CONNECT_TIMEOUT,
-        keepaliveInterval: 10000,
-        keepaliveCountMax: 3,
-        maxTries: 1
-      };
-
-      if (server.use_ssh_key && decryptedPrivateKey) {
-        connectConfig.privateKey = decryptedPrivateKey;
-      } else if (decryptedPassword) {
-        connectConfig.password = decryptedPassword;
-      } else {
-        safeResolve({
-          success: false,
-          stdout: '',
-          stderr: 'No authentication method configured',
-          command,
-          duration: Date.now() - startTime
-        });
-        return;
-      }
-
-      conn.connect(connectConfig);
     });
+
+    if (logHistory) {
+      logCommandHistory(serverId, command, result, options.executedBy || 'system');
+    }
+    
+    if (result.success) {
+      updateLastConnected(serverId);
+    }
+
+    return result;
   } catch (error) {
     const result: CommandResult = {
       success: false,
@@ -253,6 +458,10 @@ export async function executeCommand(
     }
     
     return result;
+  } finally {
+    if (connAcquired && conn) {
+      sshPool.release(conn);
+    }
   }
 }
 

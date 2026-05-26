@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../lib/api';
+import { ImportExport } from '../components/ImportExport';
 
 interface Server {
   id: string;
@@ -974,17 +975,20 @@ export default function Servers() {
             <h1 className="text-2xl font-bold text-text-primary mb-2">服务器管理</h1>
             <p className="text-text-secondary">管理和监控您的服务器</p>
           </div>
-          <button
-            onClick={() => {
-              resetForm();
-              setSelectedServer(null);
-              setIsModalOpen(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            添加服务器
-          </button>
+          <div className="flex items-center gap-3">
+            <ImportExport resourceType="servers" onImportSuccess={() => queryClient.invalidateQueries({ queryKey: ['servers'] })} />
+            <button
+              onClick={() => {
+                resetForm();
+                setSelectedServer(null);
+                setIsModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              添加服务器
+            </button>
+          </div>
         </div>
 
         {/* 标签页导航 */}

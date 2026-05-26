@@ -95,6 +95,10 @@ api.interceptors.response.use(
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         localStorage.removeItem('refreshToken');
+        
+        const allRejected = failedQueue.map(p => p.reject(refreshError));
+        failedQueue = [];
+        
         window.location.href = '/login';
         return Promise.reject(refreshError);
       } finally {

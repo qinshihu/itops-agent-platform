@@ -66,6 +66,10 @@ export function clearUserCache(userId?: string): void {
   }
 }
 
+export function invalidateUserCache(userId: string): void {
+  userCache.delete(userId);
+}
+
 export function authenticateToken(req: Request & { user?: AuthUser }, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   

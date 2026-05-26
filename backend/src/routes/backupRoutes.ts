@@ -83,4 +83,21 @@ router.delete('/:id', requireRole('admin'), (req: Request, res: Response) => {
   }
 });
 
+router.post('/restore/:id', requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const result = await backupService.restoreBackup(req.params.id);
+    res.json({ 
+      success: true, 
+      message: 'Backup restored successfully',
+      data: result
+    });
+  } catch (error) {
+    logger.error('Failed to restore backup', error as Error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;
