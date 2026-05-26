@@ -106,7 +106,7 @@ services:
     container_name: itops-frontend
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8080:80"
     depends_on:
       backend:
         condition: service_healthy
@@ -149,13 +149,13 @@ curl http://localhost:3001/health
 # 预期输出: {"status":"ok","timestamp":"..."}
 
 # 检查前端
-curl -I http://localhost:80
+curl -I http://localhost:8080
 # 预期输出: HTTP/1.1 200 OK
 ```
 
 ### 5. 登录系统
 
-- **前端地址**: http://服务器IP
+- **前端地址**: http://服务器IP:8080
 - **后端 API**: http://服务器IP:3001
 - **默认账号**: admin
 - **默认密码**: admin
@@ -300,12 +300,12 @@ docker compose logs backend
 
 ```bash
 # CentOS/RHEL (firewalld)
-sudo firewall-cmd --permanent --add-port=80/tcp
+sudo firewall-cmd --permanent --add-port=8080/tcp
 sudo firewall-cmd --permanent --add-port=3001/tcp
 sudo firewall-cmd --reload
 
 # Ubuntu (ufw)
-sudo ufw allow 80/tcp
+sudo ufw allow 8080/tcp
 sudo ufw allow 3001/tcp
 sudo ufw reload
 ```
@@ -320,7 +320,7 @@ sudo ufw reload
 | 默认密码 | 首次登录后立即修改 admin 密码 |
 | CORS | 将 `ALLOWED_ORIGINS` 限制为实际使用的域名 |
 | HTTPS | 生产环境建议使用 Nginx 反向代理配置 SSL |
-| 防火墙 | 仅暴露 80 和 3001 端口，其他端口禁止对外 |
+| 防火墙 | 仅暴露 8080 和 3001 端口，其他端口禁止对外 |
 
 ---
 

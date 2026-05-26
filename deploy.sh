@@ -2,10 +2,20 @@
 # ============================================================
 # ITOps Agent Platform - 一键部署脚本
 # ============================================================
+# 默认行为: 自动从阿里云镜像仓库拉取 LATEST 最新镜像
+#   registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:IT_Onlin-ITOps-{backend|frontend}-latest
+#
 # 用法:
 #   curl -fsSL https://your-repo/deploy.sh | bash
 #   或
 #   wget -O deploy.sh https://your-repo/deploy.sh && bash deploy.sh
+#
+# 示例:
+#   # 部署最新版本 (默认)
+#   bash deploy.sh
+#
+#   # 指定部署目录并自动确认
+#   bash deploy.sh -d /opt/itops -y
 # ============================================================
 
 set -e
@@ -315,8 +325,8 @@ print_deploy_info() {
     echo -e "${GREEN} 部署成功!${NC}"
     echo -e "${CYAN}==========================================${NC}"
     echo ""
-    echo -e "前端地址:  ${GREEN}http://${SERVER_IP}${NC}"
-    echo -e "后端 API:  ${GREEN}http://${SERVER_IP}:3001/api/health${NC}"
+    echo -e "前端地址:  ${GREEN}http://${SERVER_IP}:8080${NC}"
+    echo -e "健康检查:  ${GREEN}http://${SERVER_IP}:3001/health${NC}"
     echo ""
     echo -e "默认账号:  ${YELLOW}admin${NC}"
     echo -e "用户名:  ${YELLOW}admin${NC}"

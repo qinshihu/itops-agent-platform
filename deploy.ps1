@@ -4,20 +4,25 @@
 # Usage:
 #   .\deploy.ps1 [OPTIONS]
 #
+# Default behavior: Pulls LATEST images from Aliyun Registry
+#   registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:IT_Onlin-ITOps-{backend|frontend}-latest
+#
 # Examples:
-#   # Deploy with default settings
+#   # Deploy latest version (DEFAULT)
 #   .\deploy.ps1
 #
 #   # Deploy with custom image registry
-#   .\deploy.ps1 -Registry registry.cn-hangzhou.aliyuncs.com -Namespace your-namespace/your-repo
+#   .\deploy.ps1 -Namespace your-namespace -Repo your-repo
 #
-#   # Deploy with specific version
-#   .\deploy.ps1 -Version v1.0.0
+#   # Deploy specific version on custom ports
+#   .\deploy.ps1 -Version v3.0.3 -BackendPort 8000 -FrontendPort 9000
 # ============================================================
 
 param(
     [string]$Registry = "registry.cn-hangzhou.aliyuncs.com",
-    [string]$Namespace = "huluwa666/tsq-images-hub",
+    [string]$Namespace = "huluwa666",
+    [string]$Repo = "tsq-images-hub",
+    [string]$ImagePrefix = "IT_Onlin-ITOps",
     [string]$Version = "latest",
     [string]$BackendPort = "3001",
     [string]$FrontendPort = "8080",
@@ -36,23 +41,25 @@ Usage:
   .\deploy.ps1 [OPTIONS]
 
 Options:
-  -Registry    Container registry (default: registry.cn-hangzhou.aliyuncs.com)
-  -Namespace   Registry namespace/repo (default: huluwa666/tsq-images-hub)
-  -Version     Image version tag (default: latest)
-  -BackendPort Backend API port (default: 3001)
+  -Registry     Container registry (default: registry.cn-hangzhou.aliyuncs.com)
+  -Namespace    Registry namespace (default: huluwa666)
+  -Repo         Registry repository (default: tsq-images-hub)
+  -ImagePrefix  Image name prefix (default: IT_Onlin-ITOps)
+  -Version      Image version tag (default: latest)
+  -BackendPort  Backend API port (default: 3001)
   -FrontendPort Frontend web port (default: 8080)
-  -JwtSecret   JWT secret key (auto-generated if not provided)
-  -Help        Show this help message
+  -JwtSecret    JWT secret key (auto-generated if not provided)
+  -Help         Show this help message
 
 Examples:
   # Deploy with default settings
   .\deploy.ps1
 
   # Deploy with custom images
-  .\deploy.ps1 -Namespace your-namespace/your-repo
+  .\deploy.ps1 -Namespace your-namespace -Repo your-repo
 
   # Deploy specific version on custom ports
-  .\deploy.ps1 -Namespace your-namespace/your-repo -Version v1.0.0 -BackendPort 8000 -FrontendPort 9000
+  .\deploy.ps1 -Namespace your-namespace -Version v1.0.0 -BackendPort 8000 -FrontendPort 9000
 
 ===========================================
 "@
@@ -151,9 +158,9 @@ ALLOWED_ORIGINS=http://localhost:$FrontendPort
 $EnvContent | Out-File -FilePath ".env" -Encoding utf8 -Force
 Write-Success ".env file created"
 
-# Determine image names
-$BackendImage = "$Registry/$Namespace/itops-backend:$Version"
-$FrontendImage = "$Registry/$Namespace/itops-frontend:$Version"
+# Determine image names (matches CI/CD build format)
+$BackendImage = "$Registry/$Namespace/$Repo`:$ImagePrefix-backend-$Version"
+$FrontendImage = "$Registry/$Namespace/$Repo`:$ImagePrefix-frontend-$Version"
 Write-Info "Using images: $BackendImage, $FrontendImage"
 
 # Create docker-compose.deploy.yml
@@ -268,6 +275,13 @@ if ($backendReady) {
     Write-Warn "Backend service might still be starting. Check with: docker compose -f docker-compose.deploy.yml ps"
 }
 
+# Get server IP address
+try {
+    $ServerIP = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch "Loopback" } | Select-Object -First 1).IPAddress
+} catch {
+    $ServerIP = "localhost"
+}
+
 # Show access information
 Write-Host ""
 Write-Host "===========================================" -ForegroundColor $Cyan
@@ -275,9 +289,8 @@ Write-Host " ITOps Agent Platform Deployed Successfully!" -ForegroundColor $Gree
 Write-Host "===========================================" -ForegroundColor $Cyan
 Write-Host ""
 Write-Host "Access URLs:" -ForegroundColor $Yellow
-Write-Host "  Frontend: http://localhost:$FrontendPort"
-Write-Host "  Backend:  http://localhost:$BackendPort"
-Write-Host "  Health:   http://localhost:$BackendPort/health"
+Write-Host "  Frontend:   http://$ServerIP`:$FrontendPort"
+Write-Host "  Health:    http://$ServerIP`:$BackendPort/health"
 Write-Host ""
 Write-Host "Default Credentials:" -ForegroundColor $Yellow
 Write-Host "  Username: admin"
@@ -286,12 +299,13 @@ Write-Host ""
 Write-Host "IMPORTANT: Change password after first login!" -ForegroundColor $Red
 Write-Host ""
 Write-Host "Quick Commands:" -ForegroundColor $Yellow
-Write-Host "  View logs:        docker compose logs -f"
-Write-Host "  Stop services:    docker compose down"
-Write-Host "  Restart services: docker compose restart"
+Write-Host "  View status:      docker compose -f docker-compose.deploy.yml ps"
+Write-Host "  View logs:        docker compose -f docker-compose.deploy.yml logs -f"
+Write-Host "  Stop services:    docker compose -f docker-compose.deploy.yml down"
+Write-Host "  Restart services: docker compose -f docker-compose.deploy.yml restart"
 Write-Host ""
 Write-Host "Next Steps:" -ForegroundColor $Yellow
-Write-Host "  1. Visit http://localhost:$FrontendPort in your browser"
+Write-Host "  1. Visit http://$ServerIP`:$FrontendPort in your browser"
 Write-Host "  2. Login with admin/admin"
 Write-Host "  3. Change your password immediately in Settings"
 Write-Host "  4. Configure your LLM API keys in Settings"
