@@ -108,10 +108,29 @@ router.post('/config', (req: Request, res: Response) => {
   try {
     const { enabled, apiBase, apiKey, kbId, mode, topK } = req.body;
 
+    // 获取已有配置中的原始 API Key
+    const existingSetting = db.prepare(
+      "SELECT value FROM settings WHERE key = 'qanything_config'"
+    ).get() as { value: string } | undefined;
+    
+    let originalApiKey = '';
+    if (existingSetting) {
+      try {
+        const existingConfig = JSON.parse(existingSetting.value);
+        originalApiKey = existingConfig.apiKey || '';
+      } catch (e) {
+        // 忽略解析错误
+      }
+    }
+
+    // 如果传入的 API Key 是脱敏值（包含 **** 或 ... 模式），保留原始值
+    const isMasked = apiKey.includes('****') || apiKey.includes('...');
+    const finalApiKey = isMasked ? originalApiKey : apiKey;
+
     const config = {
       enabled: enabled || false,
       apiBase: apiBase || '',
-      apiKey: apiKey || '',
+      apiKey: finalApiKey,
       kbId: kbId || '',
       mode: mode || 'cloud',
       topK: topK || 5,

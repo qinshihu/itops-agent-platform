@@ -106,6 +106,26 @@ export default function Settings() {
     },
   });
 
+  const handleTestQAnythingConnection = () => {
+    if (!qanythingConfig.apiBase.trim()) {
+      setQanythingTestStatus('error');
+      setQanythingTestMessage('请先填写 API 地址');
+      setTimeout(() => setQanythingTestStatus('idle'), 3000);
+      return;
+    }
+    qanythingTestMutation.mutate();
+  };
+
+  const handleUploadDocuments = () => {
+    if (!qanythingConfig.enabled) {
+      setUploadStatus('error');
+      setUploadMessage('请先启用 QAnything 知识库并保存配置');
+      setTimeout(() => setUploadStatus('idle'), 5000);
+      return;
+    }
+    uploadMutation.mutate(uploadFiles);
+  };
+
   // 文档上传
   const uploadMutation = useMutation({
     mutationFn: async (files: File[]) => {
@@ -812,7 +832,7 @@ export default function Settings() {
                       {/* 测试连接 */}
                       <div className="flex items-center gap-3 pt-2">
                         <button
-                          onClick={() => qanythingTestMutation.mutate()}
+                          onClick={handleTestQAnythingConnection}
                           disabled={qanythingTestStatus === 'testing'}
                           className="px-4 py-2 bg-surface border border-border text-text-primary rounded-lg hover:bg-surface/80 transition-all disabled:opacity-50 flex items-center gap-2"
                         >
@@ -958,10 +978,10 @@ export default function Settings() {
 
                       {/* 上传按钮 */}
                       <button
-                        onClick={() => uploadMutation.mutate(uploadFiles)}
-                        disabled={uploadFiles.length === 0 || uploadStatus === 'uploading'}
-                        className="w-full px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
+                          onClick={handleUploadDocuments}
+                          disabled={uploadFiles.length === 0 || uploadStatus === 'uploading'}
+                          className="w-full px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
                         {uploadStatus === 'uploading' ? (
                           <>
                             <Loader2 className="w-4 h-4 animate-spin" />
