@@ -144,8 +144,8 @@
 - 新增 `QUICK_DEPLOY.md` — 面向国内用户的快速部署指南
 - 新增 `deploy.sh` — Linux 一键部署脚本（自动检查环境、生成配置、拉取镜像、启动服务、健康检查）
 - 推送 Docker 镜像到阿里云杭州镜像仓库
-  - 后端: `registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:backend-v3.0.1`
-  - 前端: `registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:frontend-v3.0.1`
+  - 后端: `registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:IT_Onlin-ITOps-backend-latest`
+  - 前端: `registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:IT_Onlin-ITOps-frontend-latest`
 - 修复 `QUICK_DEPLOY.md` 中 JWT_SECRET 生成逻辑（heredoc 变量展开问题）
 
 ### 安全

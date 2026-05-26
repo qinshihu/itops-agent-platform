@@ -22,8 +22,8 @@ NC='\033[0m'
 REGISTRY="registry.cn-hangzhou.aliyuncs.com"
 NAMESPACE="huluwa666"
 REPO="tsq-images-hub"
-BACKEND_TAG="backend-v3.0.1"
-FRONTEND_TAG="frontend-v3.0.1"
+BACKEND_TAG="IT_Onlin-ITOps-backend-latest"
+FRONTEND_TAG="IT_Onlin-ITOps-frontend-latest"
 
 BACKEND_IMAGE="${REGISTRY}/${NAMESPACE}/${REPO}:${BACKEND_TAG}"
 FRONTEND_IMAGE="${REGISTRY}/${NAMESPACE}/${REPO}:${FRONTEND_TAG}"
@@ -93,10 +93,14 @@ setup_directory() {
     
     if [ -d "$DEPLOY_DIR" ]; then
         print_warn "目录 $DEPLOY_DIR 已存在"
-        read -p "是否继续使用? (y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            exit 0
+        if [ "$AUTO_YES" = true ]; then
+            print_info "自动确认模式，继续使用"
+        else
+            read -p "是否继续使用? (y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                exit 0
+            fi
         fi
     else
         print_info "创建部署目录: $DEPLOY_DIR"
@@ -112,11 +116,15 @@ setup_directory() {
 generate_compose_file() {
     if [ -f "docker-compose.yml" ]; then
         print_warn "docker-compose.yml 已存在"
-        read -p "是否覆盖? (y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            print_info "跳过生成 compose 文件"
-            return
+        if [ "$AUTO_YES" = true ]; then
+            print_info "自动确认模式，覆盖文件"
+        else
+            read -p "是否覆盖? (y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                print_info "跳过生成 compose 文件"
+                return
+            fi
         fi
     fi
     
@@ -147,7 +155,7 @@ services:
     container_name: itops-frontend
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8080:80"
     depends_on:
       backend:
         condition: service_healthy
@@ -181,11 +189,15 @@ COMPOSE_EOF
 generate_env_file() {
     if [ -f ".env" ]; then
         print_warn ".env 文件已存在"
-        read -p "是否覆盖? (y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            print_info "跳过生成 .env 文件"
-            return
+        if [ "$AUTO_YES" = true ]; then
+            print_info "自动确认模式，覆盖文件"
+        else
+            read -p "是否覆盖? (y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                print_info "跳过生成 .env 文件"
+                return
+            fi
         fi
     fi
     
@@ -286,7 +298,7 @@ verify_services() {
     
     # 检查前端
     sleep 3
-    if curl -s -o /dev/null -w "%{http_code}" http://localhost:80 | grep -q "200"; then
+    if curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 | grep -q "200"; then
         print_success "前端服务已就绪"
     else
         print_warn "前端服务可能未就绪，请检查日志: docker logs itops-frontend"
@@ -326,6 +338,7 @@ main() {
     
     # 解析参数
     DEPLOY_DIR="/opt/itops"
+    AUTO_YES=false
     
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -333,11 +346,16 @@ main() {
                 DEPLOY_DIR="$2"
                 shift 2
                 ;;
+            -y|--yes)
+                AUTO_YES=true
+                shift
+                ;;
             -h|--help)
-                echo "用法: $0 [-d 部署目录] [-h 帮助]"
+                echo "用法: $0 [-d 部署目录] [-y 自动确认] [-h 帮助]"
                 echo ""
                 echo "选项:"
                 echo "  -d, --dir    部署目录 (默认: /opt/itops)"
+                echo "  -y, --yes    自动确认所有提示 (非交互模式)"
                 echo "  -h, --help   显示帮助"
                 exit 0
                 ;;
