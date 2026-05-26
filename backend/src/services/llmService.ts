@@ -508,6 +508,13 @@ export async function executeAgentWithLLM(
       agent.name,
       temperature
     );
+  } else if (provider === 'local') {
+    return await callLocalAIAPI(
+      enhancedPrompt,
+      userInput,
+      agent.name,
+      temperature
+    );
   } else {
     return await callDoubaoAPI(
       enhancedPrompt,

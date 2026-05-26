@@ -153,6 +153,7 @@ export default function Settings() {
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [uploadMessage, setUploadMessage] = useState('');
+  const [isDragOver, setIsDragOver] = useState(false);
 
   // 如果是强制修改密码，自动切换到安全设置标签
   useEffect(() => {
@@ -160,6 +161,58 @@ export default function Settings() {
       setActiveTab('security');
     }
   }, [searchParams]);
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (e.dataTransfer.files) {
+      setUploadFiles((prev) => [...prev, ...Array.from(e.dataTransfer.files)]);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setUploadFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveQAnythingConfig = () => {
+    if (qanythingConfig.enabled) {
+      if (!qanythingConfig.apiBase.trim()) {
+        setQanythingSaveStatus('error');
+        setQanythingTestMessage('API 地址不能为空');
+        setTimeout(() => setQanythingSaveStatus('idle'), 3000);
+        return;
+      }
+      if (!qanythingConfig.kbId.trim()) {
+        setQanythingSaveStatus('error');
+        setQanythingTestMessage('知识库 ID 不能为空');
+        setTimeout(() => setQanythingSaveStatus('idle'), 3000);
+        return;
+      }
+      if (!qanythingConfig.apiKey.trim()) {
+        setQanythingSaveStatus('error');
+        setQanythingTestMessage('API Key 不能为空');
+        setTimeout(() => setQanythingSaveStatus('idle'), 3000);
+        return;
+      }
+    }
+    qanythingConfigMutation.mutate(qanythingConfig);
+  };
 
   // 密码修改处理
   const handlePasswordChange = async () => {
@@ -805,7 +858,7 @@ export default function Settings() {
                           )}
                         </div>
                         <button
-                          onClick={() => qanythingConfigMutation.mutate(qanythingConfig)}
+                          onClick={handleSaveQAnythingConfig}
                           disabled={qanythingSaveStatus === 'saving'}
                           className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         >
@@ -826,7 +879,15 @@ export default function Settings() {
                     </h4>
                     
                     <div className="space-y-4">
-                      <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+                      <div 
+                        className={clsx(
+                          'border-2 border-dashed rounded-lg p-8 text-center transition-all',
+                          isDragOver ? 'border-primary bg-primary/5' : 'border-border'
+                        )}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                      >
                         <FileText className="w-12 h-12 mx-auto text-text-secondary mb-3" />
                         <p className="text-sm text-text-primary mb-1">拖拽文件到此处，或点击选择文件</p>
                         <p className="text-xs text-text-secondary">支持 PDF/Word/Excel/PPT/Markdown/TXT/CSV/图片</p>
@@ -835,8 +896,10 @@ export default function Settings() {
                           multiple
                           accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.md,.txt,.csv,.jpg,.jpeg,.png"
                           onChange={(e) => {
-                            if (e.target.files) {
-                              setUploadFiles(Array.from(e.target.files));
+                            const files = e.target.files;
+                            if (files) {
+                              setUploadFiles((prev) => [...prev, ...Array.from(files)]);
+                              e.target.value = '';
                             }
                           }}
                           className="hidden"
@@ -857,10 +920,21 @@ export default function Settings() {
                           <div className="max-h-40 overflow-y-auto space-y-1">
                             {uploadFiles.map((file, index) => (
                               <div key={index} className="flex items-center justify-between p-2 bg-surface rounded-lg">
-                                <span className="text-sm text-text-secondary truncate">{file.name}</span>
-                                <span className="text-xs text-text-secondary">
-                                  {(file.size / 1024).toFixed(1)} KB
-                                </span>
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <FileText className="w-4 h-4 text-text-secondary flex-shrink-0" />
+                                  <span className="text-sm text-text-secondary truncate">{file.name}</span>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <span className="text-xs text-text-secondary">
+                                    {formatFileSize(file.size)}
+                                  </span>
+                                  <button
+                                    onClick={() => removeFile(index)}
+                                    className="text-xs text-status-failed hover:text-status-failed/80 transition-colors"
+                                  >
+                                    移除
+                                  </button>
+                                </div>
                               </div>
                             ))}
                           </div>

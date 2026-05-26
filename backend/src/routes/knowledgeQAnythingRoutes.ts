@@ -7,6 +7,26 @@ import db from '../models/database';
 
 const router = Router();
 
+function maskApiKey(key: string): string {
+  if (!key || key.length < 12) return key.substring(0, 4) + '****';
+  return key.substring(0, 8) + '...' + key.substring(key.length - 4);
+}
+
+function validateQAnythingConfig(config: any): string | null {
+  if (config.enabled) {
+    if (!config.apiBase || !config.apiBase.trim()) {
+      return 'API 地址不能为空';
+    }
+    if (!config.kbId || !config.kbId.trim()) {
+      return '知识库 ID 不能为空';
+    }
+    if (!config.apiKey || !config.apiKey.trim()) {
+      return 'API Key 不能为空';
+    }
+  }
+  return null;
+}
+
 // 配置内存存储上传文件（不写入磁盘）
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -65,7 +85,7 @@ router.get('/config', (req: Request, res: Response) => {
     const config = JSON.parse(setting.value);
     // 不返回完整的 API Key，只显示部分
     const maskedApiKey = config.apiKey
-      ? config.apiKey.substring(0, 8) + '...' + config.apiKey.substring(config.apiKey.length - 4)
+      ? maskApiKey(config.apiKey)
       : '';
 
     res.json({
@@ -97,11 +117,15 @@ router.post('/config', (req: Request, res: Response) => {
       topK: topK || 5,
     };
 
+    const validationError = validateQAnythingConfig(config);
+    if (validationError) {
+      return res.status(400).json({ success: false, error: validationError });
+    }
+
     db.prepare(
       "INSERT OR REPLACE INTO settings (key, value) VALUES ('qanything_config', ?)"
     ).run(JSON.stringify(config));
 
-    // 清除服务缓存
     qanythingService.clearConfigCache();
 
     logger.info('✅ QAnything configuration saved');
