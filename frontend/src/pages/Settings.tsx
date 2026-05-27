@@ -453,7 +453,7 @@ export default function Settings() {
 
   return (
     <div className="h-full overflow-auto p-6">
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-text-primary mb-2">设置</h1>
           <p className="text-text-secondary">配置系统参数和API密钥</p>

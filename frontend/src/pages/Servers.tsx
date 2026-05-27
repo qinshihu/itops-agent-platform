@@ -607,7 +607,7 @@ export default function Servers() {
                 </div>
               )}
 
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {isLoading ? (
                   Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="bg-surface border border-border rounded-lg p-4 animate-pulse">
@@ -621,18 +621,18 @@ export default function Servers() {
                     <p>{selectedTag ? `没有带标签 "${selectedTag}" 的服务器` : selectedGroupId ? '该分组下暂无服务器' : '暂无服务器，请添加第一个服务器'}</p>
                   </div>
                 ) : filteredServers.map((server) => (
-                  <div key={server.id} className="bg-surface border border-border rounded-lg p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <div key={server.id} className="bg-surface border border-border rounded-lg p-4 min-w-0">
+                    <div className="flex items-start justify-between mb-3 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                           <Server className="w-4 h-4 text-primary" />
                         </div>
-                        <div>
-                          <h3 className="font-medium text-text-primary">{server.name}</h3>
-                          <p className="text-xs text-text-secondary">{server.hostname}:{server.port}</p>
+                        <div className="min-w-0">
+                          <h3 className="font-medium text-text-primary truncate">{server.name}</h3>
+                          <p className="text-xs text-text-secondary truncate">{server.hostname}:{server.port}</p>
                         </div>
                       </div>
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 flex-shrink-0">
                         <button
                           onClick={() => handleTestConnection(server)}
                           className="p-1 hover:bg-background rounded transition-colors"
@@ -679,32 +679,34 @@ export default function Servers() {
                     {/* 主机扩展信息 */}
                     {(server.os || server.cpu_cores || server.memory_gb || server.disk_gb) && (
                       <div className="mb-3 p-2 bg-background rounded-lg">
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          {server.os && (
-                            <div className="flex items-center gap-1.5 text-text-secondary">
-                              <Monitor className="w-3 h-3" />
-                              <span className="truncate">{server.os}</span>
-                            </div>
-                          )}
-                          {server.cpu_cores && (
-                            <div className="flex items-center gap-1.5 text-text-secondary">
-                              <Cpu className="w-3 h-3" />
-                              <span>{server.cpu_cores} 核</span>
-                            </div>
-                          )}
-                          {server.memory_gb && (
-                            <div className="flex items-center gap-1.5 text-text-secondary">
-                              <MemoryStick className="w-3 h-3" />
-                              <span>{server.memory_gb} GB</span>
-                            </div>
-                          )}
-                          {server.disk_gb && (
-                            <div className="flex items-center gap-1.5 text-text-secondary">
-                              <HardDrive className="w-3 h-3" />
-                              <span>{server.disk_gb} GB</span>
-                            </div>
-                          )}
-                        </div>
+                        {server.os && (
+                          <div className="flex items-center gap-1.5 text-xs text-text-secondary mb-2">
+                            <Monitor className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">{server.os}</span>
+                          </div>
+                        )}
+                        {(server.cpu_cores !== undefined || server.memory_gb !== undefined || server.disk_gb !== undefined) && (
+                          <div className="grid grid-cols-3 gap-2 text-xs">
+                            {server.cpu_cores !== undefined && (
+                              <div className="flex items-center gap-1.5 text-text-secondary">
+                                <Cpu className="w-3 h-3 flex-shrink-0" />
+                                <span>{server.cpu_cores} 核</span>
+                              </div>
+                            )}
+                            {server.memory_gb !== undefined && (
+                              <div className="flex items-center gap-1.5 text-text-secondary">
+                                <MemoryStick className="w-3 h-3 flex-shrink-0" />
+                                <span>{server.memory_gb} GB</span>
+                              </div>
+                            )}
+                            {server.disk_gb !== undefined && (
+                              <div className="flex items-center gap-1.5 text-text-secondary">
+                                <HardDrive className="w-3 h-3 flex-shrink-0" />
+                                <span>{server.disk_gb} GB</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                     
@@ -1030,7 +1032,7 @@ export default function Servers() {
 
   return (
     <div className="h-full overflow-auto p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-text-primary mb-2">服务器管理</h1>

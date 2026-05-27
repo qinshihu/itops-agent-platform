@@ -74,7 +74,7 @@ export default function AuditLogs() {
 
   return (
     <div className="h-full overflow-auto p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-text-primary">审计日志</h1>

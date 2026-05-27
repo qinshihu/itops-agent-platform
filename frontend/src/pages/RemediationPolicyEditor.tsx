@@ -134,77 +134,76 @@ export default function RemediationPolicyEditor() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-auto p-6">
-        <div className="flex items-center gap-4 mb-6">
-          <button
-            onClick={() => navigate('/remediation-policies')}
-            className="p-2 text-slate-400 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-white mb-1">
-              {isNew ? '新建修复策略' : '编辑修复策略'}
-            </h2>
-            <p className="text-slate-400 text-sm">配置告警自动修复规则和策略</p>
-          </div>
-          {!isNew && (
-            <button
-              onClick={handleDelete}
-              className="p-2 text-slate-400 hover:text-red-400 transition-colors"
-              title="删除"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
-          )}
-          <button
-            onClick={handleSubmit}
-            disabled={saveMutation.isPending}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-all duration-200 shadow-lg shadow-blue-600/30"
-          >
-            <Save className="w-4 h-4" />
-            保存
-          </button>
+      <div className="flex items-center gap-4 px-6 py-4 border-b border-slate-700/50 bg-slate-900/50 flex-shrink-0">
+        <button
+          onClick={() => navigate('/remediation-policies')}
+          className="p-2 text-slate-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div className="flex-1">
+          <h2 className="text-xl font-bold text-white">
+            {isNew ? '新建修复策略' : '编辑修复策略'}
+          </h2>
         </div>
+        {!isNew && (
+          <button
+            onClick={handleDelete}
+            className="p-2 text-slate-400 hover:text-red-400 transition-colors"
+            title="删除"
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
+        )}
+        <button
+          onClick={handleSubmit}
+          disabled={saveMutation.isPending}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-all duration-200 shadow-lg shadow-blue-600/30"
+        >
+          <Save className="w-4 h-4" />
+          保存
+        </button>
+      </div>
 
-        <form onSubmit={handleSubmit} className="max-w-4xl space-y-6">
-          <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">基本信息</h3>
-            <div className="grid grid-cols-2 gap-4">
+      <div className="flex-1 overflow-auto">
+        <form onSubmit={handleSubmit} className="p-6 max-w-5xl">
+          <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-4">
+            <h3 className="text-base font-semibold text-white mb-3">基本信息</h3>
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm text-slate-400 mb-2">策略名称 *</label>
+                <label className="block text-xs text-slate-400 mb-1">策略名称 *</label>
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
                   placeholder="例如：磁盘空间不足自动清理"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-2">描述</label>
+                <label className="block text-xs text-slate-400 mb-1">描述</label>
                 <input
                   type="text"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
                   placeholder="策略描述"
                 />
               </div>
             </div>
           </div>
 
-          <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">触发条件</h3>
-            <div className="grid grid-cols-2 gap-4">
+          <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-4 mt-4">
+            <h3 className="text-base font-semibold text-white mb-3">触发条件</h3>
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm text-slate-400 mb-2">告警来源 *</label>
+                <label className="block text-xs text-slate-400 mb-1">告警来源 *</label>
                 <select
                   required
                   value={formData.alert_source}
                   onChange={(e) => setFormData({ ...formData, alert_source: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
                 >
                   {ALERT_SOURCES.map(source => (
                     <option key={source} value={source}>{source}</option>
@@ -212,11 +211,11 @@ export default function RemediationPolicyEditor() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-2">告警级别</label>
+                <label className="block text-xs text-slate-400 mb-1">告警级别</label>
                 <select
                   value={formData.alert_severity}
                   onChange={(e) => setFormData({ ...formData, alert_severity: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
                 >
                   <option value="">全部</option>
                   {SEVERITY_OPTIONS.map(opt => (
@@ -225,38 +224,38 @@ export default function RemediationPolicyEditor() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-2">关键词匹配</label>
+                <label className="block text-xs text-slate-400 mb-1">关键词匹配</label>
                 <input
                   type="text"
                   value={formData.alert_keywords}
                   onChange={(e) => setFormData({ ...formData, alert_keywords: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
                   placeholder="多个关键词用逗号分隔"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-2">标签匹配</label>
+                <label className="block text-xs text-slate-400 mb-1">标签匹配</label>
                 <input
                   type="text"
                   value={formData.alert_tags}
                   onChange={(e) => setFormData({ ...formData, alert_tags: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
                   placeholder="多个标签用逗号分隔"
                 />
               </div>
             </div>
           </div>
 
-          <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">执行策略</h3>
-            <div className="grid grid-cols-2 gap-4">
+          <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-4 mt-4">
+            <h3 className="text-base font-semibold text-white mb-3">执行策略</h3>
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm text-slate-400 mb-2">执行模式 *</label>
+                <label className="block text-xs text-slate-400 mb-1">执行模式 *</label>
                 <select
                   required
                   value={formData.execution_mode}
                   onChange={(e) => setFormData({ ...formData, execution_mode: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
                 >
                   {EXECUTION_MODES.map(mode => (
                     <option key={mode.value} value={mode.value}>{mode.label}</option>
@@ -264,11 +263,11 @@ export default function RemediationPolicyEditor() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-2">关联工作流</label>
+                <label className="block text-xs text-slate-400 mb-1">关联工作流</label>
                 <select
                   value={formData.workflow_id}
                   onChange={(e) => setFormData({ ...formData, workflow_id: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
                 >
                   <option value="">选择工作流</option>
                   {workflows?.map((w: any) => (
@@ -277,65 +276,65 @@ export default function RemediationPolicyEditor() {
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="block text-sm text-slate-400 mb-2">工作流参数 (JSON)</label>
+                <label className="block text-xs text-slate-400 mb-1">工作流参数 (JSON)</label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={formData.workflow_params}
                   onChange={(e) => setFormData({ ...formData, workflow_params: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 font-mono text-sm"
+                  className="w-full px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 font-mono"
                   placeholder='{"server_id": "{{alert.host}}"}'
                 />
               </div>
             </div>
           </div>
 
-          <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">触发控制</h3>
-            <div className="grid grid-cols-2 gap-4">
+          <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-4 mt-4">
+            <h3 className="text-base font-semibold text-white mb-3">触发控制</h3>
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm text-slate-400 mb-2">每小时最大执行次数</label>
+                <label className="block text-xs text-slate-400 mb-1">每小时最大执行次数</label>
                 <input
                   type="number"
                   min="1"
                   value={formData.max_executions_per_hour}
                   onChange={(e) => setFormData({ ...formData, max_executions_per_hour: parseInt(e.target.value) })}
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-2">冷却时间（秒）</label>
+                <label className="block text-xs text-slate-400 mb-1">冷却时间（秒）</label>
                 <input
                   type="number"
                   min="0"
                   value={formData.cooldown_seconds}
                   onChange={(e) => setFormData({ ...formData, cooldown_seconds: parseInt(e.target.value) })}
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
             </div>
           </div>
 
-          <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">验证配置</h3>
-            <div className="mb-4">
+          <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-4 mt-4">
+            <h3 className="text-base font-semibold text-white mb-3">验证配置</h3>
+            <div className="mb-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={formData.enable_verification}
                   onChange={(e) => setFormData({ ...formData, enable_verification: e.target.checked })}
-                  className="w-4 h-4 rounded border-slate-600 text-blue-600 focus:ring-blue-500"
+                  className="w-3.5 h-3.5 rounded border-slate-600 text-blue-600 focus:ring-blue-500"
                 />
-                <span className="text-sm text-slate-300">启用修复后验证</span>
+                <span className="text-xs text-slate-300">启用修复后验证</span>
               </label>
             </div>
             {formData.enable_verification && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-2">验证工作流</label>
+                  <label className="block text-xs text-slate-400 mb-1">验证工作流</label>
                   <select
                     value={formData.verification_workflow_id}
                     onChange={(e) => setFormData({ ...formData, verification_workflow_id: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
                   >
                     <option value="">选择工作流</option>
                     {workflows?.map((w: any) => (
@@ -344,49 +343,49 @@ export default function RemediationPolicyEditor() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-400 mb-2">验证超时（秒）</label>
+                  <label className="block text-xs text-slate-400 mb-1">验证超时（秒）</label>
                   <input
                     type="number"
                     min="1"
                     value={formData.verification_timeout_seconds}
                     onChange={(e) => setFormData({ ...formData, verification_timeout_seconds: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-sm text-slate-400 mb-2">验证参数 (JSON)</label>
+                  <label className="block text-xs text-slate-400 mb-1">验证参数 (JSON)</label>
                   <textarea
                     rows={2}
                     value={formData.verification_params}
                     onChange={(e) => setFormData({ ...formData, verification_params: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 font-mono text-sm"
+                    className="w-full px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 font-mono"
                   />
                 </div>
               </div>
             )}
           </div>
 
-          <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">回滚配置</h3>
-            <div className="mb-4">
+          <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-4 mt-4">
+            <h3 className="text-base font-semibold text-white mb-3">回滚配置</h3>
+            <div className="mb-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={formData.enable_rollback}
                   onChange={(e) => setFormData({ ...formData, enable_rollback: e.target.checked })}
-                  className="w-4 h-4 rounded border-slate-600 text-blue-600 focus:ring-blue-500"
+                  className="w-3.5 h-3.5 rounded border-slate-600 text-blue-600 focus:ring-blue-500"
                 />
-                <span className="text-sm text-slate-300">启用自动回滚</span>
+                <span className="text-xs text-slate-300">启用自动回滚</span>
               </label>
             </div>
             {formData.enable_rollback && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-2">回滚工作流</label>
+                  <label className="block text-xs text-slate-400 mb-1">回滚工作流</label>
                   <select
                     value={formData.rollback_workflow_id}
                     onChange={(e) => setFormData({ ...formData, rollback_workflow_id: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
                   >
                     <option value="">选择工作流</option>
                     {workflows?.map((w: any) => (
@@ -394,15 +393,15 @@ export default function RemediationPolicyEditor() {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="flex items-center gap-2 cursor-pointer mt-6">
+                <div className="flex items-center">
+                  <label className="flex items-center gap-2 cursor-pointer mt-4">
                     <input
                       type="checkbox"
                       checked={formData.rollback_on_failure}
                       onChange={(e) => setFormData({ ...formData, rollback_on_failure: e.target.checked })}
-                      className="w-4 h-4 rounded border-slate-600 text-blue-600 focus:ring-blue-500"
+                      className="w-3.5 h-3.5 rounded border-slate-600 text-blue-600 focus:ring-blue-500"
                     />
-                    <span className="text-sm text-slate-300">修复失败时自动回滚</span>
+                    <span className="text-xs text-slate-300">修复失败时自动回滚</span>
                   </label>
                 </div>
               </div>

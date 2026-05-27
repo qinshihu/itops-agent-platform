@@ -86,7 +86,7 @@ class ServerInfoCollector {
         os: "cat /etc/os-release 2>/dev/null | grep '^PRETTY_NAME=' | cut -d'=' -f2 | tr -d '\"'",
         cpu_cores: "nproc 2>/dev/null || grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo 0",
         memory_gb: "free -g 2>/dev/null | awk '/^Mem:/{print $2}' || echo 0",
-        disk_gb: "df -BG 2>/dev/null | awk '/^\\//{sum+=$2}END{print int(sum/1024)}' || echo 0",
+        disk_gb: "df -BG 2>/dev/null | awk '/^\\//{sum+=$2}END{print int(sum)}' || echo 0",
         ip_address: "hostname -I 2>/dev/null | awk '{print $1}' || echo ''",
         private_ip: "hostname -I 2>/dev/null | awk '{print $1}' || echo ''"
       };

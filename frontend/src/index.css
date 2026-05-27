@@ -9,6 +9,7 @@
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.6;
   font-weight: 400;
+  font-size: 14px; /* 笔记本适配：默认16px缩小到14px，约等于90%缩放效果 */
 
   color-scheme: dark;
   color: #ffffff;

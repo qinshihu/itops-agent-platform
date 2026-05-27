@@ -183,7 +183,7 @@ export default function Agents() {
 
   return (
     <div className="h-full overflow-auto p-6 scrollbar-thin">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Agent管理</h1>
@@ -549,7 +549,7 @@ function AgentDetailInner({ agentId, onBack, deleteMutation }: AgentDetailInnerP
 
   return (
     <div className="h-full overflow-auto p-6">
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
