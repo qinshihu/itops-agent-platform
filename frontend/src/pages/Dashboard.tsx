@@ -253,7 +253,7 @@ export default function Dashboard() {
               </a>
             </div>
             <div className="space-y-3">
-              {servers?.slice(0, 5).map((server) => (
+              {(Array.isArray(servers) ? servers : []).slice(0, 5).map((server) => (
                 <div
                   key={server.id}
                   className="flex items-center gap-3 p-3 rounded-lg bg-background hover:bg-background/80 transition-all"

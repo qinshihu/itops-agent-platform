@@ -100,6 +100,7 @@ export default function Servers() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isCollecting, setIsCollecting] = useState(false);
+  const [isCollectingMetrics, setIsCollectingMetrics] = useState(false);
   const [groupFormData, setGroupFormData] = useState({ name: '', description: '', parent_id: '' });
   const [editingGroup, setEditingGroup] = useState<ServerGroup | null>(null);
   const [importData, setImportData] = useState('');
@@ -245,6 +246,26 @@ export default function Servers() {
     },
   });
 
+  const collectMetricsMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.post(`/api/server-management/${id}/collect-metrics`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
+    },
+  });
+
+  const collectAllMetricsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/api/server-management/collect-all-metrics');
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
+    },
+  });
+
   const importServersMutation = useMutation({
     mutationFn: async (data: { servers: any[]; test_connection: boolean }) => {
       const res = await api.post('/api/server-management/import', data);
@@ -383,6 +404,30 @@ export default function Servers() {
     }
   };
 
+  const handleCollectMetrics = async (server: Server) => {
+    setIsCollectingMetrics(true);
+    try {
+      await collectMetricsMutation.mutateAsync(server.id);
+      alert(`已采集 ${server.name} 的性能指标`);
+    } catch {
+      alert('采集失败');
+    } finally {
+      setIsCollectingMetrics(false);
+    }
+  };
+
+  const handleCollectAllMetrics = async () => {
+    setIsCollectingMetrics(true);
+    try {
+      const result = await collectAllMetricsMutation.mutateAsync();
+      alert(`指标采集完成: ${result.data.success} 成功, ${result.data.failed} 失败`);
+    } catch {
+      alert('批量采集失败');
+    } finally {
+      setIsCollectingMetrics(false);
+    }
+  };
+
   const handleGroupSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingGroup) {
@@ -483,6 +528,14 @@ export default function Servers() {
             >
               <RefreshCw className={clsx('w-4 h-4', isCollecting && 'animate-spin')} />
               采集所有主机信息
+            </button>
+            <button
+              onClick={handleCollectAllMetrics}
+              disabled={isCollectingMetrics}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-surface border border-border text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={clsx('w-4 h-4', isCollectingMetrics && 'animate-spin')} />
+              采集所有性能指标
             </button>
             <button
               onClick={() => { setIsImportModalOpen(true); setImportResult(null); setImportData(''); }}
@@ -594,6 +647,14 @@ export default function Servers() {
                           title="采集主机信息"
                         >
                           <RefreshCw className={clsx('w-4 h-4 text-text-secondary', isCollecting && 'animate-spin')} />
+                        </button>
+                        <button
+                          onClick={() => handleCollectMetrics(server)}
+                          disabled={isCollectingMetrics}
+                          className="p-1 hover:bg-background rounded transition-colors disabled:opacity-50"
+                          title="采集性能指标"
+                        >
+                          <Monitor className={clsx('w-4 h-4 text-text-secondary', isCollectingMetrics && 'animate-spin')} />
                         </button>
                         <button
                           onClick={() => handleEdit(server)}

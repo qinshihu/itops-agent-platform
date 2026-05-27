@@ -26,6 +26,28 @@ router.post('/collect-all', async (_req, res) => {
   }
 });
 
+router.post('/:id/collect-metrics', async (req, res) => {
+  try {
+    const result = await serverInfoCollector.collectServerMetrics(req.params.id);
+    if (result.success) {
+      res.json({ success: true, data: result.data });
+    } else {
+      res.status(400).json({ success: false, error: result.error });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+router.post('/collect-all-metrics', async (_req, res) => {
+  try {
+    const result = await serverInfoCollector.collectAllServerMetrics();
+    res.json({ success: true, data: result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
 router.post('/import', async (req, res) => {
   try {
     const { servers, test_connection } = req.body as {

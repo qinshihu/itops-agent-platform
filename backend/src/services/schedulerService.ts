@@ -4,6 +4,7 @@ import db, { performMaintenance } from '../models/database';
 import { logger } from '../utils/logger';
 import { executeWorkflow } from './workflowExecutor';
 import { WorkflowParsed, WorkflowNode, WorkflowEdge } from '../types';
+import { serverInfoCollector } from './serverInfoCollector';
 
 interface ScheduledTaskRecord {
   id: string;
@@ -36,6 +37,9 @@ class SchedulerService {
       
       // 启动数据库定期维护任务
       this.initDatabaseMaintenance();
+      
+      // 启动服务器性能指标定期采集任务（每5分钟）
+      this.initMetricsCollection();
       
       this.initialized = true;
       logger.info(`✅ Scheduler initialized with ${tasks.length} tasks`);
@@ -74,6 +78,28 @@ class SchedulerService {
     
     this.jobs.set('db-maintenance', maintenanceJob);
     logger.info('✅ Database maintenance scheduled: daily at 3:00 AM');
+  }
+
+  /**
+   * 初始化服务器性能指标定期采集任务（每 5 分钟）
+   */
+  private initMetricsCollection() {
+    const metricsJob = scheduleJob('*/5 * * * *', async () => {
+      logger.info('📊 Starting scheduled server metrics collection...');
+      
+      try {
+        const result = await serverInfoCollector.collectAllServerMetrics();
+        logger.info(`✅ Scheduled metrics collection completed: ${result.success} success, ${result.failed} failed`);
+        if (result.failed > 0) {
+          logger.warn(`️ Failed metrics collection: ${JSON.stringify(result.errors)}`);
+        }
+      } catch (error) {
+        logger.error('❌ Scheduled metrics collection failed', error as Error);
+      }
+    });
+    
+    this.jobs.set('metrics-collection', metricsJob);
+    logger.info('✅ Server metrics collection scheduled: every 5 minutes');
   }
 
   scheduleTask(task: ScheduledTaskRecord) {

@@ -28,34 +28,39 @@ export default function CircularProgress({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const safeValue = Number.isFinite(value) ? value : 0;
+    const safeMax = Number.isFinite(maxValue) && maxValue > 0 ? maxValue : 100;
+    const safeSize = Number.isFinite(size) && size > 0 ? size : 120;
+    const safeStrokeWidth = Number.isFinite(strokeWidth) && strokeWidth > 0 ? strokeWidth : 8;
+
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = size * dpr;
-    canvas.height = size * dpr;
+    canvas.width = safeSize * dpr;
+    canvas.height = safeSize * dpr;
     ctx.scale(dpr, dpr);
 
-    const center = size / 2;
-    const radius = (size - strokeWidth) / 2;
-    const percentage = Math.min(value / maxValue, 1);
+    const center = safeSize / 2;
+    const radius = (safeSize - safeStrokeWidth) / 2;
+    const percentage = Math.min(Math.max(safeValue / safeMax, 0), 1);
     const startAngle = -Math.PI / 2;
     const endAngle = startAngle + percentage * Math.PI * 2;
 
-    ctx.clearRect(0, 0, size, size);
+    ctx.clearRect(0, 0, safeSize, safeSize);
 
     ctx.beginPath();
     ctx.arc(center, center, radius, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(51, 65, 85, 0.3)';
-    ctx.lineWidth = strokeWidth;
+    ctx.lineWidth = safeStrokeWidth;
     ctx.lineCap = 'round';
     ctx.stroke();
 
-    const gradient = ctx.createLinearGradient(0, 0, size, size);
+    const gradient = ctx.createLinearGradient(0, 0, safeSize, safeSize);
     gradient.addColorStop(0, color);
     gradient.addColorStop(1, color + '80');
 
     ctx.beginPath();
     ctx.arc(center, center, radius, startAngle, endAngle);
     ctx.strokeStyle = gradient;
-    ctx.lineWidth = strokeWidth;
+    ctx.lineWidth = safeStrokeWidth;
     ctx.lineCap = 'round';
     ctx.stroke();
 
@@ -63,27 +68,29 @@ export default function CircularProgress({
       const glowX = center + Math.cos(endAngle) * radius;
       const glowY = center + Math.sin(endAngle) * radius;
       
-      const glowGradient = ctx.createRadialGradient(glowX, glowY, 0, glowX, glowY, strokeWidth * 2);
-      glowGradient.addColorStop(0, color + '60');
-      glowGradient.addColorStop(1, color + '00');
-      
-      ctx.beginPath();
-      ctx.arc(glowX, glowY, strokeWidth * 2, 0, Math.PI * 2);
-      ctx.fillStyle = glowGradient;
-      ctx.fill();
+      if (Number.isFinite(glowX) && Number.isFinite(glowY)) {
+        const glowGradient = ctx.createRadialGradient(glowX, glowY, 0, glowX, glowY, safeStrokeWidth * 2);
+        glowGradient.addColorStop(0, color + '60');
+        glowGradient.addColorStop(1, color + '00');
+        
+        ctx.beginPath();
+        ctx.arc(glowX, glowY, safeStrokeWidth * 2, 0, Math.PI * 2);
+        ctx.fillStyle = glowGradient;
+        ctx.fill();
+      }
     }
 
     if (showValue) {
-      ctx.font = `bold ${size * 0.22}px Inter, system-ui, sans-serif`;
+      ctx.font = `bold ${safeSize * 0.22}px Inter, system-ui, sans-serif`;
       ctx.fillStyle = '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(`${Math.round(percentage * 100)}%`, center, center - (label ? 8 : 0));
       
       if (label) {
-        ctx.font = `${size * 0.12}px Inter, system-ui, sans-serif`;
+        ctx.font = `${safeSize * 0.12}px Inter, system-ui, sans-serif`;
         ctx.fillStyle = '#94a3b8';
-        ctx.fillText(label, center, center + size * 0.15);
+        ctx.fillText(label, center, center + safeSize * 0.15);
       }
     }
   }, [value, maxValue, size, strokeWidth, color, label, showValue]);
