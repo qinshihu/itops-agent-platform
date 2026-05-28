@@ -45,9 +45,9 @@ router.get('/:id', validateParams(serverSchemas.serverId), (req: Request, res: R
 });
 
 // Create server
-router.post('/', validateBody(serverSchemas.createServer), (req: Request, res: Response) => {
+router.post('/', validateBody(serverSchemas.createServer), requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
-    const { name, hostname, port, username, password, private_key, use_ssh_key, description, os_type } = req.body;
+    const { name, hostname, port, username, password, private_key, use_ssh_key, description, os_type, ssh_key_id } = req.body;
     const tags = (req.body as Record<string, unknown>).tags;
     const tagsJson = tags ? JSON.stringify(tags) : null;
 
@@ -56,9 +56,9 @@ router.post('/', validateBody(serverSchemas.createServer), (req: Request, res: R
 
     const id = randomUUID();
     db.prepare(
-      `INSERT INTO servers (id, name, hostname, port, username, password, private_key, use_ssh_key, description, tags, os_type)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(id, name, hostname, port || 22, username, encryptedPassword, encryptedPrivateKey, use_ssh_key ? 1 : 0, description || null, tagsJson, os_type || 'linux');
+      `INSERT INTO servers (id, name, hostname, port, username, password, private_key, use_ssh_key, description, tags, os_type, ssh_key_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(id, name, hostname, port || 22, username, encryptedPassword, encryptedPrivateKey, use_ssh_key ? 1 : 0, description || null, tagsJson, os_type || 'linux', ssh_key_id || null);
 
     res.json({ success: true, data: { id } });
   } catch {
@@ -74,7 +74,7 @@ router.put('/:id', validateParams(serverSchemas.serverId), validateBody(serverSc
       return res.status(404).json({ success: false, error: 'Server not found' });
     }
 
-    const { name, hostname, port, username, password, private_key, use_ssh_key, description, enabled, os_type } = req.body as Record<string, unknown>;
+    const { name, hostname, port, username, password, private_key, use_ssh_key, description, enabled, os_type, ssh_key_id } = req.body as Record<string, unknown>;
     const tags = (req.body as Record<string, unknown>).tags;
     const tagsJson = tags ? JSON.stringify(tags) : undefined;
 
@@ -102,6 +102,7 @@ router.put('/:id', validateParams(serverSchemas.serverId), validateBody(serverSc
            tags = COALESCE(?, tags),
            enabled = COALESCE(?, enabled),
            os_type = COALESCE(?, os_type),
+           ssh_key_id = COALESCE(?, ssh_key_id),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`
     ).run(
@@ -111,7 +112,7 @@ router.put('/:id', validateParams(serverSchemas.serverId), validateBody(serverSc
       private_key !== undefined ? encryptedPrivateKey : undefined,
       private_key !== undefined ? encryptedPrivateKey : undefined,
       use_ssh_key !== undefined ? (use_ssh_key ? 1 : 0) : undefined,
-      description, tagsJson, enabled, os_type, req.params.id
+      description, tagsJson, enabled, os_type, ssh_key_id !== undefined ? ssh_key_id : undefined, req.params.id
     );
 
     res.json({ success: true });

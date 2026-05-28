@@ -243,8 +243,26 @@ export default function Agents() {
         </div>
 
         {isLoading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="bg-gradient-to-br from-slate-800/70 to-slate-900/70 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50 animate-pulse">
+                <div className="flex items-start gap-4 mb-5">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-700/50" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-5 w-32 bg-slate-700/50 rounded" />
+                    <div className="h-4 w-24 bg-slate-700/50 rounded" />
+                  </div>
+                </div>
+                <div className="space-y-2 mb-5">
+                  <div className="h-4 bg-slate-700/50 rounded" />
+                  <div className="h-4 w-3/4 bg-slate-700/50 rounded" />
+                </div>
+                <div className="border-t border-slate-700/30 pt-3 space-y-2">
+                  <div className="h-4 bg-slate-700/50 rounded" />
+                  <div className="h-4 bg-slate-700/50 rounded" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
@@ -346,14 +364,14 @@ export default function Agents() {
                   <div className="flex gap-1">
                     <button
                       onClick={() => handleTest(agent)}
-                      className="p-2.5 hover:bg-blue-500/20 text-blue-400 rounded-xl transition-all hover:scale-105 active:scale-95"
+                      className="p-2.5 hover:bg-blue-500/20 text-blue-400 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
                       title="测试"
                     >
                       <Play className="w-4.5 h-4.5" />
                     </button>
                     <button
                       onClick={() => setShowDetail(agent.id)}
-                      className="p-2.5 hover:bg-slate-700/50 text-slate-400 hover:text-slate-200 rounded-xl transition-all hover:scale-105 active:scale-95"
+                      className="p-2.5 hover:bg-slate-700/50 text-slate-400 hover:text-slate-200 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
                       title="详情"
                     >
                       <BookOpen className="w-4.5 h-4.5" />
@@ -368,7 +386,7 @@ export default function Agents() {
                     {agent.is_preset !== 1 && (
                       <button
                         onClick={() => handleDelete(agent.id, agent.name)}
-                        className="p-2.5 hover:bg-red-500/20 text-red-400 rounded-xl transition-all hover:scale-105 active:scale-95"
+                        className="p-2.5 hover:bg-red-500/20 text-red-400 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
                         title="删除"
                       >
                         <Trash2 className="w-4.5 h-4.5" />
@@ -540,7 +558,7 @@ function AgentDetailInner({ agentId, onBack, deleteMutation }: AgentDetailInnerP
   if (agentLoading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
       </div>
     );
   }
@@ -554,52 +572,58 @@ function AgentDetailInner({ agentId, onBack, deleteMutation }: AgentDetailInnerP
           <div className="flex items-center gap-4">
             <button
               onClick={onBack}
-              className="p-2 hover:bg-background rounded-lg transition-all"
+              className="p-2 hover:bg-slate-800/50 rounded-xl transition-all"
             >
-              <ChevronLeft className="w-5 h-5 text-text-secondary" />
+              <ChevronLeft className="w-5 h-5 text-slate-400" />
             </button>
-            <div>
-              <h1 className="text-2xl font-bold text-text-primary flex items-center gap-3">
-                <span className="text-3xl">{agent.avatar}</span>
-                {agent.name}
-              </h1>
-              <p className="text-text-secondary">{agent.role}</p>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 flex items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-400/30 text-2xl shadow-lg shadow-blue-500/20">
+                {agent.avatar}
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
+                  {agent.name}
+                </h1>
+                <p className="text-sm text-slate-400">{agent.role}</p>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-surface rounded-xl p-6 border border-border">
+        <div className="bg-gradient-to-br from-slate-800/70 to-slate-900/70 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50 shadow-lg">
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
-                <span className="text-sm text-text-secondary block mb-1">分类</span>
-                <span className="text-text-primary">{agent.category || '-'}</span>
+                <span className="text-sm text-slate-500 block mb-1">分类</span>
+                <span className="text-slate-200">{agent.category || '-'}</span>
               </div>
               <div>
-                <span className="text-sm text-text-secondary block mb-1">模型</span>
-                <span className="text-text-primary font-medium">{agent.model}</span>
+                <span className="text-sm text-slate-500 block mb-1">模型</span>
+                <span className="text-slate-200 font-medium">{agent.model}</span>
               </div>
               <div>
-                <span className="text-sm text-text-secondary block mb-1">温度</span>
-                <span className="text-text-primary">{agent.temperature}</span>
+                <span className="text-sm text-slate-500 block mb-1">温度</span>
+                <span className="text-slate-200">{agent.temperature}</span>
               </div>
             </div>
             <div className="space-y-4">
               <div>
-                <span className="text-sm text-text-secondary block mb-1">使用次数</span>
-                <span className="text-text-primary font-medium">{agent.usage_count || 0}</span>
+                <span className="text-sm text-slate-500 block mb-1">使用次数</span>
+                <span className="text-slate-200 font-medium">{agent.usage_count || 0}</span>
               </div>
               <div>
-                <span className="text-sm text-text-secondary block mb-1">最后使用</span>
-                <span className="text-text-primary">
+                <span className="text-sm text-slate-500 block mb-1">最后使用</span>
+                <span className="text-slate-300">
                   {agent.last_used_at ? new Date(agent.last_used_at).toLocaleString() : '-'}
                 </span>
               </div>
               <div>
-                <span className="text-sm text-text-secondary block mb-1">状态</span>
+                <span className="text-sm text-slate-500 block mb-1">状态</span>
                 <span className={clsx(
-                  "px-2 py-1 rounded-full text-xs font-medium",
-                  agent.enabled ? 'bg-status-success/10 text-status-success' : 'bg-status-failed/10 text-status-failed'
+                  "px-3 py-1.5 rounded-full text-xs font-semibold",
+                  agent.enabled
+                    ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-400 border border-green-500/30'
+                    : 'bg-gradient-to-r from-red-500/20 to-rose-500/20 text-red-400 border border-red-500/30'
                 )}>
                   {agent.enabled ? '在线' : '离线'}
                 </span>
@@ -608,13 +632,13 @@ function AgentDetailInner({ agentId, onBack, deleteMutation }: AgentDetailInnerP
           </div>
 
           {agent.tags && agent.tags.length > 0 && (
-            <div className="mt-6 pt-4 border-t border-border">
-              <span className="text-sm text-text-secondary block mb-2">标签</span>
-              <div className="flex flex-wrap gap-2">
+            <div className="mt-6 pt-4 border-t border-slate-700/30">
+              <span className="text-sm text-slate-500 block mb-2">标签</span>
+              <div className="flex flex-wrap gap-1.5">
                 {agent.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="px-3 py-1 bg-background rounded-full text-sm text-text-secondary"
+                    className="px-3 py-1 bg-gradient-to-r from-slate-700/50 to-slate-600/50 border border-slate-600/50 text-xs text-slate-300 rounded-full"
                   >
                     {tag}
                   </span>
@@ -624,10 +648,10 @@ function AgentDetailInner({ agentId, onBack, deleteMutation }: AgentDetailInnerP
           )}
 
           {agent.system_prompt && (
-            <div className="mt-6 pt-4 border-t border-border">
-              <span className="text-sm text-text-secondary block mb-2">系统提示词</span>
-              <div className="bg-background rounded-lg p-4">
-                <pre className="text-sm text-text-primary whitespace-pre-wrap font-mono">
+            <div className="mt-6 pt-4 border-t border-slate-700/30">
+              <span className="text-sm text-slate-500 block mb-2">系统提示词</span>
+              <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700/50">
+                <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono">
                   {agent.system_prompt}
                 </pre>
               </div>
@@ -635,57 +659,57 @@ function AgentDetailInner({ agentId, onBack, deleteMutation }: AgentDetailInnerP
           )}
         </div>
 
-        <div className="bg-surface rounded-xl p-6 border border-border">
-          <h2 className="text-lg font-bold text-text-primary mb-4 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-text-secondary" />
+        <div className="bg-gradient-to-br from-slate-800/70 to-slate-900/70 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50 shadow-lg">
+          <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <Clock className="w-5 h-5 text-slate-400" />
             执行历史
           </h2>
           
           {executionsLoading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
             </div>
           ) : (!executions || executions.executions.length === 0) ? (
-            <div className="text-center py-12 text-text-secondary">
+            <div className="text-center py-12 text-slate-400">
               <Clock className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p>暂无执行记录</p>
             </div>
           ) : (
             <div className="space-y-3">
               {executions.executions.map((exec) => (
-                <div key={exec.id} className="bg-background rounded-lg p-4">
+                <div key={exec.id} className="bg-slate-900/50 rounded-xl p-4 border border-slate-700/50">
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-3">
                       <span className={clsx(
-                        "px-2 py-1 rounded-full text-xs font-medium",
+                        "px-3 py-1.5 rounded-full text-xs font-semibold",
                         exec.status === 'success' 
-                          ? 'bg-status-success/10 text-status-success'
-                          : 'bg-status-failed/10 text-status-failed'
+                          ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-400 border border-green-500/30'
+                          : 'bg-gradient-to-r from-red-500/20 to-rose-500/20 text-red-400 border border-red-500/30'
                       )}>
                         {exec.status === 'success' ? '成功' : '失败'}
                       </span>
-                      <span className="text-sm text-text-secondary">
+                      <span className="text-sm text-slate-400">
                         {new Date(exec.created_at).toLocaleString()}
                       </span>
                     </div>
-                    <span className="text-xs text-text-secondary">
+                    <span className="text-xs text-slate-500">
                       {exec.execution_time_ms}ms
                     </span>
                   </div>
                   <div className="mb-3">
-                    <span className="text-xs text-text-secondary block mb-1">输入:</span>
-                    <p className="text-sm text-text-primary">{exec.input_text}</p>
+                    <span className="text-xs text-slate-500 block mb-1">输入:</span>
+                    <p className="text-sm text-slate-300">{exec.input_text}</p>
                   </div>
                   <div>
-                    <span className="text-xs text-text-secondary block mb-1">输出:</span>
-                    <pre className="text-sm text-text-primary whitespace-pre-wrap max-h-40 overflow-y-auto">
+                    <span className="text-xs text-slate-500 block mb-1">输出:</span>
+                    <pre className="text-sm text-slate-300 whitespace-pre-wrap max-h-40 overflow-y-auto scrollbar-thin">
                       {exec.output_text}
                     </pre>
                   </div>
                   {exec.error_message && (
                     <div className="mt-2">
-                      <span className="text-xs text-status-warning block mb-1">错误:</span>
-                      <p className="text-sm text-status-failed">{exec.error_message}</p>
+                      <span className="text-xs text-amber-400 block mb-1">错误:</span>
+                      <p className="text-sm text-red-400">{exec.error_message}</p>
                     </div>
                   )}
                 </div>
@@ -694,13 +718,13 @@ function AgentDetailInner({ agentId, onBack, deleteMutation }: AgentDetailInnerP
           )}
         </div>
         
-        <div className="bg-surface rounded-xl p-6 border border-border">
+        <div className="bg-gradient-to-br from-slate-800/70 to-slate-900/70 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50 shadow-lg">
           <div className="flex gap-3">
             <button
               onClick={() => {
                 onBack();
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all"
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-500 hover:to-blue-600 hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 font-semibold"
             >
               <Edit className="w-4 h-4" />
               编辑 Agent
@@ -713,7 +737,7 @@ function AgentDetailInner({ agentId, onBack, deleteMutation }: AgentDetailInnerP
                     onBack();
                   }
                 }}
-                className="flex items-center gap-2 px-4 py-2 bg-status-failed/10 text-status-failed rounded-lg hover:bg-status-failed/20 transition-all"
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-red-500/20 to-rose-500/20 text-red-400 border border-red-500/30 rounded-xl hover:from-red-500/30 hover:to-rose-500/30 transition-all duration-300 font-semibold"
               >
                 <Trash2 className="w-4 h-4" />
                 删除 Agent
@@ -802,35 +826,35 @@ function AgentModal({ agent, onClose }: { agent: Agent | null; onClose: () => vo
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-surface rounded-xl p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto border border-border">
-        <h2 className="text-xl font-bold text-text-primary mb-6">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-gradient-to-br from-slate-800/95 to-slate-900/95 backdrop-blur-xl rounded-2xl p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto border border-slate-700/50 shadow-2xl shadow-blue-500/10">
+        <h2 className="text-xl font-bold text-white mb-6">
           {agent ? '编辑Agent' : '新建Agent'}
         </h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2">
                 Agent名称
               </label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:border-primary"
+                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2">
                 头像
               </label>
               <input
                 type="text"
                 value={formData.avatar}
                 onChange={(e) => setFormData({ ...formData, avatar: e.target.value })}
-                className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:border-primary"
+                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
                 placeholder="使用emoji作为头像"
               />
             </div>
@@ -838,89 +862,90 @@ function AgentModal({ agent, onClose }: { agent: Agent | null; onClose: () => vo
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2">
                 角色描述
               </label>
               <input
                 type="text"
                 value={formData.role}
                 onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:border-primary"
+                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2">
                 分类
               </label>
               <select
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:border-primary"
+                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
               >
-                <option value="">选择分类...</option>
-                <option value="告警处理">告警处理</option>
-                <option value="故障处理">故障处理</option>
-                <option value="数据分析">数据分析</option>
-                <option value="巡检审计">巡检审计</option>
-                <option value="服务器管理">服务器管理</option>
-                <option value="操作执行">操作执行</option>
-                <option value="文档报告">文档报告</option>
+                <option value="" className="bg-slate-800">选择分类...</option>
+                <option value="告警处理" className="bg-slate-800">告警处理</option>
+                <option value="故障处理" className="bg-slate-800">故障处理</option>
+                <option value="数据分析" className="bg-slate-800">数据分析</option>
+                <option value="巡检审计" className="bg-slate-800">巡检审计</option>
+                <option value="服务器管理" className="bg-slate-800">服务器管理</option>
+                <option value="操作执行" className="bg-slate-800">操作执行</option>
+                <option value="文档报告" className="bg-slate-800">文档报告</option>
               </select>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               描述
             </label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:border-primary h-20"
+              className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all h-20"
               placeholder="简短描述这个Agent的作用"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               系统提示词
             </label>
             <textarea
               value={formData.system_prompt}
               onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
-              className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:border-primary h-40"
+              className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all h-40"
               required
             />
           </div>
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2">
                 模型
               </label>
               <select
                 value={formData.model}
                 onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:border-primary"
+                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
               >
                 {(availableModels || []).map((model: { id: string; name: string; enabled?: boolean }) => (
                   <option 
                     key={model.id} 
                     value={model.id}
                     disabled={!model.enabled}
+                    className="bg-slate-800"
                   >
                     {model.name}
                     {!model.enabled && ' (未配置 API)'}
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-text-secondary mt-1">
+              <p className="text-xs text-slate-500 mt-1">
                 提示：在设置中配置您的 API 密钥和自定义模型 ID
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2">
                 温度参数
               </label>
               <input
@@ -930,18 +955,18 @@ function AgentModal({ agent, onClose }: { agent: Agent | null; onClose: () => vo
                 max="2"
                 value={formData.temperature}
                 onChange={(e) => setFormData({ ...formData, temperature: parseFloat(e.target.value) })}
-                className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:border-primary"
+                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2">
                 标签 (逗号分隔)
               </label>
               <input
                 type="text"
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
-                className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:border-primary"
+                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
                 placeholder="例如: 运维, 自动化, 测试"
               />
             </div>
@@ -953,9 +978,9 @@ function AgentModal({ agent, onClose }: { agent: Agent | null; onClose: () => vo
               id="enabled"
               checked={formData.enabled}
               onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-              className="w-4 h-4 rounded border-border"
+              className="w-4 h-4 rounded border-slate-600 text-blue-500 focus:ring-blue-500/50"
             />
-            <label htmlFor="enabled" className="text-sm text-text-secondary">
+            <label htmlFor="enabled" className="text-sm text-slate-300">
               启用此Agent
             </label>
           </div>
@@ -964,7 +989,7 @@ function AgentModal({ agent, onClose }: { agent: Agent | null; onClose: () => vo
             <button
               type="button"
               onClick={() => setShowTestModal(true)}
-              className="px-4 py-2 bg-status-info/10 text-status-info rounded-lg hover:bg-status-info/20 transition-all"
+              className="px-5 py-2.5 bg-gradient-to-r from-blue-600/20 to-purple-600/20 text-blue-400 border border-blue-500/30 rounded-xl hover:from-blue-600/30 hover:to-purple-600/30 transition-all font-semibold"
             >
               🧪 测试 Agent
             </button>
@@ -972,14 +997,14 @@ function AgentModal({ agent, onClose }: { agent: Agent | null; onClose: () => vo
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-background text-text-secondary rounded-lg hover:bg-background/80 transition-all"
+              className="px-5 py-2.5 bg-slate-700/50 text-slate-300 rounded-xl hover:bg-slate-700/70 transition-all font-semibold border border-slate-600/30"
             >
               取消
             </button>
             <button
               type="submit"
               disabled={mutation.isPending}
-              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-all"
+              className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-500 hover:to-blue-600 hover:shadow-lg hover:shadow-blue-500/25 disabled:opacity-50 disabled:shadow-none transition-all duration-300 font-semibold"
             >
               {mutation.isPending ? '保存中...' : (agent ? '保存' : '创建')}
             </button>

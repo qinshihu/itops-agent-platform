@@ -84,6 +84,14 @@ export async function executeWorkflow(
     const edges = Array.isArray(workflow.edges) ? workflow.edges : JSON.parse(workflow.edges as unknown as string || '[]') as WorkflowEdge[];
     executionOrder = topologicalSort(nodes, edges);
     
+    if (executionOrder.length === 0) {
+      logger.error(`❌ Workflow ${workflow.name} has circular dependencies, aborting execution`);
+      db.prepare('UPDATE tasks SET status = ?, end_time = CURRENT_TIMESTAMP WHERE id = ?')
+        .run('failed', taskId);
+      io?.to(`task:${taskId}`).emit('task:failed', { taskId, error: 'Circular dependency detected in workflow' });
+      return;
+    }
+    
     logger.info('📊 Parsed workflow nodes:', nodes);
     logger.info('📊 Execution order:', executionOrder);
     
@@ -435,14 +443,13 @@ function topologicalSort(nodes: WorkflowNode[], edges: WorkflowEdge[]): string[]
   
   const nodeIds = nodes.map(n => n.id);
   const unsortedNodes = nodeIds.filter(id => !result.includes(id));
-  unsortedNodes.sort((a, b) => {
-    const posA = getNodePosition(a);
-    const posB = getNodePosition(b);
-    if (posA.y !== posB.y) return posA.y - posB.y;
-    return posA.x - posB.x;
-  });
   
-  return [...result, ...unsortedNodes];
+  if (unsortedNodes.length > 0) {
+    logger.warn(`⚠️ 工作流存在循环依赖，以下节点处于环中: ${unsortedNodes.join(', ')}`);
+    return [];
+  }
+  
+  return result;
 }
 
 function addTaskLog(taskId: string, log: TaskLogEntry) {

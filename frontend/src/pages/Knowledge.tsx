@@ -26,7 +26,7 @@ export default function Knowledge() {
   const [editingEntry, setEditingEntry] = useState<Knowledge | null>(null);
   const [showDetail, setShowDetail] = useState<Knowledge | null>(null);
 
-  const { data: knowledge } = useQuery({
+  const { data: knowledge, isLoading } = useQuery({
     queryKey: ['knowledge', search, selectedCategory],
     queryFn: async () => {
       const params: any = {};
@@ -35,6 +35,7 @@ export default function Knowledge() {
       const res = await api.get('/api/knowledge', { params });
       return res.data.data as Knowledge[];
     },
+    staleTime: 60000,
   });
 
   const deleteMutation = useMutation({
@@ -108,10 +109,38 @@ export default function Knowledge() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {knowledge?.map((entry) => (
+          {isLoading ? (
+            Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="bg-surface rounded-xl p-6 border border-border animate-pulse"
+              >
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-border/50" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-5 w-32 bg-border/50 rounded" />
+                    <div className="h-3 w-16 bg-border/50 rounded" />
+                  </div>
+                </div>
+                <div className="space-y-2 mb-4">
+                  <div className="h-4 bg-border/50 rounded" />
+                  <div className="h-4 w-3/4 bg-border/50 rounded" />
+                  <div className="h-4 w-1/2 bg-border/50 rounded" />
+                </div>
+                <div className="flex justify-between items-center pt-4 border-t border-border">
+                  <div className="h-4 w-20 bg-border/50 rounded" />
+                  <div className="flex gap-1">
+                    <div className="w-8 h-8 rounded-lg bg-border/50" />
+                    <div className="w-8 h-8 rounded-lg bg-border/50" />
+                    <div className="w-8 h-8 rounded-lg bg-border/50" />
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : knowledge?.map((entry) => (
             <div
               key={entry.id}
-              className="bg-surface rounded-xl p-6 border border-border hover:border-primary/50 transition-all"
+              className="bg-surface rounded-xl p-6 border border-border hover:border-primary/50 hover:bg-background/30 transition-all"
             >
               <div className="flex items-start gap-3 mb-4">
                 <div className="p-2 bg-primary/10 rounded-lg flex-shrink-0">
@@ -145,7 +174,8 @@ export default function Knowledge() {
               )}
 
               <div className="flex items-center justify-between pt-4 border-t border-border">
-                <span className="text-xs text-text-secondary">
+                <span className="text-xs text-text-secondary flex items-center gap-1">
+                  <Eye className="w-3 h-3" />
                   使用 {entry.usage_count} 次
                 </span>
                 <div className="flex gap-1">
@@ -184,9 +214,22 @@ export default function Knowledge() {
         </div>
 
         {(!knowledge || knowledge.length === 0) && (
-          <div className="text-center py-12">
-            <BookOpen className="w-16 h-16 text-text-secondary mx-auto mb-4 opacity-50" />
-            <p className="text-text-secondary">暂无知识条目</p>
+          <div className="bg-surface rounded-xl p-12 border border-border text-center">
+            <div className="p-4 rounded-xl bg-surface border border-border w-fit mx-auto mb-4">
+              <BookOpen className="w-8 h-8 text-text-secondary opacity-50" />
+            </div>
+            <h3 className="text-lg font-medium text-text-primary mb-2">暂无知识条目</h3>
+            <p className="text-text-secondary mb-4">添加运维知识管理和问题解决方案</p>
+            <button
+              onClick={() => {
+                setEditingEntry(null);
+                setShowModal(true);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              添加知识
+            </button>
           </div>
         )}
       </div>
@@ -199,7 +242,7 @@ export default function Knowledge() {
       )}
 
       {showDetail && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-surface rounded-xl p-6 w-full max-w-3xl max-h-[90vh] overflow-auto border border-border">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-text-primary">{showDetail.title}</h2>

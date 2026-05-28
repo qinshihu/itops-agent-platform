@@ -38,18 +38,36 @@ export default function Workflows() {
   const [filterTemplate, setFilterTemplate] = useState<'all' | 'template' | 'custom'>('all');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const getWorkflowStyle = (workflowName: string) => {
-    const styles = [
-      { icon: Zap, color: 'text-purple-500', bg: 'bg-purple-500/10', border: 'border-purple-500/20' },
-      { icon: Shield, color: 'text-green-500', bg: 'bg-green-500/10', border: 'border-green-500/20' },
-      { icon: Database, color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
-      { icon: Globe, color: 'text-cyan-500', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20' },
-      { icon: Cpu, color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
-      { icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-500/10', border: 'border-red-500/20' },
-    ];
+  const getWorkflowStyle = (workflow: Workflow) => {
+    const serverNames = ['服务器', '巡检', '合规'];
+    const securityNames = ['安全', '漏洞'];
+    const dataNames = ['数据', '备份', '恢复'];
+    const networkNames = ['网络', 'DNS'];
+    const systemNames = ['系统', '性能', '监控'];
     
-    const index = workflowName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % styles.length;
-    return styles[index];
+    const name = workflow.name.toLowerCase();
+    
+    if (serverNames.some(n => name.includes(n))) {
+      return { icon: Server as any, color: 'text-purple-500', bg: 'bg-purple-500/10', border: 'border-purple-500/30' };
+    }
+    if (securityNames.some(n => name.includes(n))) {
+      return { icon: Shield, color: 'text-green-500', bg: 'bg-green-500/10', border: 'border-green-500/30' };
+    }
+    if (dataNames.some(n => name.includes(n))) {
+      return { icon: Database, color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/30' };
+    }
+    if (networkNames.some(n => name.includes(n))) {
+      return { icon: Globe, color: 'text-cyan-500', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30' };
+    }
+    if (systemNames.some(n => name.includes(n))) {
+      return { icon: Cpu, color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/30' };
+    }
+    
+    if (workflow.is_template === 1) {
+      return { icon: Sparkles, color: 'text-primary', bg: 'bg-primary/10', border: 'border-primary/30' };
+    }
+    
+    return { icon: GitBranch, color: 'text-text-secondary', bg: 'bg-text-secondary/10', border: 'border-text-secondary/30' };
   };
   
   const { data: servers } = useQuery({
@@ -294,7 +312,7 @@ export default function Workflows() {
 
         {/* Server Select Modal */}
         {showServerSelectModal && selectedWorkflowForServer && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
             <div className="bg-surface rounded-xl p-6 w-full max-w-lg mx-4">
               <h3 className="text-xl font-bold text-text-primary mb-2">选择服务器</h3>
               <p className="text-text-secondary mb-4">
@@ -429,7 +447,7 @@ export default function Workflows() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {filteredWorkflows?.map((workflow) => {
-              const style = getWorkflowStyle(workflow.name);
+              const style = getWorkflowStyle(workflow);
               const Icon = style.icon;
               
               return (
@@ -437,7 +455,7 @@ export default function Workflows() {
                   key={workflow.id}
                   className="bg-surface rounded-2xl border border-border hover:border-primary/30 transition-all group relative overflow-hidden"
                 >
-                  <div className={`absolute top-0 left-0 right-0 h-1 ${style.bg}`} />
+                  <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-2xl ${style.bg}`} />
                   
                   <div className="p-6">
                     <div className="flex items-start justify-between mb-4">
@@ -593,7 +611,7 @@ export default function Workflows() {
                       <button
                         onClick={() => handleExecute(workflow)}
                         disabled={executingWorkflow === workflow.id || (workflow.nodes?.length || 0) === 0}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary to-purple-600 text-white rounded-xl hover:from-primary/90 hover:to-purple-600/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/20"
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary to-purple-600 text-white rounded-xl hover:from-primary/90 hover:to-purple-600/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-primary/25"
                       >
                         <Play className="w-4 h-4" />
                         {executingWorkflow === workflow.id ? '执行中...' : '立即执行'}

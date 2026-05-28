@@ -101,13 +101,21 @@ class TokenBlacklistService {
       
       const isBlacklisted = !!result;
       if (isBlacklisted) {
-        const decoded = jwt.decode(token) as { exp?: number } | null;
-        const expiresAt = decoded?.exp 
-          ? new Date(decoded.exp * 1000) 
-          : new Date(Date.now() + 24 * 60 * 60 * 1000);
-        
-        blacklistedTokenCache.set(token, { token, expiresAt });
-        this.enforceCacheLimit();
+        try {
+          const decoded = jwt.decode(token) as { exp?: number } | null;
+          const expiresAt = decoded?.exp 
+            ? new Date(decoded.exp * 1000) 
+            : new Date(Date.now() + 24 * 60 * 60 * 1000);
+          
+          blacklistedTokenCache.set(token, { token, expiresAt });
+          this.enforceCacheLimit();
+        } catch (decodeError) {
+          logger.warn('Failed to decode token for cache, using default expiration:', decodeError);
+          blacklistedTokenCache.set(token, { 
+            token, 
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) 
+          });
+        }
       }
       
       return isBlacklisted;

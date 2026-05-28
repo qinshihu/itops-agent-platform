@@ -372,6 +372,16 @@ router.post('/grafana', (req: Request, res: Response) => {
 router.post('/aliyun', (req: Request, res: Response) => {
   const startTime = Date.now();
   try {
+    if (!verifyWebhookSignature(req, 'aliyun')) {
+      createAuditLog({
+        action: 'webhook_signature_failed',
+        resource_type: 'webhook',
+        details: { source: 'aliyun', ip: req.ip },
+      });
+      logWebhookInvocation('aliyun', 'error', 0, 0, 'Invalid signature', req, Date.now() - startTime);
+      return res.status(401).json({ success: false, error: 'Invalid webhook signature' });
+    }
+
     const result = adaptAliyun(req.body);
     if (result.errors.length > 0) logger.warn('Aliyun adapter errors:', result.errors);
 
@@ -397,6 +407,16 @@ router.post('/aliyun', (req: Request, res: Response) => {
 router.post('/tencent', (req: Request, res: Response) => {
   const startTime = Date.now();
   try {
+    if (!verifyWebhookSignature(req, 'tencent')) {
+      createAuditLog({
+        action: 'webhook_signature_failed',
+        resource_type: 'webhook',
+        details: { source: 'tencent', ip: req.ip },
+      });
+      logWebhookInvocation('tencent', 'error', 0, 0, 'Invalid signature', req, Date.now() - startTime);
+      return res.status(401).json({ success: false, error: 'Invalid webhook signature' });
+    }
+
     const result = adaptTencentCloud(req.body);
     if (result.errors.length > 0) logger.warn('Tencent adapter errors:', result.errors);
 

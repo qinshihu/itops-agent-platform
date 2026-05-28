@@ -680,7 +680,7 @@ Content-Type: application/json
 
 {
   "username": "admin",
-  "password": "admin123"
+  "password": "admin"
 }
 
 ### 获取服务器列表（使用登录返回的 token）

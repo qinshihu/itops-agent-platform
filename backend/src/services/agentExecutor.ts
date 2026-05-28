@@ -4,6 +4,8 @@ import { executeAgentWithLLM } from './llmService';
 import { executeCommand, runComplianceCheck, complianceChecks } from './sshService';
 import { Agent, Server } from '../types';
 
+const AGENT_EXECUTION_TIMEOUT = 300000; // 5 分钟
+
 export async function executeAgentNode(
   agentId: string,
   input: string,
@@ -26,9 +28,14 @@ export async function executeAgentNode(
     return await executeAutoInspectionAgent(input, context);
   }
   
-  // 其他 Agent - 调用真实 LLM
+  // 其他 Agent - 调用真实 LLM，增加超时保护
   logger.info(`🤖 Calling LLM for agent ${agentName}`);
-  return await executeAgentWithLLM(agentId, input);
+  return await Promise.race([
+    executeAgentWithLLM(agentId, input),
+    new Promise<string>((_, reject) =>
+      setTimeout(() => reject(new Error(`Agent 执行超时（${AGENT_EXECUTION_TIMEOUT / 1000}s）`)), AGENT_EXECUTION_TIMEOUT)
+    )
+  ]);
 }
 
 /**
@@ -145,14 +152,14 @@ async function executeAutoInspectionAgent(input: string, context?: Record<string
     const server = servers.find((s: Server) => s.id === serverId);
     if (!server) continue;
     
+    let successCount = 0;
+    let failCount = 0;
+    
     try {
       logger.info(`🔍 对服务器 ${server.name}(${server.hostname}) 执行自动巡检...`);
       const results = await runComplianceCheck(serverId);
       
       report += `\n### 🖥️ ${server.name} (${server.hostname})\n\n`;
-      
-      let successCount = 0;
-      let failCount = 0;
       
       for (const [, result] of Object.entries(results)) {
         if (result.success) {
@@ -173,7 +180,7 @@ async function executeAutoInspectionAgent(input: string, context?: Record<string
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       report += `\n### 🖥️ ${server.name} (${server.hostname})\n\n**错误**: ${errorMessage}\n\n`;
-      totalFailChecks += complianceChecks.length;
+      totalFailChecks += failCount;
     }
     
     report += '\n---\n';

@@ -111,11 +111,11 @@ export default function Users() {
 
   const getRoleBadge = (role: string) => {
     const roles = {
-      admin: { label: '管理员', class: 'bg-red-100 text-red-700' },
-      operator: { label: '运维', class: 'bg-blue-100 text-blue-700' },
-      viewer: { label: '只读', class: 'bg-green-100 text-green-700' },
+      admin: { label: '管理员', class: 'bg-red-500/10 text-red-500' },
+      operator: { label: '运维', class: 'bg-blue-500/10 text-blue-500' },
+      viewer: { label: '只读', class: 'bg-green-500/10 text-green-500' },
     };
-    return roles[role as keyof typeof roles] || { label: role, class: 'bg-gray-100 text-gray-700' };
+    return roles[role as keyof typeof roles] || { label: role, class: 'bg-text-secondary/10 text-text-secondary' };
   };
 
   return (
@@ -181,7 +181,7 @@ export default function Users() {
                       <td className="px-4 py-3">
                         <span className={clsx(
                           "px-2 py-1 rounded-full text-xs font-medium",
-                          user.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                          user.enabled ? 'bg-green-500/10 text-green-500' : 'bg-text-secondary/10 text-text-secondary'
                         )}>
                           {user.enabled ? '启用' : '禁用'}
                         </span>
@@ -201,7 +201,7 @@ export default function Users() {
                           <button
                             onClick={() => deleteMutation.mutate(user.id)}
                             disabled={deleteMutation.isPending}
-                            className="p-2 hover:bg-red-50 rounded-lg transition-colors text-red-600"
+                            className="p-2 hover:bg-red-500/10 rounded-lg transition-colors text-red-500"
                             title="删除"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -218,7 +218,7 @@ export default function Users() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-surface rounded-xl border border-border max-w-lg w-full">
             <div className="p-4 border-b border-border flex items-center justify-between">
               <h3 className="text-lg font-semibold text-text-primary">
@@ -291,9 +291,9 @@ export default function Users() {
                 />
                 <label htmlFor="enabled" className="text-sm text-text-secondary">启用用户</label>
               </div>
-              <div className="bg-yellow-50 p-3 rounded-lg">
-                <p className="text-sm text-yellow-800">
-                  ⚠️ 注意：管理员用户拥有系统的完全访问权限，请谨慎分配。
+              <div className="bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20">
+                <p className="text-sm text-yellow-500">
+                  注意：管理员用户拥有系统的完全访问权限，请谨慎分配。
                 </p>
               </div>
               <div className="flex justify-end gap-2 pt-4 border-t border-border">

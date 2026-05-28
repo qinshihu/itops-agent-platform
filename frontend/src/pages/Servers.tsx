@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -6,10 +6,12 @@ import {
   AlertCircle, ShieldCheck, Wifi, History, Clock, FolderTree,
   Upload, RefreshCw, ChevronRight, ChevronDown, Cpu,
   HardDrive, MemoryStick, Monitor, FolderPlus, MonitorPlay,
-  Bot, Sparkles, X
+  Bot, Key,
+  Sparkles, X, AlertTriangle,
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../lib/api';
+import { useToast } from '../contexts/ToastContext';
 import { ImportExport } from '../components/ImportExport';
 
 interface Server {
@@ -80,6 +82,7 @@ interface ComplianceCheck {
 export default function Servers() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedServer, setSelectedServer] = useState<Server | null>(null);
   const [formData, setFormData] = useState({
@@ -106,6 +109,8 @@ export default function Servers() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [pendingDeleteServer, setPendingDeleteServer] = useState<{ id: string; name: string } | null>(null);
   const [isCollecting, setIsCollecting] = useState(false);
   const [isCollectingMetrics, setIsCollectingMetrics] = useState(false);
   // AI 命令生成相关
@@ -116,21 +121,81 @@ export default function Servers() {
   const [aiCommandExplanation, setAiCommandExplanation] = useState('');
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [selectedAiAgent, setSelectedAiAgent] = useState<{ id: string; name: string } | null>(null);
+  const [showAiCommandConfirm, setShowAiCommandConfirm] = useState(false);
+  const [aiGenerationError, setAiGenerationError] = useState('');
 
   // 获取 Agent 列表（用于 AI 生成命令）
   const { data: agents } = useQuery({
     queryKey: ['agents'],
     queryFn: async () => {
       const res = await api.get('/api/agents');
-      return res.data.data as Array<{ id: string; name: string; enabled: number }>;
+      return res.data.data as Array<{ id: string; name: string; enabled: number; category?: string }>;
     },
     enabled: true
   });
+  // SSH 密钥列表（用于选择已有密钥）
+  const { data: sshKeys } = useQuery({
+    queryKey: ['ssh-keys'],
+    queryFn: async () => {
+      const res = await api.get('/api/ssh-keys');
+      return res.data.data as Array<{ id: string; name: string; key_type: string; fingerprint: string | null }>;
+    },
+  });
+  const [selectedSshKeyId, setSelectedSshKeyId] = useState<string>('');
   const [groupFormData, setGroupFormData] = useState({ name: '', description: '', parent_id: '' });
   const [editingGroup, setEditingGroup] = useState<ServerGroup | null>(null);
   const [importData, setImportData] = useState('');
   const [importResult, setImportResult] = useState<any>(null);
   const [showGroups, setShowGroups] = useState(false);
+  // 标签输入相关
+  const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
+  const tagInputRef = useRef<HTMLInputElement>(null);
+  const tagDropdownRef = useRef<HTMLDivElement>(null);
+
+  // 关闭标签建议下拉框（点击外部时）
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        tagDropdownRef.current &&
+        !tagDropdownRef.current.contains(e.target as Node) &&
+        tagInputRef.current &&
+        !tagInputRef.current.contains(e.target as Node)
+      ) {
+        setTagDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // 解析当前已输入的标签
+  const parseCurrentTags = useCallback(() => {
+    return formData.tags ? formData.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [];
+  }, [formData.tags]);
+
+  // 获取输入框中最后一段文本（用于过滤建议）
+  const getLastTagFragment = useCallback(() => {
+    const raw = formData.tags;
+    const lastCommaIndex = raw.lastIndexOf(',');
+    return lastCommaIndex >= 0 ? raw.substring(lastCommaIndex + 1).trim() : (raw || '').trim();
+  }, [formData.tags]);
+
+  // 添加标签到输入框
+  const addTagToInput = useCallback((tag: string) => {
+    const raw = formData.tags;
+    const lastCommaIndex = raw.lastIndexOf(',');
+    const beforeLast = lastCommaIndex >= 0 ? raw.substring(0, lastCommaIndex + 1) : '';
+    // 替换最后一段为选中的标签，并追加逗号和空格
+    setFormData({ ...formData, tags: beforeLast + tag + ', ' });
+    tagInputRef.current?.focus();
+  }, [formData]);
+
+  // 从已选标签中删除
+  const removeTag = useCallback((tagToRemove: string) => {
+    const current = parseCurrentTags();
+    const filtered = current.filter((t: string) => t !== tagToRemove);
+    setFormData({ ...formData, tags: filtered.join(', ') });
+  }, [formData.tags]);
 
   const { data: groupsData } = useQuery({
     queryKey: ['server-groups'],
@@ -153,6 +218,17 @@ export default function Servers() {
     (Array.isArray(servers) ? servers : [])
       .flatMap((server: Server) => Array.isArray(server.tags) ? server.tags : [])
   )).sort();
+
+  // 过滤后的标签建议（排除已选的，按输入过滤）
+  const filteredTagSuggestions = () => {
+    const current = parseCurrentTags();
+    const fragment = getLastTagFragment().toLowerCase();
+    return allTags.filter((tag: string) => {
+      if (current.includes(tag)) return false;
+      if (fragment) return tag.toLowerCase().includes(fragment);
+      return true;
+    });
+  };
 
   // 根据选中的标签或分组筛选服务器
   const safeServers = Array.isArray(servers) ? servers : [];
@@ -186,7 +262,8 @@ export default function Servers() {
     mutationFn: async (data: any) => {
       const payload = {
         ...data,
-        tags: data.tags ? data.tags.split(',').map((t: string) => t.trim()) : []
+        tags: data.tags ? data.tags.split(',').map((t: string) => t.trim()) : [],
+        ssh_key_id: selectedSshKeyId || undefined
       };
       const res = await api.post('/api/servers', payload);
       return res.data;
@@ -195,15 +272,26 @@ export default function Servers() {
       queryClient.invalidateQueries({ queryKey: ['servers'] });
       resetForm();
       setIsModalOpen(false);
+      toast.success('服务器已添加');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || err.response?.data?.error || '添加服务器失败');
     },
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const payload = {
+      const payload: Record<string, unknown> = {
         ...data,
-        tags: data.tags ? data.tags.split(',').map((t: string) => t.trim()) : undefined
+        tags: data.tags ? data.tags.split(',').map((t: string) => t.trim()) : undefined,
+        ssh_key_id: selectedSshKeyId || undefined
       };
+      // 编辑模式下 private_key 为空则不发送，避免覆盖已有密钥
+      if (data.private_key) {
+        payload.private_key = data.private_key;
+      } else {
+        delete payload.private_key;
+      }
       const res = await api.put(`/api/servers/${id}`, payload);
       return res.data;
     },
@@ -212,6 +300,10 @@ export default function Servers() {
       resetForm();
       setIsModalOpen(false);
       setSelectedServer(null);
+      toast.success('服务器已更新');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || err.response?.data?.error || '更新服务器失败');
     },
   });
 
@@ -340,6 +432,7 @@ export default function Servers() {
       vnc_port: 5900,
       vnc_password: ''
     });
+    setSelectedSshKeyId('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -353,6 +446,8 @@ export default function Servers() {
 
   const handleEdit = (server: Server) => {
     setSelectedServer(server);
+    const serverSshKeyId = (server as any).ssh_key_id || '';
+    setSelectedSshKeyId(serverSshKeyId);
     setFormData({
       name: server.name,
       hostname: server.hostname,
@@ -373,7 +468,7 @@ export default function Servers() {
   const handleTestConnection = (server: Server) => {
     testConnectionMutation.mutate(server.id, {
       onSuccess: (data) => {
-        alert(data.data.message);
+        toast.success(data.data.message);
       },
     });
   };
@@ -415,9 +510,9 @@ export default function Servers() {
     setIsCollecting(true);
     try {
       await collectInfoMutation.mutateAsync(server.id);
-      alert(`已更新 ${server.name} 的主机信息`);
+      toast.success(`已更新 ${server.name} 的主机信息`);
     } catch {
-      alert('采集失败');
+      toast.error('采集失败');
     } finally {
       setIsCollecting(false);
     }
@@ -427,16 +522,15 @@ export default function Servers() {
   const handleAiGenerateCommand = async () => {
     if (!aiCommandServer || !aiPrompt.trim()) return;
 
-    // 用已经选好的 Agent
     const enabledAgent = selectedAiAgent;
     if (!enabledAgent) {
-      alert('没有可用的 AI Agent，请先配置并启用至少一个 Agent');
+      setAiGenerationError('没有可用的 AI Agent，请先在 Agent 管理页面创建并启用一个 Agent');
       return;
     }
 
+    setAiGenerationError('');
     setIsAiGenerating(true);
     try {
-      // 收集尽可能多的服务器信息，让 Agent 生成更有针对性的命令
       const serverInfo = {
         os_name: aiCommandServer.os || '未知',
         os_type: aiCommandServer.os_type || 'linux',
@@ -446,8 +540,7 @@ export default function Servers() {
         memory_gb: aiCommandServer.memory_gb || '',
         disk_gb: aiCommandServer.disk_gb || ''
       };
-      
-      // 将服务器信息格式化传给 Agent
+
       const userInput = `目标服务器信息：
 操作系统名称：${serverInfo.os_name}
 操作系统类型：${serverInfo.os_type}
@@ -463,9 +556,7 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
         serverIds: [aiCommandServer.id]
       });
 
-      // 尝试解析返回的 JSON
       let output = res.data.data.output;
-      // 提取 JSON 部分（去除可能的 markdown 代码块标记）
       const jsonMatch = output.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         try {
@@ -473,17 +564,16 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
           setAiGeneratedCommand(result.command);
           setAiCommandExplanation(result.explanation);
         } catch {
-          // JSON 解析失败，直接显示原始输出
           setAiGeneratedCommand(output);
           setAiCommandExplanation('AI 生成的命令，请确认后执行');
         }
       } else {
-        // 如果没有解析到 JSON，直接使用输出
         setAiGeneratedCommand(output);
         setAiCommandExplanation('AI 生成的命令，请确认后执行');
       }
     } catch (err: any) {
-      alert('AI 生成命令失败: ' + (err.response?.data?.error || err.message));
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || '未知错误';
+      setAiGenerationError(`生成失败：${errorMsg}`);
     } finally {
       setIsAiGenerating(false);
     }
@@ -492,16 +582,23 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
   // 执行 AI 生成的命令
   const handleExecuteAiCommand = () => {
     if (!aiCommandServer || !aiGeneratedCommand) return;
+    setShowAiCommandConfirm(true);
+  };
+
+  const confirmExecuteAiCommand = () => {
+    setShowAiCommandConfirm(false);
     setIsAiCommandModalOpen(false);
+    setAiGeneratedCommand('');
+    setAiCommandExplanation('');
+    setAiPrompt('');
     setActiveTab('servers');
     setSelectedServer(aiCommandServer);
     setCommand(aiGeneratedCommand);
     setCommandResult(null);
 
-    // 直接执行命令，不需要 setTimeout
     setIsExecuting(true);
     executeCommandMutation.mutate(
-      { id: aiCommandServer.id, command: aiGeneratedCommand },
+      { id: aiCommandServer!.id, command: aiGeneratedCommand },
       {
         onSuccess: (data) => {
           setCommandResult(data.data);
@@ -517,9 +614,9 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
     setIsCollecting(true);
     try {
       const result = await collectAllMutation.mutateAsync();
-      alert(`采集完成: ${result.data.success} 成功, ${result.data.failed} 失败`);
+      toast.success(`采集完成: ${result.data.success} 成功, ${result.data.failed} 失败`);
     } catch {
-      alert('批量采集失败');
+      toast.error('批量采集失败');
     } finally {
       setIsCollecting(false);
     }
@@ -529,9 +626,9 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
     setIsCollectingMetrics(true);
     try {
       await collectMetricsMutation.mutateAsync(server.id);
-      alert(`已采集 ${server.name} 的性能指标`);
+      toast.success(`已采集 ${server.name} 的性能指标`);
     } catch {
-      alert('采集失败');
+      toast.error('采集失败');
     } finally {
       setIsCollectingMetrics(false);
     }
@@ -541,9 +638,9 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
     setIsCollectingMetrics(true);
     try {
       const result = await collectAllMetricsMutation.mutateAsync();
-      alert(`指标采集完成: ${result.data.success} 成功, ${result.data.failed} 失败`);
+      toast.success(`指标采集完成: ${result.data.success} 成功, ${result.data.failed} 失败`);
     } catch {
-      alert('批量采集失败');
+      toast.error('批量采集失败');
     } finally {
       setIsCollectingMetrics(false);
     }
@@ -581,14 +678,15 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
       }).filter(Boolean);
 
       if (servers.length === 0) {
-        alert('没有有效的服务器数据，请检查 JSON 格式');
+        toast.error('没有有效的服务器数据，请检查 JSON 格式');
         return;
       }
 
       const result = await importServersMutation.mutateAsync({ servers, test_connection: true });
       setImportResult(result.data);
+      toast.success(`导入成功: ${result.data.success} 成功, ${result.data.failed} 失败`);
     } catch (err: any) {
-      alert(err.response?.data?.error || '导入失败');
+      toast.error(err.response?.data?.error || '导入失败');
     }
   };
 
@@ -757,7 +855,7 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
                         ? 'bg-gradient-to-b from-yellow-500 to-orange-500' 
                         : server.os_type === 'windows' 
                           ? 'bg-gradient-to-b from-blue-500 to-cyan-500' 
-                          : 'bg-gray-400'
+                          : 'bg-gradient-to-b from-text-tertiary/50 to-text-tertiary/30'
                     )} />
                     
                     <div className="flex items-start justify-between mb-3 min-w-0 pl-2">
@@ -817,18 +915,21 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
                           <Monitor className={clsx('w-4 h-4 text-text-secondary', isCollectingMetrics && 'animate-spin')} />
                         </button>
                         <button
+                          onClick={() => {
+                            setPendingDeleteServer({ id: server.id, name: server.name });
+                            setIsDeleteConfirmOpen(true);
+                          }}
+                          className="p-1 hover:bg-background rounded transition-colors"
+                          title="删除"
+                        >
+                          <AlertTriangle className="w-4 h-4 text-status-failed" />
+                        </button>
+                        <button
                           onClick={() => handleEdit(server)}
                           className="p-1 hover:bg-background rounded transition-colors"
                           title="编辑"
                         >
                           <Edit className="w-4 h-4 text-text-secondary" />
-                        </button>
-                        <button
-                          onClick={() => deleteMutation.mutate(server.id)}
-                          className="p-1 hover:bg-background rounded transition-colors"
-                          title="删除"
-                        >
-                          <Trash2 className="w-4 h-4 text-text-secondary" />
                         </button>
                       </div>
                     </div>
@@ -874,7 +975,7 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
                     {server.groups && server.groups.length > 0 && (
                       <div className="flex flex-wrap gap-1 mb-2">
                         {server.groups.map((g) => (
-                          <span key={g.id} className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded-full flex items-center gap-1">
+                          <span key={g.id} className="px-2 py-0.5 bg-purple-500/10 text-purple-500 text-xs rounded-full flex items-center gap-1">
                             <FolderTree className="w-2.5 h-2.5" />
                             {g.name}
                           </span>
@@ -909,67 +1010,77 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
                         </span>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-3 gap-2 mt-3">
                       <button
                         onClick={() => {
                           setAiCommandServer(server);
                           setAiPrompt('');
                           setAiGeneratedCommand('');
                           setAiCommandExplanation('');
-                          // 打开前先选好最合适的 Agent（优先选命令生成专家）
+                          setAiGenerationError('');
+                          setShowAiCommandConfirm(false);
                           if (agents) {
-                            const cmdAgent = agents.find(a => a.enabled === 1 && a.id === '31a630ba-f6cc-464c-8b2d-20389611fa27');
-                            const serverAgent = agents.find(a => a.enabled === 1 && (
-                              a.category?.includes('服务器') || a.name?.includes('命令') || a.name?.includes('服务')
-                            ));
+                            const cmdAgent = agents.find(a =>
+                              a.enabled === 1 && (
+                                a.name?.includes('命令生成') ||
+                                a.category?.includes('命令生成')
+                              )
+                            );
+                            const serverAgent = agents.find(a =>
+                              a.enabled === 1 && (
+                                a.category?.includes('服务器') ||
+                                a.name?.includes('命令') ||
+                                a.name?.includes('服务')
+                              )
+                            );
                             const firstAgent = agents.find(a => a.enabled === 1);
                             setSelectedAiAgent(cmdAgent || serverAgent || firstAgent || null);
                           }
                           setIsAiCommandModalOpen(true);
                         }}
-                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-lg text-sm text-purple-600 dark:text-purple-400 hover:from-purple-500/20 hover:to-blue-500/20 transition-colors"
+                        className="flex flex-col items-center justify-center gap-1 px-2 py-2.5 bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/30 rounded-lg text-xs font-medium text-purple-300 whitespace-nowrap hover:from-purple-600/30 hover:to-blue-600/30 transition-colors"
                       >
                         <Sparkles className="w-4 h-4" />
-                        AI 帮我执行
+                        <span>AI 执行</span>
                       </button>
                       <button
                         onClick={() => {
                           setSelectedServer(server);
                           setCommandResult(null);
                         }}
-                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-background rounded-lg text-sm text-text-secondary hover:text-text-primary transition-colors"
+                        className="flex flex-col items-center justify-center gap-1 px-2 py-2.5 bg-surface border border-border rounded-lg text-xs text-text-primary whitespace-nowrap hover:bg-background transition-colors"
                       >
                         <Terminal className="w-4 h-4" />
-                        执行命令
+                        <span>执行命令</span>
                       </button>
                       <button
                         onClick={() => handleRunCompliance(server)}
-                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-primary/10 text-primary rounded-lg text-sm hover:bg-primary/20 transition-colors"
+                        className="flex flex-col items-center justify-center gap-1 px-2 py-2.5 bg-surface border border-border rounded-lg text-xs text-text-primary whitespace-nowrap hover:bg-background transition-colors"
                       >
                         <ShieldCheck className="w-4 h-4" />
-                        合规检查
+                        <span>合规检查</span>
                       </button>
                     </div>
-                    <div className="flex gap-2 mt-2">
+                    <div className="grid grid-cols-2 gap-2 mt-2">
                       <button
                         onClick={() => {
                           setSelectedServer(server);
                           setActiveTab('command-history');
                         }}
-                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-background rounded-lg text-xs text-text-secondary hover:text-text-primary transition-colors"
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-surface border border-border rounded-lg text-xs text-text-secondary hover:text-text-primary transition-colors whitespace-nowrap"
                       >
-                        <History className="w-3 h-3" />
-                        命令历史
+                        <History className="w-3.5 h-3.5" />
+                        <span>命令历史</span>
                       </button>
                       <button
                         onClick={() => {
                           setSelectedServer(server);
                           setActiveTab('compliance-history');
                         }}
-                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-background rounded-lg text-xs text-text-secondary hover:text-text-primary transition-colors"
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-surface border border-border rounded-lg text-xs text-text-secondary hover:text-text-primary transition-colors whitespace-nowrap"
                       >
-                        <Clock className="w-3 h-3" />
-                        检查历史
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>检查历史</span>
                       </button>
                     </div>
                   </div>
@@ -1427,7 +1538,7 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
 
         {/* 添加/编辑服务器模态框 */}
         {isModalOpen && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
             <div className="bg-surface rounded-xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
               <h3 className="text-xl font-bold text-text-primary mb-6">
                 {selectedServer ? '编辑服务器' : '添加服务器'}
@@ -1515,10 +1626,61 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
                 ) : (
                   <div>
                     <label className="block text-sm font-medium text-text-secondary mb-2">SSH 私钥</label>
+                    {sshKeys && sshKeys.length > 0 && (
+                      <div className="mb-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Key className="w-3.5 h-3.5 text-text-tertiary" />
+                          <span className="text-xs text-text-tertiary">从已有密钥中选择</span>
+                        </div>
+                        <select
+                          value={selectedSshKeyId}
+                          onChange={async (e) => {
+                            const keyId = e.target.value;
+                            setSelectedSshKeyId(keyId);
+                            if (keyId) {
+                              try {
+                                const res = await api.get(`/api/ssh-keys/${keyId}`);
+                                setFormData({ ...formData, private_key: res.data.data.private_key });
+                              } catch {
+                                toast.error('获取 SSH 私钥失败');
+                              }
+                            } else {
+                              setFormData({ ...formData, private_key: '' });
+                            }
+                          }}
+                          className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-text-primary text-sm"
+                        >
+                          <option value="">-- 选择 SSH 密钥 --</option>
+                          {sshKeys.map((key) => (
+                            <option key={key.id} value={key.id}>
+                              {key.name} ({key.key_type}){key.fingerprint ? ` · ${key.fingerprint.slice(0, 20)}...` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        {selectedSshKeyId && (
+                          <div className="mt-2 flex items-center gap-1.5 text-xs text-status-success">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>当前已选择: {sshKeys.find((k) => k.id === selectedSshKeyId)?.name}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 mt-2">
+                          <button
+                            type="button"
+                            onClick={() => { resetForm(); setIsModalOpen(false); navigate('/ssh-keys'); }}
+                            className="text-xs text-primary hover:underline"
+                          >
+                            + 管理 SSH 密钥
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <textarea
                       value={formData.private_key}
-                      onChange={(e) => setFormData({ ...formData, private_key: e.target.value })}
-                      placeholder={selectedServer ? '留空以保持不变' : '粘贴您的私钥...'}
+                      onChange={(e) => {
+                        setSelectedSshKeyId('');
+                        setFormData({ ...formData, private_key: e.target.value });
+                      }}
+                      placeholder={selectedServer && !selectedSshKeyId ? '留空以保持不变' : selectedSshKeyId ? '已选择上方密钥，手动编辑可覆盖' : '粘贴您的私钥，或从上方选择已有密钥...'}
                       rows={6}
                       className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-text-primary font-mono text-sm"
                     />
@@ -1536,17 +1698,71 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
                   />
                 </div>
 
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-text-secondary mb-2">
-                    标签 (用逗号分隔)
+                    标签
                   </label>
-                  <input
-                    type="text"
-                    value={formData.tags}
-                    onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-                    placeholder="例如: 生产, Linux, Web"
-                    className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-text-primary"
-                  />
+                  {/* 已选标签展示 */}
+                  {parseCurrentTags().length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {parseCurrentTags().map((tag: string, idx: number) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary/10 text-primary text-xs rounded-full"
+                        >
+                          {tag}
+                          <button
+                            type="button"
+                            onClick={() => removeTag(tag)}
+                            className="hover:bg-primary/20 rounded-full p-0.5 transition-colors"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                    {/* 标签输入框 + 下拉建议 */}
+                    <div className="relative">
+                      <input
+                        ref={tagInputRef}
+                        type="text"
+                        value={formData.tags}
+                        onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+                        onFocus={() => setTagDropdownOpen(true)}
+                        onBlur={() => {
+                          // 延迟关闭，让下拉按钮的onClick先触发
+                          setTimeout(() => setTagDropdownOpen(false), 200);
+                        }}
+                        placeholder="输入标签名称，从下方选择或手动输入（逗号分隔）"
+                        className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-text-primary"
+                      />
+                      {/* 下拉建议框 */}
+                      {tagDropdownOpen && filteredTagSuggestions().length > 0 && (
+                        <div
+                          ref={tagDropdownRef}
+                          className="absolute z-10 mt-1 w-full bg-surface border border-border rounded-lg shadow-xl max-h-48 overflow-y-auto animate-fade-in"
+                        >
+                          <div className="px-3 py-2 text-xs text-text-tertiary border-b border-border">
+                            选择已有标签
+                          </div>
+                          {filteredTagSuggestions().map((tag: string) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onMouseDown={(e) => { e.preventDefault(); addTagToInput(tag); }}
+                              className="w-full px-3 py-2 text-left text-sm text-text-primary hover:bg-primary/10 transition-colors flex items-center gap-2"
+                            >
+                              <span className="w-2 h-2 rounded-full bg-primary/50 flex-shrink-0" />
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  {allTags.length === 0 && (
+                    <p className="mt-1 text-xs text-text-tertiary">添加服务器后，标签将在此处显示为可选项</p>
+                  )}
                 </div>
 
                 {formData.os_type === 'windows' && (
@@ -1605,7 +1821,7 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
         {/* 批量导入模态框 */}
         {isImportModalOpen && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-surface rounded-xl p-6 w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="bg-surface rounded-xl p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
               <h3 className="text-xl font-bold text-text-primary mb-4">批量导入服务器</h3>
               <p className="text-sm text-text-secondary mb-4">每行一个 JSON 对象，包含以下字段：name, hostname, port, username, password, use_ssh_key(0/1), description, tags(逗号分隔)</p>
               <div className="mb-4 p-3 bg-background rounded-lg">
@@ -1736,37 +1952,60 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
         {/* AI 命令生成模态框 */}
         {isAiCommandModalOpen && aiCommandServer && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-surface rounded-xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
+            <div className="bg-surface rounded-xl p-8 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-white" />
+                  <div className="w-10 h-10 rounded-lg bg-surface border border-border flex items-center justify-center">
+                    <Bot className="w-5 h-5 text-text-primary" />
                   </div>
                   <div>
                     <h3 className="text-lg font-bold text-text-primary">AI 智能命令生成</h3>
-                    <p className="text-xs text-text-secondary">
+                    <p className="text-sm text-text-secondary mt-1.5">
                       {aiCommandServer.name} ({aiCommandServer.hostname})
                       {selectedAiAgent && (
-                        <span className="ml-2 text-purple-500">
-                          · {selectedAiAgent.name}
+                        <span className="ml-2 text-text-tertiary">
+                          · 默认调用 <span className="font-medium text-text-secondary">{selectedAiAgent.name} Agent</span>
                         </span>
                       )}
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => setIsAiCommandModalOpen(false)}
+                  onClick={() => {
+                    setIsAiCommandModalOpen(false);
+                    setAiPrompt('');
+                    setAiGeneratedCommand('');
+                    setAiCommandExplanation('');
+                    setAiGenerationError('');
+                    setShowAiCommandConfirm(false);
+                  }}
                   className="p-2 hover:bg-background rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-text-secondary" />
                 </button>
               </div>
 
+              {/* 无 Agent 提示 */}
+              {!selectedAiAgent && (
+                <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                  <p className="text-sm text-red-300 font-medium">
+                    没有可用的 AI Agent。请先前往「Agent 管理」页面创建并启用一个 Agent。
+                  </p>
+                </div>
+              )}
+
+              {/* 生成错误提示 */}
+              {aiGenerationError && (
+                <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                  <p className="text-sm text-red-300 font-medium">{aiGenerationError}</p>
+                </div>
+              )}
+
               {/* 操作系统信息展示 */}
-              <div className="mb-4 p-3 bg-purple-500/5 border border-purple-500/20 rounded-lg">
+              <div className="mb-6 p-3 bg-background border border-border rounded-lg">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm">
-                    <Server className="w-4 h-4 text-purple-500" />
+                    <Server className="w-4 h-4 text-text-secondary" />
                     <span className="text-text-secondary">目标操作系统：</span>
                     <span className="text-text-primary font-medium">
                       {aiCommandServer?.os || aiCommandServer?.os_type || 'linux (默认，未采集信息)'}
@@ -1782,7 +2021,7 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
               </div>
 
               {/* 输入提示 */}
-              <div className="mb-4">
+              <div className="mb-6">
                 <label className="block text-sm font-medium text-text-secondary mb-2">请描述您要执行的操作</label>
                 <div className="relative">
                   <textarea
@@ -1801,7 +2040,7 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
                   <button
                     onClick={handleAiGenerateCommand}
                     disabled={isAiGenerating || !aiPrompt.trim()}
-                    className="absolute right-3 bottom-3 px-4 py-1.5 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg text-sm hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="absolute right-3 bottom-3 px-4 py-1.5 bg-text-primary text-surface rounded-lg text-sm hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {isAiGenerating ? (
                       <>
@@ -1842,7 +2081,7 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
                     <button
                       key={tip}
                       onClick={() => setAiPrompt(tip)}
-                      className="px-3 py-1 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-full text-xs hover:bg-purple-500/20 transition-colors"
+                      className="px-4 py-1.5 bg-surface/80 border border-border/50 text-text-primary rounded-full text-sm hover:bg-surface hover:border-purple-500/40 transition-colors"
                     >
                       {tip}
                     </button>
@@ -1852,30 +2091,31 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
 
               {/* 生成的命令 */}
               {aiGeneratedCommand && (
-                <div className="mb-4">
+                <div className="mb-6">
                   <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-text-secondary">AI 生成的命令</label>
+                    <label className="block text-sm font-medium text-text-secondary">AI 生成的命令（可编辑）</label>
                     <button
                       onClick={() => navigator.clipboard.writeText(aiGeneratedCommand)}
-                      className="text-xs text-purple-500 hover:text-purple-400"
+                      className="text-xs text-text-tertiary hover:text-text-secondary"
                     >
                       复制命令
                     </button>
                   </div>
-                  <div className="bg-black/90 rounded-lg p-4">
-                    <code className="text-green-400 font-mono text-sm break-all whitespace-pre-wrap">
-                      {aiGeneratedCommand}
-                    </code>
-                  </div>
+                  <textarea
+                    value={aiGeneratedCommand}
+                    onChange={(e) => setAiGeneratedCommand(e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-3 bg-black/80 border border-border rounded-lg font-mono text-sm text-green-400 focus:outline-none focus:border-purple-500 resize-y"
+                  />
                   {aiCommandExplanation && (
-                    <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                      <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                    <div className="mt-3 p-3 bg-yellow-500/20 border border-yellow-500/40 rounded-lg">
+                      <p className="text-sm text-yellow-300 dark:text-yellow-200 font-medium">
                         <strong>💡 说明：</strong>{aiCommandExplanation}
                       </p>
                     </div>
                   )}
-                  <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                    <p className="text-sm text-red-700 dark:text-red-400">
+                  <div className="mt-3 p-3 bg-red-500/20 border border-red-500/40 rounded-lg">
+                    <p className="text-sm text-red-300 dark:text-red-200 font-medium">
                       <strong>⚠️ 警告：</strong>请仔细确认命令的安全性和正确性，再执行！错误的命令可能导致数据丢失或系统故障。
                     </p>
                   </div>
@@ -1887,8 +2127,11 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
                 <button
                   onClick={() => {
                     setIsAiCommandModalOpen(false);
+                    setAiPrompt('');
                     setAiGeneratedCommand('');
                     setAiCommandExplanation('');
+                    setAiGenerationError('');
+                    setShowAiCommandConfirm(false);
                   }}
                   className="flex-1 px-4 py-2 bg-surface border border-border text-text-primary rounded-lg hover:bg-background transition-colors"
                 >
@@ -1900,23 +2143,100 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
                       onClick={() => {
                         setAiGeneratedCommand('');
                         setAiCommandExplanation('');
+                        setAiGenerationError('');
                         handleAiGenerateCommand();
                       }}
                       disabled={isAiGenerating}
-                      className="flex-1 px-4 py-2 bg-surface border border-purple-500/30 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-500/10 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="flex-1 px-4 py-2 bg-surface border border-border text-text-secondary rounded-lg hover:bg-background transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       <RefreshCw className={clsx('w-4 h-4', isAiGenerating && 'animate-spin')} />
                       重新生成
                     </button>
                     <button
                       onClick={handleExecuteAiCommand}
-                      className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                      className="flex-1 px-4 py-2 bg-text-primary text-surface rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
                     >
                       <Terminal className="w-4 h-4" />
                       确认并执行
                     </button>
                   </>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* AI 命令执行确认弹窗 */}
+        {showAiCommandConfirm && aiCommandServer && aiGeneratedCommand && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
+            <div className="bg-surface rounded-xl p-6 w-full max-w-lg mx-4">
+              <h3 className="text-lg font-bold text-text-primary mb-4">确认执行命令</h3>
+              <div className="space-y-3 mb-6">
+                <div className="flex items-center gap-2 text-sm">
+                  <Server className="w-4 h-4 text-text-secondary" />
+                  <span className="text-text-secondary">目标服务器：</span>
+                  <span className="text-text-primary font-medium">{aiCommandServer.name} ({aiCommandServer.hostname})</span>
+                </div>
+                <div>
+                  <span className="text-sm text-text-secondary">执行命令：</span>
+                  <div className="mt-1 bg-black/80 rounded-lg p-3">
+                    <code className="text-green-400 font-mono text-sm break-all">{aiGeneratedCommand}</code>
+                  </div>
+                </div>
+                {aiCommandExplanation && (
+                  <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                    <p className="text-sm text-yellow-300">
+                      <strong>💡 说明：</strong>{aiCommandExplanation}
+                    </p>
+                  </div>
+                )}
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <p className="text-sm text-red-300 font-medium">
+                    ⚠️ 此操作将在目标服务器上执行命令，请确认命令的安全性！
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowAiCommandConfirm(false)}
+                  className="flex-1 px-4 py-2 bg-surface border border-border text-text-primary rounded-lg hover:bg-background transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={confirmExecuteAiCommand}
+                  className="flex-1 px-4 py-2 bg-text-primary text-surface rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                >
+                  <Terminal className="w-4 h-4" />
+                  确认执行
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {isDeleteConfirmOpen && pendingDeleteServer && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]" onClick={() => { setIsDeleteConfirmOpen(false); setPendingDeleteServer(null); }}>
+            <div className="bg-gradient-to-br from-slate-800/70 to-slate-900/70 backdrop-blur-xl rounded-xl p-6 w-full max-w-md mx-4 border border-red-500/20" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-red-400 mb-4 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5" />
+                删除服务器
+              </h3>
+              <p className="text-text-secondary mb-6">
+                确定要删除服务器 <span className="text-text-primary font-medium">{pendingDeleteServer.name}</span> 吗？此操作不可撤销。
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setIsDeleteConfirmOpen(false); setPendingDeleteServer(null); }}
+                  className="flex-1 px-4 py-2 bg-surface border border-border text-text-primary rounded-lg hover:bg-background transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={() => deleteMutation.mutate(pendingDeleteServer.id)}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  确认删除
+                </button>
               </div>
             </div>
           </div>

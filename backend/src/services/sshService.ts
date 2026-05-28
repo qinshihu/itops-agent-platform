@@ -14,6 +14,7 @@ interface ServerInfo {
   username: string;
   password?: string;
   private_key?: string;
+  ssh_key_id?: string;
   use_ssh_key: number;
 }
 
@@ -30,6 +31,8 @@ export interface CommandResult {
 // 默认超时时间（毫秒）
 const DEFAULT_CONNECT_TIMEOUT = 10000;
 const DEFAULT_COMMAND_TIMEOUT = 30000;
+const POOL_ACQUIRE_TIMEOUT = 30000; // 连接池等待超时 30 秒
+const POOL_ACQUIRE_RETRY_INTERVAL = 500; // 连接池重试间隔 500ms
 
 // 连接池配置
 const POOL_CONFIG = {
@@ -133,55 +136,62 @@ class SSHConnectionPool {
     return `${serverId}:${hostname}:${port}:${username}`;
   }
 
-  async acquire(serverId: string): Promise<Client> {
+  async acquire(serverId: string, options: { timeout?: number } = {}): Promise<Client> {
     const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(serverId) as ServerInfo;
     if (!server) {
       throw new Error('Server not found');
     }
 
     const key = this.getConnectionKey(serverId, server.hostname, server.port || 22, server.username);
-    const connections = this.pool.get(key) || [];
+    const timeout = options.timeout ?? POOL_ACQUIRE_TIMEOUT;
+    const startTime = Date.now();
 
-    // 查找可用的空闲连接
-    for (const conn of connections) {
-      if (!conn.inUse) {
-        conn.inUse = true;
-        conn.lastUsedAt = Date.now();
-        logger.debug(`♻️ Reusing SSH connection for server ${serverId}`);
-        return conn.client;
+    while (Date.now() - startTime < timeout) {
+      const connections = this.pool.get(key) || [];
+
+      // 查找可用的空闲连接
+      for (const conn of connections) {
+        if (!conn.inUse) {
+          conn.inUse = true;
+          conn.lastUsedAt = Date.now();
+          logger.debug(`♻️ Reusing SSH connection for server ${serverId}`);
+          return conn.client;
+        }
       }
+
+      // 检查是否可以创建新连接
+      if (this.totalConnections < POOL_CONFIG.maxTotalConnections) {
+        const serverConnections = this.pool.get(key) || [];
+        if (serverConnections.length < POOL_CONFIG.maxConnectionsPerServer) {
+          // 创建新连接
+          logger.debug(`🔌 Creating new SSH connection for server ${serverId}`);
+          const newClient = await this.createConnection(server, serverId);
+          
+          const pooledConn: PooledConnection = {
+            client: newClient,
+            serverId,
+            createdAt: Date.now(),
+            lastUsedAt: Date.now(),
+            inUse: true,
+            healthCheckFailed: 0
+          };
+
+          if (!this.pool.has(key)) {
+            this.pool.set(key, []);
+          }
+          this.pool.get(key)!.push(pooledConn);
+          this.totalConnections++;
+
+          return newClient;
+        }
+      }
+
+      // 连接池已满，等待释放
+      logger.debug(`⏳ SSH pool busy for server ${serverId}, waiting for connection release...`);
+      await delay(POOL_ACQUIRE_RETRY_INTERVAL);
     }
 
-    // 检查是否超过限制
-    if (this.totalConnections >= POOL_CONFIG.maxTotalConnections) {
-      throw new Error('SSH connection pool exhausted. Total connections: ' + this.totalConnections);
-    }
-
-    const serverConnections = this.pool.get(key) || [];
-    if (serverConnections.length >= POOL_CONFIG.maxConnectionsPerServer) {
-      throw new Error(`Max connections reached for server ${serverId} (${POOL_CONFIG.maxConnectionsPerServer})`);
-    }
-
-    // 创建新连接
-    logger.debug(`🔌 Creating new SSH connection for server ${serverId}`);
-    const newClient = await this.createConnection(server, serverId);
-    
-    const pooledConn: PooledConnection = {
-      client: newClient,
-      serverId,
-      createdAt: Date.now(),
-      lastUsedAt: Date.now(),
-      inUse: true,
-      healthCheckFailed: 0
-    };
-
-    if (!this.pool.has(key)) {
-      this.pool.set(key, []);
-    }
-    this.pool.get(key)!.push(pooledConn);
-    this.totalConnections++;
-
-    return newClient;
+    throw new Error(`SSH connection pool timeout: unable to acquire connection for server ${serverId} within ${timeout}ms`);
   }
 
   release(client: Client, success: boolean = true): void {
@@ -204,8 +214,34 @@ class SSHConnectionPool {
   }
 
   private async createConnection(server: ServerInfo, serverId: string): Promise<Client> {
-    const decryptedPassword = server.password ? decrypt(server.password) : undefined;
-    const decryptedPrivateKey = server.private_key ? decrypt(server.private_key) : undefined;
+    let decryptedPassword: string | undefined;
+    let decryptedPrivateKey: string | undefined;
+
+    try {
+      decryptedPassword = server.password ? decrypt(server.password) : undefined;
+    } catch (error) {
+      throw new Error(`Failed to decrypt password for server ${serverId}: ${(error as Error).message}`);
+    }
+
+    // 优先使用 ssh_key_id 从密钥表获取私钥
+    if (server.ssh_key_id) {
+      const sshKey = db.prepare('SELECT private_key FROM ssh_keys WHERE id = ?').get(server.ssh_key_id) as { private_key: string } | undefined;
+      if (sshKey) {
+        try {
+          decryptedPrivateKey = decrypt(sshKey.private_key);
+        } catch (error) {
+          throw new Error(`Failed to decrypt SSH key for server ${serverId}: ${(error as Error).message}`);
+        }
+      }
+    }
+    // 回退到直接存储的私钥
+    else if (server.private_key) {
+      try {
+        decryptedPrivateKey = decrypt(server.private_key);
+      } catch (error) {
+        throw new Error(`Failed to decrypt SSH key for server ${serverId}: ${(error as Error).message}`);
+      }
+    }
 
     return new Promise((resolve, reject) => {
       const conn = new Client();
@@ -294,6 +330,11 @@ class SSHConnectionPool {
 
 // 全局连接池实例
 const sshPool = new SSHConnectionPool();
+
+// 延迟函数
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // 导出连接池供外部使用（如监控、管理）
 export { sshPool };
@@ -395,7 +436,7 @@ export async function executeCommand(
     conn = await sshPool.acquire(serverId);
     connAcquired = true;
 
-    const result = await new Promise<CommandResult>((resolve) => {
+    const result = await new Promise<CommandResult>((resolve, reject) => {
       let commandTimeout: NodeJS.Timeout | null = null;
       let isResolved = false;
       
@@ -407,48 +448,68 @@ export async function executeCommand(
         }
       };
 
-      conn!.exec(command, (err, stream) => {
-        if (err) {
-          safeResolve({
-            success: false,
-            stdout: '',
-            stderr: err.message,
-            command,
-            duration: Date.now() - startTime
-          });
-          return;
-        }
+      try {
+        conn!.exec(command, (err, stream) => {
+          if (err) {
+            safeResolve({
+              success: false,
+              stdout: '',
+              stderr: err.message,
+              command,
+              duration: Date.now() - startTime
+            });
+            return;
+          }
 
-        let stdout = '';
-        let stderr = '';
+          const MAX_BUFFER_SIZE = 100 * 1024;
+          const TRUNCATION_MARKER = '[Output truncated: exceeded 100KB limit]';
+          let stdout = '';
+          let stderr = '';
+          let stdoutTruncated = false;
+          let stderrTruncated = false;
 
-        commandTimeout = setTimeout(() => {
-          try { stream.destroy(); } catch { /* ignore */ }
-          safeResolve({
-            success: false,
-            stdout: '',
-            stderr: 'Command timeout',
-            command,
-            duration: Date.now() - startTime
-          });
-        }, timeout);
+          commandTimeout = setTimeout(() => {
+            try { stream.destroy(); } catch { /* ignore */ }
+            safeResolve({
+              success: false,
+              stdout: '',
+              stderr: 'Command timeout',
+              command,
+              duration: Date.now() - startTime
+            });
+          }, timeout);
 
-        stream.on('close', (code: number | null) => {
-          safeResolve({
-            success: code === 0,
-            stdout,
-            stderr,
-            command,
-            duration: Date.now() - startTime
+          stream.on('close', (code: number | null) => {
+            safeResolve({
+              success: code === 0,
+              stdout,
+              stderr,
+              command,
+              duration: Date.now() - startTime
+            });
+          }).on('data', (data: Buffer) => {
+            if (!stdoutTruncated) {
+              stdout += data.toString();
+              if (stdout.length > MAX_BUFFER_SIZE) {
+                stdout = stdout.substring(0, MAX_BUFFER_SIZE) + '\n' + TRUNCATION_MARKER;
+                stdoutTruncated = true;
+              }
+            }
+          }).stderr.on('data', (data: Buffer) => {
+            if (!stderrTruncated) {
+              stderr += data.toString();
+              if (stderr.length > MAX_BUFFER_SIZE) {
+                stderr = stderr.substring(0, MAX_BUFFER_SIZE) + '\n' + TRUNCATION_MARKER;
+                stderrTruncated = true;
+              }
+            }
+          }).on('error', (err) => {
+            stderr += `Stream error: ${err.message}\n`;
           });
-        }).on('data', (data: Buffer) => {
-          stdout += data.toString();
-        }).stderr.on('data', (data: Buffer) => {
-          stderr += data.toString();
-        }).on('error', (err) => {
-          stderr += `Stream error: ${err.message}\n`;
         });
-      });
+      } catch (execError) {
+        reject(execError);
+      }
     });
 
     if (logHistory) {

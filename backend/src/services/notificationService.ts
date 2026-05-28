@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 import axios from 'axios';
 import { randomUUID } from 'crypto';
 import nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
 
 interface NotificationDB {
   id: string;
@@ -41,6 +42,7 @@ interface TaskRecord {
 class NotificationService {
   private config: NotificationConfig | null = null;
   private initialized: boolean = false;
+  private transporter: Transporter | null = null;
 
   constructor() {
     // 延迟初始化，等到数据库准备好后再调用 loadConfig
@@ -48,6 +50,23 @@ class NotificationService {
 
   init() {
     this.ensureInitialized();
+    this.initializeEmail();
+  }
+
+  private initializeEmail() {
+    if (this.transporter) return;
+    const emailConfig = this.config?.email_config;
+    if (!emailConfig?.smtp_host) return;
+
+    this.transporter = nodemailer.createTransport({
+      host: emailConfig.smtp_host,
+      port: emailConfig.smtp_port || 465,
+      secure: (emailConfig.smtp_port || 465) === 465,
+      auth: {
+        user: emailConfig.user,
+        pass: emailConfig.password
+      }
+    });
   }
 
   private ensureInitialized() {
@@ -206,17 +225,15 @@ class NotificationService {
       throw new Error('Email SMTP not configured');
     }
 
-    const transporter = nodemailer.createTransport({
-      host: emailConfig.smtp_host,
-      port: emailConfig.smtp_port || 465,
-      secure: (emailConfig.smtp_port || 465) === 465,
-      auth: {
-        user: emailConfig.user,
-        pass: emailConfig.password
-      }
-    });
+    if (!this.transporter) {
+      this.initializeEmail();
+    }
 
-    const info = await transporter.sendMail({
+    if (!this.transporter) {
+      throw new Error('Failed to initialize email transporter');
+    }
+
+    const info = await this.transporter.sendMail({
       from: `"ITOps Agent Platform" <${emailConfig.user}>`,
       to: emailConfig.user,
       subject: notification.title,
@@ -308,6 +325,7 @@ class NotificationService {
       SELECT * FROM notifications 
       WHERE status = 'failed'
       ORDER BY created_at DESC
+      LIMIT 10
     `).all() as NotificationDB[];
 
     const results = [];

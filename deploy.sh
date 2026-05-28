@@ -223,10 +223,10 @@ generate_env_file() {
 # JWT 签名密钥（生产环境必须修改）
 JWT_SECRET=${JWT_SECRET}
 
-# 管理员初始密码（请在首次登录后立即修改）
-ADMIN_INITIAL_PASSWORD=admin
+# 管理员初始密码（可选，留空则使用默认 'admin' 密码）
+ADMIN_INITIAL_PASSWORD=
 
-# 后端端口
+# 后端端
 PORT=3001
 
 # 运行环境

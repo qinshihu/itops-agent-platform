@@ -1,6 +1,8 @@
 import { logger } from '../utils/logger';
 import { env } from '../utils/env';
 import db from '../models/database';
+import { rootCauseAnalysisService } from './rootCauseAnalysisService';
+import { circuitBreakers } from './llmService';
 
 export type AlertSeverity = 'critical' | 'warning' | 'info';
 export type AlertChannel = 'email' | 'webhook' | 'log';
@@ -398,6 +400,52 @@ export class AlertService {
   clearHistory(): void {
     this.alertHistory = [];
     logger.info('Alert history cleared');
+  }
+
+  processDatabaseAlert(alertId: string): void {
+    const alert = db.prepare('SELECT id, title, content, severity, source FROM alerts WHERE id = ?').get(alertId) as {
+      id: string;
+      title: string;
+      content: string;
+      severity: string;
+      source: string;
+    } | undefined;
+
+    if (!alert) {
+      logger.warn(`⚠️ [AlertService] Alert not found for RCA trigger: ${alertId}`);
+      return;
+    }
+
+    if (alert.severity === 'critical' || alert.severity === 'high' || alert.severity === 'warning') {
+      setImmediate(async () => {
+        try {
+          const existingRCA = db.prepare(
+            "SELECT id FROM root_cause_analyses WHERE alert_id = ? AND status != 'failed'"
+          ).get(alert.id) as { id: string } | undefined;
+
+          if (existingRCA) {
+            logger.info(`⏭️ [AlertService] Skipping RCA for alert ${alertId} - already analyzed (existing RCA: ${existingRCA.id})`);
+            return;
+          }
+
+          const openBreakers = [];
+          for (const [name, breaker] of circuitBreakers.entries()) {
+            if (!breaker.canCall()) {
+              openBreakers.push(name);
+            }
+          }
+
+          if (openBreakers.length > 0) {
+            logger.warn(`⚠️ [AlertService] LLM circuit breakers are open: ${openBreakers.join(', ')}. RCA will rely more on rule engine fallback.`);
+          }
+
+          logger.info(`🔔 [AlertService] Auto-triggering RCA for alert: ${alertId} (severity: ${alert.severity})`);
+          await rootCauseAnalysisService.autoAnalyze(alert.id);
+        } catch (error) {
+          logger.error(`❌ [AlertService] Failed to auto-analyze alert: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      });
+    }
   }
 }
 

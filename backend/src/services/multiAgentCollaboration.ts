@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import db from '../models/database';
 import { logger } from '../utils/logger';
 import { callDoubaoAPI } from './llmService';
+import EnhancedRAGService from './enhancedRAGService';
 
 interface AgentDB {
   id: string;
@@ -34,7 +35,9 @@ interface CollaborationMessage {
 class MultiAgentOrchestrator {
   private context: AgentCollaborationContext;
   private maxRounds: number = 10;
-  private maxThinkingTime: number = 5 * 60 * 1000; // 5分钟
+  private maxThinkingTime: number = 5 * 60 * 1000;
+  private maxConversationHistory: number = 50;
+  private trimTargetSize: number = 30;
 
   constructor(taskId: string, initialContext: Record<string, unknown> = {}) {
     this.context = {
@@ -169,6 +172,7 @@ ${agentDescriptions}
       content: initialQuery,
       timestamp: Date.now()
     });
+    this._trimConversationHistory();
 
     // RAG知识检索
     if (enableRAG) {
@@ -180,6 +184,7 @@ ${agentDescriptions}
           content: `以下是从知识库中检索到的相关信息：\n\n${knowledge.map(k => `- ${k.title}\n  ${k.content}`).join('\n\n')}`,
           timestamp: Date.now()
         });
+        this._trimConversationHistory();
       }
     }
 
@@ -204,6 +209,7 @@ ${agentDescriptions}
           content: '协作已超时，正在总结结果...',
           timestamp: Date.now()
         });
+        this._trimConversationHistory();
         break;
       }
 
@@ -221,6 +227,7 @@ ${agentDescriptions}
             content: `检测到Agent委托循环 (${this.context.delegationChain.join(' -> ')} -> ${delegateToAgent})，终止委托以避免无限循环`,
             timestamp: Date.now()
           });
+          this._trimConversationHistory();
           shouldContinue = false;
         } else {
           this.context.currentAgentId = delegateToAgent;
@@ -269,6 +276,7 @@ ${agentDescriptions}
         content: response,
         timestamp: Date.now()
       });
+      this._trimConversationHistory();
 
       // 解析响应，判断下一步
       return this.parseAgentResponse(response, agents);
@@ -287,41 +295,20 @@ ${agentDescriptions}
   }
 
   /**
-   * 从知识库检索相关信息
+   * 从知识库检索相关信息（使用 TF-IDF 增强的 RAG）
    */
   private async retrieveRelevantKnowledge(query: string): Promise<Array<{ score: number; [key: string]: unknown }>> {
     try {
-      const allKnowledge = db.prepare('SELECT * FROM knowledge_base ORDER BY usage_count DESC LIMIT 20').all() as Array<{
-        id: string;
-        title: string;
-        content: string;
-        category: string;
-        usage_count: number;
-      }>;
+      const ragService = new EnhancedRAGService();
+      const searchResults = await ragService.search(query, { limit: 5, minScore: 0.15 });
       
-      if (allKnowledge.length === 0) return [];
-
-      // 简单关键词匹配（真实生产环境应该用向量数据库）
-      const queryLower = query.toLowerCase();
-      const keywords = queryLower.split(/\s+/).filter(k => k.length > 2);
-
-      const scoredKnowledge = allKnowledge.map(k => {
-        const searchFields = `${k.title} ${k.content} ${k.category}`.toLowerCase();
-        let score = 0;
-        
-        for (const keyword of keywords) {
-          if (searchFields.includes(keyword)) {
-            score += 1;
-          }
-        }
-
-        // 增加基于使用量的权重
-        score += Math.min((k.usage_count || 0) * 0.1, 2);
-
-        return { ...k, score };
-      }).filter(k => k.score > 0).sort((a, b) => b.score - a.score).slice(0, 5);
-
-      return scoredKnowledge;
+      return searchResults.map(r => ({
+        id: r.item.id,
+        title: r.item.title,
+        content: r.item.content,
+        category: r.item.category,
+        score: r.score
+      }));
 
     } catch (error) {
       logger.error('Knowledge retrieval failed:', error);
@@ -345,35 +332,88 @@ ${agentDescriptions}
 对话历史:
 ${formatted}
 
-请根据对话历史继续处理任务。如果你认为需要其他专业Agent的帮助，可以明确提出要咨询哪个Agent。如果你认为任务已完成，可以输出"任务完成"并给出总结。`;
+请根据对话历史继续处理任务。
+
+【委托协议】如果你认为需要其他专业Agent的帮助，请使用以下格式之一：
+1. 结构化格式：\`\`\`json
+{"delegate_to": "Agent名称"}
+\`\`\`
+2. 快捷格式：[DELEGATE:Agent名称]
+3. 自然语言格式：需要请/建议/调用 [Agent名称] 协助
+
+【完成标记】如果任务已完成，请在回复中包含"任务完成"或 [DONE]。
+`;
   }
 
   /**
    * 解析Agent响应，决定下一步
+   * 支持结构化协议：Agent 可通过 JSON 标记表达委托意图
    */
   private parseAgentResponse(
     response: string,
     agents: AgentDB[]
   ): { type: 'continue' | 'final' | 'delegate', delegateTo?: string } {
     
-    // 检查是否任务完成
+    // 优先解析结构化委托协议
+    // 格式 1: ```json\n{"delegate_to": "Agent名称"}\n```
+    const jsonBlockMatch = response.match(/```json\s*\n([\s\S]*?)\n?\s*```/);
+    if (jsonBlockMatch) {
+      try {
+        const parsed = JSON.parse(jsonBlockMatch[1]);
+        if (parsed.delegate_to) {
+          const targetAgent = agents.find(a => 
+            a.name === parsed.delegate_to || a.name.includes(parsed.delegate_to)
+          );
+          if (targetAgent) {
+            return { type: 'delegate', delegateTo: targetAgent.id };
+          }
+        }
+      } catch {
+        // JSON 解析失败，降级到文本匹配
+      }
+    }
+
+    // 格式 2: [DELEGATE:Agent名称]
+    const delegateMatch = response.match(/\[DELEGATE:([^\]]+)\]/i);
+    if (delegateMatch) {
+      const targetName = delegateMatch[1].trim();
+      const targetAgent = agents.find(a => 
+        a.name === targetName || a.name.includes(targetName)
+      );
+      if (targetAgent) {
+        return { type: 'delegate', delegateTo: targetAgent.id };
+      }
+    }
+
+    // 检查是否任务完成（支持结构化标记）
     if (response.includes('任务完成') || 
         response.includes('已完成') || 
-        response.includes('总结:')) {
+        response.includes('总结:') ||
+        response.includes('[DONE]') ||
+        response.includes('[COMPLETE]')) {
       return { type: 'final' };
     }
 
-    // 检查是否需要委托给其他Agent
+    // 降级方案：检查响应中是否提到其他 Agent 名称
     for (const agent of agents) {
       if (agent.id !== this.context.currentAgentId) {
-        if (response.includes(agent.name) || 
-            (agent.role && response.includes(agent.role))) {
+        // 需要精确匹配：Agent 名称前后是特定上下文词
+        const namePattern = new RegExp(`(?:需要|请|建议|调用|转给|交给|consult|delegate)\\s*${this.escapeRegExp(agent.name)}`, 'i');
+        if (namePattern.test(response) || 
+            (agent.role && namePattern.test(agent.role))) {
           return { type: 'delegate', delegateTo: agent.id };
         }
       }
     }
 
     return { type: 'continue' };
+  }
+
+  /**
+   * 转义正则特殊字符
+   */
+  private escapeRegExp(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   /**
@@ -491,6 +531,13 @@ ${this.context.conversationHistory.slice(0, 5).map(msg =>
     return id;
   }
 
+  private _trimConversationHistory(): void {
+    if (this.context.conversationHistory.length > this.maxConversationHistory) {
+      const excess = this.context.conversationHistory.length - this.trimTargetSize;
+      this.context.conversationHistory.splice(0, excess);
+    }
+  }
+
   /**
    * 获取协作上下文
    */
@@ -504,14 +551,38 @@ ${this.context.conversationHistory.slice(0, 5).map(msg =>
  */
 class AgentMessageBus {
   private messages: Map<string, CollaborationMessage[]> = new Map();
-  private messageTTL: number; // 毫秒，默认30分钟
-  private cleanupInterval: number; // 毫秒，默认10分钟
+  private messageTTL: number;
+  private cleanupInterval: number;
   private lastCleanup: number;
+  private periodicCleanupTimer: NodeJS.Timeout;
 
   constructor(options: { messageTTL?: number; cleanupInterval?: number } = {}) {
-    this.messageTTL = options.messageTTL || 30 * 60 * 1000; // 30分钟
-    this.cleanupInterval = options.cleanupInterval || 10 * 60 * 1000; // 10分钟
+    this.messageTTL = options.messageTTL || 30 * 60 * 1000;
+    this.cleanupInterval = options.cleanupInterval || 10 * 60 * 1000;
     this.lastCleanup = Date.now();
+
+    this.periodicCleanupTimer = setInterval(() => {
+      this.globalCleanup();
+    }, 5 * 60 * 1000);
+
+    if (this.periodicCleanupTimer.unref) {
+      this.periodicCleanupTimer.unref();
+    }
+  }
+
+  globalCleanup(): void {
+    const now = Date.now();
+    const cutoff = now - this.messageTTL;
+
+    for (const [key, msgs] of this.messages.entries()) {
+      const validMessages = msgs.filter(msg => msg.timestamp > cutoff);
+      if (validMessages.length === 0) {
+        this.messages.delete(key);
+      } else {
+        this.messages.set(key, validMessages);
+      }
+    }
+    this.lastCleanup = now;
   }
 
   sendMessage(

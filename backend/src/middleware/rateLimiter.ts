@@ -1,4 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
+import { env } from '../utils/env';
+import { logger } from '../utils/logger';
 
 interface RateLimitEntry {
   count: number;
@@ -29,6 +31,23 @@ const rateLimitConfig: RateLimitConfig = {
   '/api/webhooks': { windowMs: 1000, max: 10 },
 };
 
+const ipWhitelist = env.WEBHOOK_IP_WHITELIST
+  ? env.WEBHOOK_IP_WHITELIST.split(',').map(ip => ip.trim())
+  : [];
+
+function isIpWhitelisted(ip: string | undefined): boolean {
+  if (ipWhitelist.length === 0) return true;
+  if (!ip) return false;
+
+  const clientIp = ip.replace(/^::ffff:/, '');
+  return ipWhitelist.some(whitelistedIp => {
+    if (whitelistedIp.includes('/')) {
+      return clientIp.startsWith(whitelistedIp.split('/')[0]);
+    }
+    return clientIp === whitelistedIp || whitelistedIp === '*';
+  });
+}
+
 // 默认策略：每分钟最多100次
 const DEFAULT_CONFIG = { windowMs: 60 * 1000, max: 100 };
 
@@ -38,7 +57,31 @@ function getClientKey(req: Request): string {
   return `${ip}:${req.method}:${req.path}`;
 }
 
+export function webhookIpFilter(req: Request, res: Response, next: NextFunction) {
+  const clientIp = req.ip || req.socket.remoteAddress;
+
+  if (ipWhitelist.length > 0 && req.path.startsWith('/api/webhooks')) {
+    if (!isIpWhitelisted(clientIp)) {
+      logger.warn(`Webhook request blocked: IP ${clientIp} not in whitelist`, {
+        path: req.path,
+        method: req.method,
+      });
+      return res.status(403).json({
+        success: false,
+        message: 'IP not allowed',
+      });
+    }
+  }
+
+  next();
+}
+
 export function rateLimiter(req: Request, res: Response, next: NextFunction) {
+  // 白名单IP跳过速率限制
+  if (isIpWhitelisted(req.ip || req.socket.remoteAddress)) {
+    return next();
+  }
+
   // 查找匹配的配置
   let config = DEFAULT_CONFIG;
   for (const [path, cfg] of Object.entries(rateLimitConfig)) {

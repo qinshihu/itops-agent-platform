@@ -5,6 +5,7 @@ import { notificationService } from '../services/notificationService';
 import { alertNoiseReductionService } from '../services/alertNoiseReductionService';
 import { remediationService } from '../services/remediationService';
 import { rootCauseAnalysisService } from '../services/rootCauseAnalysisService';
+import { alertService } from '../services/alertService';
 import { emitToAlerts } from '../websocket/handler';
 import { logger } from '../utils/logger';
 import { requireRole } from '../middleware/auth';
@@ -178,6 +179,8 @@ router.post('/', async (req: Request, res: Response) => {
               logger.error('Failed to auto-trigger RCA for alert:', err);
             });
           }
+
+          alertService.processDatabaseAlert(id);
 
           const policies = await remediationService.matchAlertToPolicies(alertForMatching);
           for (const policy of policies) {

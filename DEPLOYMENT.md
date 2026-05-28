@@ -196,19 +196,54 @@ cd frontend && npm run dev
 | `NODE_ENV` | 运行环境 | production | 否 |
 | `PORT` | 后端端口 | 3001 | 否 |
 | `DATABASE_PATH` | 数据库路径 | ./data/app.db | 否 |
-| `JWT_SECRET` | JWT 签名密钥 | 开发环境自动生成 | 是（生产） |
-| `ADMIN_INITIAL_PASSWORD` | 管理员初始密码 | admin | 否 |
+| `JWT_SECRET` | JWT 签名密钥（生产环境必须修改） | 开发环境自动生成 | 是（生产） |
+| `JWT_EXPIRES_IN` | Access Token 有效期 | 24h | 否 |
+| `ADMIN_INITIAL_PASSWORD` | 管理员初始密码（首次部署时生效） | 空（默认 admin） | 否 |
 | `DOUBAO_API_KEY` | 豆包 API 密钥 | - | 否 |
 | `DOUBAO_API_BASE` | 豆包 API 地址 | https://ark.cn-beijing.volces.com/api/v3 | 否 |
 | `DOUBAO_MODEL` | 豆包模型名称 | doubao-4o | 否 |
 | `OPENAI_API_KEY` | OpenAI API 密钥 | - | 否 |
-| `OPENAI_API_BASE` | OpenAI API 地址 | https://api.openai.com/v3 | 否 |
+| `OPENAI_API_BASE` | OpenAI API 地址 | https://api.openai.com/v1 | 否 |
 | `OPENAI_MODEL` | OpenAI 模型名称 | gpt-4o | 否 |
-| `ALLOWED_ORIGINS` | CORS 允许源列表 | http://localhost:80,http://localhost:3000,http://localhost:8080 | 否 |
-| `WEBHOOK_VERIFY_ENABLED` | Webhook 签名验证开关 | false | 否（生产建议开启） |
-| `WEBHOOK_SECRET` | Webhook 签名密钥 | - | 否（生产必须） |
+| `LOCAL_AI_API_BASE` | 本地 AI API 地址（Ollama 等） | - | 否 |
+| `LOCAL_AI_MODEL` | 本地 AI 模型名称 | - | 否 |
+| `ALLOWED_ORIGINS` | CORS 允许源列表（逗号分隔） | http://localhost,http://localhost:3000,http://localhost:8080 | 否 |
+| `WEBHOOK_VERIFY_ENABLED` | 是否启用 Webhook 签名验证（生产环境建议开启） | false | 否 |
+| `WEBHOOK_SECRET` | Webhook 签名密钥（启用签名验证时必须设置） | - | 否 |
+| `WEBHOOK_IP_WHITELIST` | Webhook IP 白名单（逗号分隔，空为允许所有 IP） | - | 否 |
+| `LOG_LEVEL` | 日志级别（debug/info/warn/error） | info | 否 |
 
 > 💡 **AI 模型配置无需在 `.env` 中配置**：登录后可直接在 Web 页面 `设置 → AI 配置` 中配置，保存到数据库，重启不丢失。
+
+### 5.1 安全配置最佳实践
+
+#### 🔐 登录安全
+- **强制密码修改**：首次登录系统会强制要求修改默认密码 `admin`
+- **密码复杂度**：新密码必须满足至少 8 位，包含大小写字母、数字和特殊字符
+- **登录锁定**：连续 5 次登录失败后，账户将被锁定 30 分钟（管理员可在用户管理中手动解锁）
+
+#### 🌐 Webhook 安全配置（推荐）
+
+生产环境建议同时启用以下两项安全措施：
+
+**1. IP 白名单**
+```env
+# 只允许 Prometheus 服务器和 Zabbix 服务器发送告警
+WEBHOOK_IP_WHITELIST=192.168.1.100,192.168.1.101
+```
+
+**2. 签名验证**
+```env
+WEBHOOK_VERIFY_ENABLED=true
+WEBHOOK_SECRET=your-strong-random-secret-here
+```
+
+生成安全密钥：
+```bash
+openssl rand -hex 32
+```
+
+在告警源（Prometheus/Zabbix）中配置相同的 secret 和签名算法（HMAC-SHA256）。
 
 ---
 

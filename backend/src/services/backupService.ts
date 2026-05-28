@@ -55,15 +55,40 @@ const DEFAULT_CONFIG: BackupConfig = {
 };
 
 export class BackupService {
-  private config: BackupConfig;
+  private config: BackupConfig = DEFAULT_CONFIG;
   private timer: NodeJS.Timeout | null = null;
   private backupHistory: BackupInfo[] = [];
   private isRunning = false;
+  private isInitialized = false;
 
   constructor() {
-    this.config = this.loadConfig();
-    this.loadHistory();
-    this.ensureBackupDir();
+    // 构造函数不进行数据库操作，等待 init() 显式调用
+  }
+
+  /**
+   * 初始化备份服务 - 必须在数据库初始化后调用
+   */
+  init(): void {
+    if (this.isInitialized) {
+      logger.info('Backup service already initialized');
+      return;
+    }
+
+    try {
+      this.config = this.loadConfig();
+      this.loadHistory();
+      this.ensureBackupDir();
+      
+      if (this.config.enabled) {
+        this.startAutoBackup();
+      }
+      
+      this.isInitialized = true;
+      logger.info('✅ Backup service initialized successfully');
+    } catch (error) {
+      logger.error('Failed to initialize backup service', error as Error);
+      throw error;
+    }
   }
 
   private loadConfig(): BackupConfig {
@@ -79,6 +104,10 @@ export class BackupService {
   }
 
   private saveConfig(): void {
+    if (!this.isInitialized) {
+      logger.warn('Attempted to save config before backup service initialization');
+      return;
+    }
     const json = JSON.stringify(this.config);
     db.prepare(`
       INSERT OR REPLACE INTO settings (key, value, updated_at)
@@ -98,6 +127,10 @@ export class BackupService {
   }
 
   private saveHistory(): void {
+    if (!this.isInitialized) {
+      logger.warn('Attempted to save history before backup service initialization');
+      return;
+    }
     const json = JSON.stringify(this.backupHistory.slice(-50));
     db.prepare(`
       INSERT OR REPLACE INTO settings (key, value, updated_at)
@@ -458,13 +491,6 @@ export class BackupService {
       logger.error('Failed to delete backup', error as Error);
       throw error;
     }
-  }
-
-  init(): void {
-    if (this.config.enabled) {
-      this.startAutoBackup();
-    }
-    logger.info('Backup service initialized');
   }
 }
 

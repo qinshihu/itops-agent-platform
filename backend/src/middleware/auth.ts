@@ -10,10 +10,11 @@ interface AuthUser {
   email: string | null;
   role: string;
   enabled: number;
+  password_must_change: number;
 }
 
 const userCache = new Map<string, { user: AuthUser; expiresAt: number }>();
-const USER_CACHE_TTL = 60 * 1000;
+const USER_CACHE_TTL = 10 * 1000;
 const CACHE_CLEANUP_INTERVAL = 5 * 60 * 1000;
 
 function startCacheCleanup(): void {
@@ -94,7 +95,7 @@ export function authenticateToken(req: Request & { user?: AuthUser }, res: Respo
     
     let user: AuthUser | null = getCachedUser(decoded.id);
     if (!user) {
-      const dbUser = db.prepare('SELECT id, username, email, role, enabled FROM users WHERE id = ?').get(decoded.id) as AuthUser | undefined;
+      const dbUser = db.prepare('SELECT id, username, email, role, enabled, password_must_change FROM users WHERE id = ?').get(decoded.id) as AuthUser | undefined;
       if (dbUser) {
         user = dbUser;
         setCachedUser(decoded.id, user);
@@ -149,4 +150,15 @@ export function requireRole(...allowedRoles: string[]) {
 
     next();
   };
+}
+
+export function requirePasswordChange(req: Request & { user?: AuthUser }, res: Response, next: NextFunction) {
+  if (req.user && req.user.password_must_change) {
+    return res.status(403).json({
+      success: false,
+      message: '请先修改初始密码',
+      code: 'PASSWORD_MUST_CHANGE'
+    });
+  }
+  next();
 }

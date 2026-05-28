@@ -1,7 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
+import { ToastProvider } from './contexts/ToastContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/layout/Layout';
@@ -31,6 +32,13 @@ import RemediationPolicies from './pages/RemediationPolicies';
 import RemediationPolicyEditor from './pages/RemediationPolicyEditor';
 import RemediationExecutions from './pages/RemediationExecutions';
 import RemediationDashboard from './pages/RemediationDashboard';
+import Topology from './pages/Topology';
+import AIRootCause from './pages/AIRootCause';
+import RCADetail from './pages/RCADetail';
+import RemediationWorkbench from './pages/RemediationWorkbench';
+import AIInsights from './pages/AIInsights';
+import NetworkDevices from './pages/NetworkDevices';
+import SSHKeys from './pages/SSHKeys';
 import NotFound from './pages/NotFound';
 
 const queryClient = new QueryClient({
@@ -43,25 +51,21 @@ const queryClient = new QueryClient({
 });
 
 function App() {
-  // 初始化主题
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' || 'dark';
-    if (savedTheme === 'light') {
-      document.documentElement.setAttribute('data-theme', 'light');
-    }
-  }, []);
-
   return (
     <ErrorBoundary>
+      <ThemeProvider>
       <AuthProvider>
-        <QueryClientProvider client={queryClient}>
-          <BrowserRouter>
+        <ToastProvider>
+          <QueryClientProvider client={queryClient}>
+            <BrowserRouter>
             <Routes>
             <Route path="/login" element={<Login />} />
-            <Route path="/" element={<Layout />}>
+            <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="servers" element={<ProtectedRoute><Servers /></ProtectedRoute>} />
+              <Route path="ssh-keys" element={<ProtectedRoute><SSHKeys /></ProtectedRoute>} />
+              <Route path="network-devices" element={<ProtectedRoute><NetworkDevices /></ProtectedRoute>} />
               <Route path="agents" element={<ProtectedRoute><Agents /></ProtectedRoute>} />
               <Route path="workflows" element={<ProtectedRoute><Workflows /></ProtectedRoute>} />
               <Route path="workflows/:id" element={<ProtectedRoute><WorkflowEditor /></ProtectedRoute>} />
@@ -86,12 +90,19 @@ function App() {
               <Route path="remediation-policies/:id" element={<ProtectedRoute><RemediationPolicyEditor /></ProtectedRoute>} />
               <Route path="remediation-executions" element={<ProtectedRoute><RemediationExecutions /></ProtectedRoute>} />
               <Route path="remediation-dashboard" element={<ProtectedRoute><RemediationDashboard /></ProtectedRoute>} />
+              <Route path="topology" element={<ProtectedRoute><Topology /></ProtectedRoute>} />
+              <Route path="ai-root-cause" element={<ProtectedRoute><AIRootCause /></ProtectedRoute>} />
+              <Route path="ai-root-cause/:id" element={<ProtectedRoute><RCADetail /></ProtectedRoute>} />
+              <Route path="remediation-workbench" element={<ProtectedRoute><RemediationWorkbench /></ProtectedRoute>} />
+              <Route path="ai-insights" element={<ProtectedRoute><AIInsights /></ProtectedRoute>} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
       </QueryClientProvider>
+    </ToastProvider>
     </AuthProvider>
+    </ThemeProvider>
   </ErrorBoundary>
   );
 }

@@ -1,55 +1,18 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { executeCommand, testConnection, runComplianceCheck, complianceChecks } from '../services/sshService';
 import { randomUUID } from 'crypto';
 import db from '../models/database';
 import { logger } from '../utils/logger';
 import { requireRole } from '../middleware/auth';
+import { checkCommandSafety } from '../middleware/commandFilter';
 
 const router = Router();
 
-// 危险命令模式 - 用于检测潜在危险操�?
-const DANGEROUS_PATTERNS = [
-  /rm\s+-rf/i,           // 强制递归删除
-  /mkfs/i,               // 格式化命�?
-  /dd\s+if=/i,           // dd命令
-  /:\(\)\s*\{/i,         // fork炸弹
-  /chmod\s+777/i,        // 过宽权限
-  />\s*\/dev\/sda/i,     // 直接写入磁盘
-  /chroot/i,             // chroot
-  /su\s+/i,              // 切换用户
-  /sudo\s+/i,            // sudo命令
-  /passwd/i,             // 密码修改
-  /crontab/i,            // cron修改
-];
-
-// 验证命令安全�?
-function validateCommandSafety(command: string): { valid: boolean; warnings: string[] } {
-  const warnings: string[] = [];
-  
-  // 检查危险模�?
-  for (const pattern of DANGEROUS_PATTERNS) {
-    if (pattern.test(command)) {
-      warnings.push(`Command contains potentially dangerous pattern: ${pattern.source}`);
-    }
-  }
-  
-  // 检查命令长�?
-  if (command.length > 1000) {
-    warnings.push('Command is unusually long');
-  }
-  
-  return {
-    valid: warnings.length === 0,
-    warnings
-  };
-}
-
-// 记录命令审计日志
 function logCommandAudit(
-  userId: string, 
-  serverId: string, 
-  command: string, 
-  isSafe: boolean, 
+  userId: string,
+  serverId: string,
+  command: string,
+  isSafe: boolean,
   warnings: string[]
 ) {
   try {
@@ -69,7 +32,6 @@ function logCommandAudit(
   }
 }
 
-// 测试服务器连�?
 router.post('/:id/test', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const result = await testConnection(req.params.id);
@@ -79,44 +41,47 @@ router.post('/:id/test', requireRole('admin', 'operator'), async (req: Request, 
   }
 });
 
-// 执行单个命令
-router.post('/:id/exec', requireRole('admin', 'operator'), async (req: Request & { user?: { id: string } }, res: Response) => {
+router.post('/:id/exec', requireRole('admin', 'operator'), (req: Request, res: Response, next: NextFunction) => {
+  const { command } = req.body;
+  if (!command) {
+    return res.status(400).json({ success: false, error: 'Command is required' });
+  }
+
+  const userRole = (req as Request & { user?: { role?: string } }).user?.role || 'viewer';
+  const safetyCheck = checkCommandSafety(command, userRole);
+
+  if (!safetyCheck.allowed) {
+    return res.status(403).json({ success: false, error: safetyCheck.reason, policy: safetyCheck.policy });
+  }
+
+  (req as Request & { commandWarnings?: string[] }).commandWarnings = safetyCheck.severity === 'warning' ? [safetyCheck.reason || ''] : undefined;
+  next();
+}, async (req: Request & { user?: { id: string }; commandWarnings?: string[] }, res: Response) => {
   try {
     const { command, timeout } = req.body;
-    
-    if (!command) {
-      return res.status(400).json({ success: false, error: 'Command is required' });
-    }
-    
-    // 验证命令安全�?
-    const safetyCheck = validateCommandSafety(command);
-    
-    // 获取用户ID
+
     const userId = req.user?.id || 'unknown';
-    
-    // 记录审计日志
-    logCommandAudit(userId, req.params.id, command, safetyCheck.valid, safetyCheck.warnings);
-    
-    // 如果有安全警告，仍然执行但返回警�?
-    const result = await executeCommand(req.params.id, command, { 
+
+    logCommandAudit(userId, req.params.id, command, true, []);
+
+    const result = await executeCommand(req.params.id, command, {
       timeout,
       executedBy: userId
     });
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       data: result,
-      warnings: safetyCheck.warnings.length > 0 ? safetyCheck.warnings : undefined
+      warnings: req.commandWarnings
     });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to execute command' });
   }
 });
 
-// 获取可用的合规检查列�?
 router.get('/compliance/checks', (_req: Request, res: Response) => {
-  res.json({ 
-    success: true, 
+  res.json({
+    success: true,
     data: complianceChecks.map(check => ({
       name: check.name,
       command: check.command
@@ -124,12 +89,11 @@ router.get('/compliance/checks', (_req: Request, res: Response) => {
   });
 });
 
-// 运行完整的合规检�?
 router.post('/:id/compliance', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const saveResults = req.body.saveResults !== false;
     const results = await runComplianceCheck(req.params.id, { saveResults });
-    
+
     res.json({ success: true, data: results });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to run compliance check' });

@@ -8,7 +8,9 @@ import { tokenBlacklist } from '../services/tokenBlacklist';
 import { logger } from '../utils/logger';
 import { validateBody } from '../middleware/validation';
 import { authSchemas } from '../schemas/apiValidation';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, invalidateUserCache } from '../middleware/auth';
+import { validatePassword } from '../utils/passwordPolicy';
+import { checkLoginLockout, recordFailedLogin, resetFailedLoginAttempts } from '../services/loginThrottler';
 
 const router = Router();
 
@@ -17,7 +19,15 @@ router.post('/login', validateBody(authSchemas.login), async (req: Request, res:
   try {
     const { username, password } = req.body;
 
-    // 查询用户
+    const lockoutStatus = checkLoginLockout(username);
+    if (lockoutStatus.locked) {
+      const remainingMinutes = Math.ceil((lockoutStatus.lockoutUntil!.getTime() - new Date().getTime()) / 60000);
+      return res.status(423).json({
+        success: false,
+        message: `账户已被锁定，请${remainingMinutes}分钟后再试`
+      });
+    }
+
     const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as { id: string; username: string; password: string; role: string; email: string; enabled: number; [key: string]: unknown } | undefined;
 
     if (!user) {
@@ -34,16 +44,23 @@ router.post('/login', validateBody(authSchemas.login), async (req: Request, res:
       });
     }
 
-    // 验证密码
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
+      const result = recordFailedLogin(username);
+      if (result.locked) {
+        return res.status(423).json({
+          success: false,
+          message: `密码错误次数过多，账户已被锁定30分钟`
+        });
+      }
       return res.status(401).json({
         success: false,
-        message: '用户名或密码错误'
+        message: `用户名或密码错误，剩余${result.remainingAttempts}次尝试机会`
       });
     }
 
-    // 生成JWT
+    resetFailedLoginAttempts(user.id);
+
     const accessToken = jwt.sign(
       {
         id: user.id,
@@ -61,10 +78,8 @@ router.post('/login', validateBody(authSchemas.login), async (req: Request, res:
       { expiresIn: '7d' } as SignOptions
     );
 
-    // 更新登录时间
     db.prepare('UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);
 
-    // 记录审计日志
     db.prepare(`
       INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, details, ip_address, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -254,10 +269,11 @@ router.post('/change-password', authenticateToken, async (req: Request & { user?
     }
 
     // 密码强度检查
-    if (newPassword.length < 8) {
+    const passwordCheck = validatePassword(newPassword);
+    if (!passwordCheck.valid) {
       return res.status(400).json({
         success: false,
-        message: '密码长度至少8位'
+        message: passwordCheck.message
       });
     }
 
@@ -266,6 +282,9 @@ router.post('/change-password', authenticateToken, async (req: Request & { user?
 
     // 更新密码并清除 password_must_change 标志
     db.prepare('UPDATE users SET password = ?, password_must_change = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(hashedNewPassword, user.id);
+    
+    // 清除用户缓存，确保下一次请求获取最新状态
+    invalidateUserCache(user.id);
 
     // 记录审计日志
     db.prepare(`

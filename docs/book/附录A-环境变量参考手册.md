@@ -40,7 +40,7 @@
 | `JWT_EXPIRES_IN` | string | `24h` | 否 | Access Token 过期时间，支持 `ms`、`s`、`m`、`h`、`d` 单位 |
 | `ALLOWED_ORIGINS` | string | `http://localhost:3000` | 否 | 允许的跨域来源，多个地址用逗号分隔 |
 | `LOG_LEVEL` | string | `info` | 否 | 日志级别，可选值：`error`、`warn`、`info`、`debug` |
-| `ADMIN_INITIAL_PASSWORD` | string | `admin123-change-me-in-production` | 否 | 管理员初始密码，仅在首次部署时使用，部署脚本会覆盖为随机密码 |
+| `ADMIN_INITIAL_PASSWORD` | string | 空（默认 admin） | 否 | 管理员初始密码，仅在首次部署时使用，留空则使用 'admin' |
 
 ### A.2.2 AI 模型变量
 
@@ -60,8 +60,9 @@
 
 | 变量名 | 类型 | 默认值 | 是否必需 | 说明 |
 |--------|------|--------|----------|------|
-| `WEBHOOK_VERIFY_ENABLED` | boolean | `false` | 否 | 是否启用 Webhook 签名验证 |
-| `WEBHOOK_SECRET` | string | 空 | 否 | Webhook 签名验证密钥 |
+| `WEBHOOK_VERIFY_ENABLED` | boolean | `false` | 否 | 是否启用 Webhook 签名验证（HMAC-SHA256） |
+| `WEBHOOK_SECRET` | string | 空 | 否 | Webhook 签名验证密钥，启用验证时必须设置 |
+| `WEBHOOK_IP_WHITELIST` | string | 空 | 否 | Webhook IP 白名单，逗号分隔多个 IP，空表示允许所有 |
 | `ALERT_WEBHOOK_URL` | string | 空 | 否 | 默认告警 Webhook 通知地址 |
 | `ALERT_EMAIL_HOST` | string | 空 | 否 | SMTP 邮件服务器地址 |
 | `ALERT_EMAIL_PORT` | number | `587` | 否 | SMTP 邮件服务器端口 |
@@ -98,7 +99,7 @@ LOG_LEVEL=info
 JWT_SECRET=your-development-secret-change-me-in-production
 
 # Administrator Initial Password (only used on first deployment)
-ADMIN_INITIAL_PASSWORD=admin123-change-me-in-production
+ADMIN_INITIAL_PASSWORD=
 ```
 
 ### A.3.2 生产环境 `.env.production`
@@ -112,6 +113,9 @@ DATABASE_PATH=/app/data/app.db
 # Security - MUST set strong values in production
 JWT_SECRET=<使用 openssl rand -hex 32 生成的强密钥>
 ADMIN_INITIAL_PASSWORD=<部署脚本自动生成的随机密码>
+WEBHOOK_VERIFY_ENABLED=true
+WEBHOOK_SECRET=<your-webhook-hmac-secret>
+WEBHOOK_IP_WHITELIST=192.168.1.100,10.0.0.50
 
 # AI API Configuration
 DOUBAO_API_KEY=<your-actual-doubao-api-key>

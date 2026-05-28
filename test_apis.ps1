@@ -1,4 +1,4 @@
-$response = Invoke-RestMethod -Uri "http://localhost:3001/api/auth/login" -Method POST -ContentType "application/json" -Body '{"username":"admin","password":"admin123"}'
+$response = Invoke-RestMethod -Uri "http://localhost:3001/api/auth/login" -Method POST -ContentType "application/json" -Body '{"username":"admin","password":"admin"}'
 $token = $response.data.token
 $headers = @{ "Authorization" = "Bearer $token" }
 

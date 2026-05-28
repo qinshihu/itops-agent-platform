@@ -1,8 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 import db from '../models/database';
+import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
+
+router.use(authenticateToken);
 
 router.get('/', (req: Request, res: Response) => {
   try {

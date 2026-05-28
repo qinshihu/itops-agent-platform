@@ -16,6 +16,7 @@ interface ChatMessage {
 interface CircuitBreakerState {
   failures: number;
   lastFailureTime: number;
+  lastUsedTime: number;
   isOpen: boolean;
   halfOpenAttempts: number;
   maxHalfOpenAttempts: number;
@@ -26,6 +27,7 @@ class CircuitBreaker {
   private state: CircuitBreakerState = {
     failures: 0,
     lastFailureTime: 0,
+    lastUsedTime: Date.now(),
     isOpen: false,
     halfOpenAttempts: 0,
     maxHalfOpenAttempts: 3
@@ -37,11 +39,13 @@ class CircuitBreaker {
   ) {}
   
   canCall(): boolean {
+    this.state.lastUsedTime = Date.now();
+    
     if (this.state.isOpen) {
       const now = Date.now();
       if (now - this.state.lastFailureTime > this.resetTimeout) {
         if (this.state.halfOpenAttempts >= this.state.maxHalfOpenAttempts) {
-          logger.info('� Circuit breaker half-open limit reached, still blocking');
+          logger.info('🔌 Circuit breaker half-open limit reached, still blocking');
           return false;
         }
         logger.info('🔄 Circuit breaker half-open, allowing test request');
@@ -57,28 +61,104 @@ class CircuitBreaker {
     this.state.failures = 0;
     this.state.isOpen = false;
     this.state.halfOpenAttempts = 0;
+    this.state.lastUsedTime = Date.now();
   }
   
   recordFailure(): void {
     this.state.failures++;
     this.state.lastFailureTime = Date.now();
+    this.state.lastUsedTime = Date.now();
     if (this.state.failures >= this.maxFailures) {
       logger.info('🔌 Circuit breaker opened due to too many failures');
       this.state.isOpen = true;
       this.state.halfOpenAttempts = 0;
     }
   }
+  
+  getLastUsedTime(): number {
+    return this.state.lastUsedTime;
+  }
+  
+  isIdle(idleThresholdMs: number): boolean {
+    return Date.now() - this.state.lastUsedTime > idleThresholdMs;
+  }
 }
+
+// 熔断器配置常量
+const CIRCUIT_BREAKER_IDLE_THRESHOLD = 60 * 60 * 1000; // 1 小时未使用则清理
+const CIRCUIT_BREAKER_CLEANUP_INTERVAL = 30 * 60 * 1000; // 每 30 分钟清理一次
+const MAX_CIRCUIT_BREAKERS = 100; // 最大熔断器实例数量
 
 // 按 Provider 拆分的熔断器实例
 const circuitBreakers = new Map<string, CircuitBreaker>();
 
 function getCircuitBreaker(providerName: string): CircuitBreaker {
   if (!circuitBreakers.has(providerName)) {
+    enforceCircuitBreakerLimit();
     circuitBreakers.set(providerName, new CircuitBreaker());
-    logger.info(`🔌 Circuit breaker initialized for provider: ${providerName}`);
+    logger.info(`🔌 Circuit breaker initialized for provider: ${providerName}, total: ${circuitBreakers.size}`);
   }
   return circuitBreakers.get(providerName)!;
+}
+
+function enforceCircuitBreakerLimit(): void {
+  if (circuitBreakers.size >= MAX_CIRCUIT_BREAKERS) {
+    const entries = Array.from(circuitBreakers.entries());
+    entries.sort((a, b) => a[1].getLastUsedTime() - b[1].getLastUsedTime());
+    const toRemove = entries.slice(0, Math.ceil(entries.length / 2));
+    toRemove.forEach(([provider]) => {
+      circuitBreakers.delete(provider);
+    });
+    logger.info(`🔌 Cleaned up ${toRemove.length} idle circuit breakers due to limit reached`);
+  }
+}
+
+function cleanupIdleCircuitBreakers(): void {
+  const idleProviders: string[] = [];
+  for (const [provider, breaker] of circuitBreakers.entries()) {
+    if (breaker.isIdle(CIRCUIT_BREAKER_IDLE_THRESHOLD)) {
+      idleProviders.push(provider);
+    }
+  }
+  
+  if (idleProviders.length > 0) {
+    idleProviders.forEach(provider => {
+      circuitBreakers.delete(provider);
+    });
+    logger.info(`🔌 Cleaned up ${idleProviders.length} idle circuit breakers, remaining: ${circuitBreakers.size}`);
+  }
+}
+
+let cleanupInterval: NodeJS.Timeout | null = null;
+
+export function startCircuitBreakerCleanup(): void {
+  if (cleanupInterval) {
+    return;
+  }
+  
+  cleanupInterval = setInterval(() => {
+    cleanupIdleCircuitBreakers();
+  }, CIRCUIT_BREAKER_CLEANUP_INTERVAL);
+  
+  cleanupInterval.unref();
+  logger.info('🔌 Circuit breaker cleanup scheduler started');
+}
+
+export function stopCircuitBreakerCleanup(): void {
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+    logger.info('🔌 Circuit breaker cleanup scheduler stopped');
+  }
+}
+
+export function getCircuitBreakerStats(): { total: number; cleanupIntervalMin: number; idleThresholdHour: number; maxLimit: number } {
+  return {
+    total: circuitBreakers.size,
+    cleanupIntervalMin: CIRCUIT_BREAKER_CLEANUP_INTERVAL / 60000,
+    idleThresholdHour: CIRCUIT_BREAKER_IDLE_THRESHOLD / 3600000,
+    maxLimit: MAX_CIRCUIT_BREAKERS
+  };
 }
 
 // 延迟函数
@@ -91,11 +171,17 @@ async function callWithRetry<T>(
   fn: () => Promise<T>,
   maxRetries = 3,
   baseDelay = 1000,
-  maxDelay = 10000
+  maxDelay = 10000,
+  breaker?: CircuitBreaker
 ): Promise<T> {
   let lastError: Error | null = null;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    if (breaker && !breaker.canCall()) {
+      logger.error('🔌 Circuit breaker is OPEN, aborting retries');
+      throw new Error('Circuit breaker is OPEN, rejecting request - service temporarily unavailable');
+    }
+
     try {
       const result = await fn();
       if (attempt > 1) {
@@ -107,10 +193,9 @@ async function callWithRetry<T>(
       logger.warn(`⚠️ Request attempt ${attempt} failed: ${lastError.message}`);
       
       if (attempt < maxRetries) {
-        // 指数退避
         const delayMs = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
         logger.info(`⏳ Waiting ${delayMs}ms before retry...`);
-        await delay(delayMs + Math.random() * baseDelay); // 添加抖动避免雪崩
+        await delay(delayMs + Math.random() * baseDelay);
       }
     }
   }
@@ -228,7 +313,8 @@ async function callLLMAPI(
   systemPrompt: string,
   userInput: string,
   agentName: string,
-  temperature: number
+  temperature: number,
+  agentId: string
 ): Promise<string> {
   const startTime = Date.now();
   const apiKey = getApiKey(db, config.apiKeySetting, config.apiKeyEnv);
@@ -271,18 +357,23 @@ async function callLLMAPI(
       finalApiBase = finalApiBase.replace('/chat/completions', '');
     }
     
-    const response = await callWithRetry(() =>
-      axios.post(
-        buildApiEndpoint(finalApiBase, 'chat/completions'),
-        requestBody,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          timeout: 60000
-        }
-      )
+    const response = await callWithRetry(
+      () =>
+        axios.post(
+          buildApiEndpoint(finalApiBase, 'chat/completions'),
+          requestBody,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            },
+            timeout: 60000
+          }
+        ),
+      3,
+      1000,
+      10000,
+      breaker
     );
 
     circuitBreakers.get(config.providerName)?.recordSuccess();
@@ -292,7 +383,7 @@ async function callLLMAPI(
       logger.info(`✅ [${agentName}] ${config.providerName} API call successful, response length: ${content?.length || 0} chars`);
       
       recordAgentExecution(
-        '',
+        agentId,
         agentName,
         userInput,
         content || '',
@@ -336,9 +427,10 @@ export async function callDoubaoAPI(
   systemPrompt: string,
   userInput: string,
   agentName: string = 'Agent',
-  temperature: number = 0.7
+  temperature: number = 0.7,
+  agentId: string = ''
 ): Promise<string> {
-  return callLLMAPI(DOUBAO_CONFIG, systemPrompt, userInput, agentName, temperature);
+  return callLLMAPI(DOUBAO_CONFIG, systemPrompt, userInput, agentName, temperature, agentId);
 }
 
 /**
@@ -352,9 +444,10 @@ export async function callOpenAIAPI(
   systemPrompt: string,
   userInput: string,
   agentName: string = 'Agent',
-  temperature: number = 0.7
+  temperature: number = 0.7,
+  agentId: string = ''
 ): Promise<string> {
-  return callLLMAPI(OPENAI_CONFIG, systemPrompt, userInput, agentName, temperature);
+  return callLLMAPI(OPENAI_CONFIG, systemPrompt, userInput, agentName, temperature, agentId);
 }
 
 /**
@@ -368,9 +461,10 @@ export async function callLocalAIAPI(
   systemPrompt: string,
   userInput: string,
   agentName: string = 'Agent',
-  temperature: number = 0.7
+  temperature: number = 0.7,
+  agentId: string = ''
 ): Promise<string> {
-  return callLLMAPI(LOCAL_AI_CONFIG, systemPrompt, userInput, agentName, temperature);
+  return callLLMAPI(LOCAL_AI_CONFIG, systemPrompt, userInput, agentName, temperature, agentId);
 }
 
 /**
@@ -384,37 +478,47 @@ export async function generateCompletion(
   prompt: string,
   systemPrompt: string = '你是一个专业的助手。',
   temperature: number = 0.7,
-  model?: string
+  model?: string,
+  agentId: string = ''
 ): Promise<string> {
+  const timeoutMs = 120000;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(`LLM generateCompletion 超时 (${timeoutMs / 1000}s)`)), timeoutMs);
+  });
+
   const provider = model ? getProviderForModel(model) : 'local';
   
-  // 优先尝试本地模型，如果未配置则回退到云端
-  if (provider === 'local') {
-    try {
-      logger.info('🏠 Trying Local AI first...');
-      return await callLocalAIAPI(systemPrompt, prompt, 'LLM', temperature);
-    } catch (localError) {
-      logger.warn(`⚠️ Local AI failed, falling back to Doubao: ${localError instanceof Error ? localError.message : 'Unknown error'}`);
-      // 回退到豆包
-      return await callDoubaoAPI(systemPrompt, prompt, 'LLM', temperature);
+  const executeCompletion = async (): Promise<string> => {
+    if (provider === 'local') {
+      try {
+        logger.info('🏠 Trying Local AI first...');
+        return await callLocalAIAPI(systemPrompt, prompt, 'LLM', temperature, agentId);
+      } catch (localError) {
+        logger.warn(`⚠️ Local AI failed, falling back to Doubao: ${localError instanceof Error ? localError.message : 'Unknown error'}`);
+        return await callDoubaoAPI(systemPrompt, prompt, 'LLM', temperature, agentId);
+      }
     }
-  }
-  
-  if (provider === 'openai') {
-    return await callOpenAIAPI(
-      systemPrompt,
-      prompt,
-      'LLM',
-      temperature
-    );
-  } else {
-    return await callDoubaoAPI(
-      systemPrompt,
-      prompt,
-      'LLM',
-      temperature
-    );
-  }
+    
+    if (provider === 'openai') {
+      return await callOpenAIAPI(
+        systemPrompt,
+        prompt,
+        'LLM',
+        temperature,
+        agentId
+      );
+    } else {
+      return await callDoubaoAPI(
+        systemPrompt,
+        prompt,
+        'LLM',
+        temperature,
+        agentId
+      );
+    }
+  };
+
+  return Promise.race([executeCompletion(), timeoutPromise]);
 }
 
 /**
@@ -487,15 +591,13 @@ export async function executeAgentWithLLM(
     logger.warn('️ QAnything query failed, proceeding without knowledge context:', error);
   }
 
-  // 构建增强 Prompt
-  let enhancedPrompt = agent.system_prompt || `你是一个专业的${agent.name || 'IT运维'}助手。`;
+  // 构建增强 System Prompt
+  let enhancedSystemPrompt = agent.system_prompt || `你是一个专业的${agent.name || 'IT运维'}助手。`;
   
   if (knowledgeContext) {
-    enhancedPrompt += `\n\n【相关知识库内容】\n${knowledgeContext}\n\n`;
-    enhancedPrompt += '请基于以上知识库内容回答用户问题。如果知识库内容不足以回答问题，请结合你的专业知识进行补充。\n\n';
+    enhancedSystemPrompt += `\n\n【相关知识库内容】\n${knowledgeContext}\n\n`;
+    enhancedSystemPrompt += '请基于以上知识库内容回答用户问题。如果知识库内容不足以回答问题，请结合你的专业知识进行补充。\n\n';
   }
-
-  enhancedPrompt += `\n【用户问题】\n${userInput}`;
 
   const temperature = agent.temperature || 0.7;
   const model = agent.model || 'doubao-4o';
@@ -503,24 +605,27 @@ export async function executeAgentWithLLM(
 
   if (provider === 'openai') {
     return await callOpenAIAPI(
-      enhancedPrompt,
-      enhancedPrompt,
+      enhancedSystemPrompt,
+      userInput,
       agent.name,
-      temperature
+      temperature,
+      agentId
     );
   } else if (provider === 'local') {
     return await callLocalAIAPI(
-      enhancedPrompt,
-      enhancedPrompt,
+      enhancedSystemPrompt,
+      userInput,
       agent.name,
-      temperature
+      temperature,
+      agentId
     );
   } else {
     return await callDoubaoAPI(
-      enhancedPrompt,
-      enhancedPrompt,
+      enhancedSystemPrompt,
+      userInput,
       agent.name,
-      temperature
+      temperature,
+      agentId
     );
   }
 }
@@ -543,4 +648,4 @@ export async function checkLLMAvailability(): Promise<{ available: boolean; mess
   return { available: true, message: 'LLM service available' };
 }
 
-export { getCircuitBreaker };
+export { getCircuitBreaker, circuitBreakers };

@@ -26,6 +26,7 @@ import {
   Layers
 } from 'lucide-react';
 import api from '../lib/api';
+import { useToast } from '../contexts/ToastContext';
 
 interface Agent {
   id: string;
@@ -98,6 +99,7 @@ function WorkflowEditorContent() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -216,10 +218,10 @@ function WorkflowEditorContent() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workflows'] });
       navigate('/workflows');
-      alert('保存成功！');
+      toast.success('保存成功！');
     },
     onError: (error: any) => {
-      alert(error.message || '保存失败，请重试');
+      toast.error(error.message || '保存失败，请重试');
     },
   });
 
@@ -323,7 +325,7 @@ function WorkflowEditorContent() {
 
   const handleSave = useCallback(() => {
     if (!validateWorkflow()) {
-      alert('工作流验证失败:\n' + validationErrors.join('\n'));
+      toast.error('工作流验证失败:\n' + validationErrors.join('\n'));
       return;
     }
 
@@ -334,15 +336,15 @@ function WorkflowEditorContent() {
       edges,
       is_template: isTemplate ? 1 : 0,
     });
-  }, [name, description, nodes, edges, isTemplate, saveMutation, validateWorkflow, validationErrors]);
+  }, [name, description, nodes, edges, isTemplate, saveMutation, validateWorkflow, validationErrors, toast]);
 
   const handleExecute = useCallback(() => {
     if (!id || id === 'new') {
-      alert('请先保存工作流再执行');
+      toast.warning('请先保存工作流再执行');
       return;
     }
     navigate(`/tasks?workflowId=${id}`);
-  }, [id, navigate]);
+  }, [id, navigate, toast]);
 
   const handleExport = useCallback(() => {
     const data = {
@@ -377,17 +379,17 @@ function WorkflowEditorContent() {
           setIsTemplate(data.is_template === 1);
           setNodes(data.nodes);
           setEdges(data.edges);
-          alert('导入成功！');
+          toast.success('导入成功！');
         } else {
-          alert('无效的工作流文件');
+          toast.error('无效的工作流文件');
         }
       } catch {
-        alert('导入失败：无效的JSON格式');
+        toast.error('导入失败：无效的JSON格式');
       }
     };
     reader.readAsText(file);
     event.target.value = '';
-  }, [setNodes, setEdges]);
+  }, [setNodes, setEdges, toast]);
 
   const handleClear = useCallback(() => {
     if (confirm('确定要清空画布吗？此操作不可撤销。')) {

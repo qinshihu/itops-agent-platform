@@ -4,6 +4,12 @@ import { generateCompletion } from './llmService';
 import { localRuleEngine } from './localRuleEngine';
 import { logger } from '../utils/logger';
 import type { Statement } from 'better-sqlite3';
+import { topologyService } from './topologyService';
+import { changeService } from './changeService';
+import EnhancedRAGService from './enhancedRAGService';
+import { RCA_PROMPT } from '../prompts/rcaPrompt';
+
+const ragService = new EnhancedRAGService();
 
 type StatementNoParams = Statement<[]>;
 
@@ -56,7 +62,7 @@ class RootCauseAnalysisService {
     try {
       this.initializeStatements();
     } catch {
-      console.error("⚠️  RootCauseAnalysisService initialization failed");
+      logger.error("⚠️  RootCauseAnalysisService initialization failed");
     }
   }
 
@@ -188,7 +194,12 @@ class RootCauseAnalysisService {
         analysisResult = await this.performLLMAnalysis(existing);
       } catch (llmError) {
         logger.info(`🔄 [RCA] LLM analysis failed, falling back to local rule engine: ${(llmError as Error).message}`);
-        analysisResult = this.performRuleEngineAnalysis(existing);
+        try {
+          analysisResult = this.performRuleEngineAnalysis(existing);
+        } catch (ruleError) {
+          logger.warn(`⚠️ [RCA] Rule engine also failed: ${(ruleError as Error).message}, using default fallback`);
+          analysisResult = this.generateFallbackAnalysis(existing);
+        }
       }
 
       return this.update(id, analysisResult);
@@ -308,14 +319,23 @@ ${alertInfo}
       // 解析LLM响应
       let analysisData;
       try {
-        const jsonMatch = response.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          analysisData = JSON.parse(jsonMatch[0]);
+        const jsonBlockMatch = response.match(/```json\s*\n([\s\S]*?)\n?\s*```/);
+        let jsonStr: string | null = null;
+        if (jsonBlockMatch) {
+          jsonStr = jsonBlockMatch[1];
+        } else {
+          const lastBrace = response.lastIndexOf('}');
+          const firstBrace = response.lastIndexOf('{', lastBrace);
+          if (firstBrace !== -1 && lastBrace !== -1) {
+            jsonStr = response.substring(firstBrace, lastBrace + 1);
+          }
+        }
+        if (jsonStr) {
+          analysisData = JSON.parse(jsonStr);
         } else {
           throw new Error('无法解析LLM响应');
         }
       } catch {
-        // 如果解析失败，使用默认结构
         analysisData = {
           root_cause: response.substring(0, 500),
           symptoms: ['系统异常'],
@@ -336,6 +356,251 @@ ${alertInfo}
     } catch (error) {
       throw new Error('LLM分析失败: ' + (error as Error).message);
     }
+  }
+
+  async autoAnalyze(alertId: string): Promise<RootCauseAnalysis | undefined> {
+    try {
+      logger.info(`🔍 [RCA] 开始自动根因分析: alertId=${alertId}`);
+      
+      const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(alertId) as {
+        id: string;
+        title: string;
+        content: string;
+        severity: string;
+        source: string;
+        server_id?: string;
+        created_at: string;
+      } | undefined;
+
+      if (!alert) {
+        logger.warn(`⚠️ [RCA] 告警不存在: ${alertId}`);
+        return undefined;
+      }
+
+      const context = await this.collectContext(alert);
+      const analysisResult = await this.analyzeWithLLM(alert, context);
+
+      if (!analysisResult) {
+        logger.warn(`⚠️ [RCA] LLM分析返回空结果: ${alertId}`);
+        return undefined;
+      }
+
+      const rca = this.create({
+        alert_id: alertId,
+        title: `自动根因分析: ${alert.title}`,
+        description: alert.content
+      });
+
+      this.update(rca.id, {
+        status: 'completed',
+        ...analysisResult
+      });
+
+      logger.info(`✅ [RCA] 自动根因分析完成: rcaId=${rca.id}`);
+      return this.get(rca.id);
+    } catch (error) {
+      logger.error(`❌ [RCA] 自动根因分析失败: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
+    }
+  }
+
+  private safeInject(template: string, replacements: Record<string, string>): string {
+    let result = template;
+    for (const [key, value] of Object.entries(replacements)) {
+      const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escapedKey, 'g');
+      result = result.replace(regex, value);
+    }
+    return result;
+  }
+
+  async collectContext(alert: {
+    id: string;
+    title: string;
+    content: string;
+    severity: string;
+    source: string;
+    server_id?: string;
+    created_at: string;
+  }) {
+    const context: Record<string, unknown> = {
+      alert: {
+        id: alert.id,
+        title: alert.title,
+        content: alert.content,
+        severity: alert.severity,
+        source: alert.source,
+        triggered_at: alert.created_at
+      },
+      topology: [],
+      recentChanges: [],
+      relatedAlerts: [],
+      serverStatus: null,
+      knowledgeMatches: []
+    };
+
+    if (alert.server_id) {
+      try {
+        const topology = topologyService.getServerTopology(alert.server_id);
+        context.topology = topology;
+      } catch (error) {
+        logger.warn(`⚠️ [RCA] 获取拓扑信息失败: ${error instanceof Error ? error.message : 'Unknown'}`);
+      }
+
+      try {
+        context.recentChanges = changeService.getRecentByServer(alert.server_id, 24);
+      } catch (error) {
+        logger.warn(`⚠️ [RCA] 获取变更记录失败: ${error instanceof Error ? error.message : 'Unknown'}`);
+      }
+
+      try {
+        context.serverStatus = db.prepare('SELECT id, name, hostname, status, os_type FROM servers WHERE id = ?').get(alert.server_id);
+      } catch (error) {
+        logger.warn(`⚠️ [RCA] 获取服务器状态失败: ${error instanceof Error ? error.message : 'Unknown'}`);
+      }
+    }
+
+    try {
+      const oneHourAgo = new Date(new Date(alert.created_at).getTime() - 3600000).toISOString();
+      const rawAlerts = db.prepare(
+        'SELECT * FROM alerts WHERE id != ? AND created_at >= ? ORDER BY created_at DESC LIMIT 10'
+      ).all(alert.id, oneHourAgo) as Array<Record<string, unknown>>;
+      context.relatedAlerts = rawAlerts.map(a => {
+        const alertCopy = { ...a };
+        if (alertCopy.content && typeof alertCopy.content === 'string') {
+          alertCopy.content = alertCopy.content.substring(0, 500);
+        }
+        return alertCopy;
+      });
+    } catch (error) {
+      logger.warn(`⚠️ [RCA] 获取关联告警失败: ${error instanceof Error ? error.message : 'Unknown'}`);
+    }
+
+    try {
+      const knowledgeResults = await ragService.search(alert.title, { limit: 5, minScore: 0.2 });
+      context.knowledgeMatches = knowledgeResults.map(r => ({
+        title: r.item.title,
+        score: r.score,
+        content: r.item.content.substring(0, 500)
+      }));
+    } catch (error) {
+      logger.warn(`⚠️ [RCA] 知识匹配失败: ${error instanceof Error ? error.message : 'Unknown'}`);
+    }
+
+    return context;
+  }
+
+  async analyzeWithLLM(alert: {
+    id: string;
+    title: string;
+    content: string;
+    severity: string;
+  }, context: Record<string, unknown>): Promise<UpdateRCAInput | null> {
+    const replacements: Record<string, string> = {
+      '{alert_id}': alert.id,
+      '{alert_title}': alert.title,
+      '{severity}': alert.severity,
+      '{alert_message}': alert.content,
+      '{triggered_at}': context.alert ? (context.alert as Record<string, string>).triggered_at || '' : '',
+      '{server_name}': context.serverStatus ? (context.serverStatus as Record<string, string>).name || '未知' : '未知',
+      '{server_ip}': context.serverStatus ? (context.serverStatus as Record<string, string>).hostname || '未知' : '未知',
+      '{server_status}': context.serverStatus ? (context.serverStatus as Record<string, string>).status || '未知' : '未知',
+      '{topology_info}': JSON.stringify(context.topology, null, 2).substring(0, 2000),
+      '{change_records}': JSON.stringify(context.recentChanges, null, 2).substring(0, 2000),
+      '{related_alerts}': JSON.stringify(context.relatedAlerts, null, 2).substring(0, 2000),
+      '{knowledge_matches}': JSON.stringify(context.knowledgeMatches, null, 2).substring(0, 2000)
+    };
+
+    const prompt = this.safeInject(RCA_PROMPT, replacements);
+
+    try {
+      const response = await generateCompletion(prompt);
+      
+      let analysisData;
+      try {
+        const jsonBlockMatch = response.match(/```json\s*\n([\s\S]*?)\n?\s*```/);
+        let jsonStr: string | null = null;
+        if (jsonBlockMatch) {
+          jsonStr = jsonBlockMatch[1];
+        } else {
+          const lastBrace = response.lastIndexOf('}');
+          const firstBrace = response.lastIndexOf('{', lastBrace);
+          if (firstBrace !== -1 && lastBrace !== -1) {
+            jsonStr = response.substring(firstBrace, lastBrace + 1);
+          }
+        }
+        if (jsonStr) {
+          analysisData = JSON.parse(jsonStr);
+        } else {
+          throw new Error('无法解析LLM响应');
+        }
+      } catch {
+        logger.warn(`⚠️ [RCA] LLM响应解析失败，使用回退分析`);
+        analysisData = null;
+      }
+
+      if (!analysisData) {
+        return this.generateFallbackAnalysis({
+          id: '',
+          alert_id: alert.id,
+          title: alert.title,
+          description: alert.content,
+          status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        } as RootCauseAnalysis);
+      }
+
+      return {
+        status: 'completed',
+        root_cause: analysisData.root_cause || '需要进一步调查',
+        symptoms: analysisData.symptoms || ['系统异常'],
+        timeline: analysisData.timeline || [],
+        evidence: analysisData.evidence || [],
+        recommendations: analysisData.recommendations || ['进一步调查']
+      };
+    } catch (error) {
+      logger.error(`❌ [RCA] LLM调用失败: ${error instanceof Error ? error.message : 'Unknown'}`);
+      throw error;
+    }
+  }
+
+  getStats(): {
+    todayCount: number;
+    avgConfidence: number;
+    autoRemediations: number;
+    falsePositives: number;
+    totalCompleted: number;
+  } {
+    const today = new Date().toISOString().split('T')[0];
+    
+    const todayResult = db.prepare(
+      "SELECT COUNT(*) as count FROM root_cause_analyses WHERE created_at >= ?"
+    ).get(`${today}T00:00:00`) as { count: number };
+
+    const totalResult = db.prepare(
+      "SELECT COUNT(*) as count FROM root_cause_analyses WHERE status = 'completed'"
+    ).get() as { count: number };
+
+    const avgConfidenceResult = db.prepare(
+      "SELECT AVG(confidence) as avgConfidence FROM root_cause_analyses WHERE status = 'completed' AND confidence IS NOT NULL"
+    ).get() as { avgConfidence: number | null };
+
+    const autoRemediationResult = db.prepare(
+      "SELECT COUNT(*) as count FROM root_cause_analyses WHERE status = 'completed' AND recommendations LIKE '%自动%'"
+    ).get() as { count: number };
+
+    const falsePositiveResult = db.prepare(
+      "SELECT COUNT(*) as count FROM root_cause_analyses WHERE status = 'completed' AND root_cause LIKE '%误报%'"
+    ).get() as { count: number };
+
+    return {
+      todayCount: todayResult.count,
+      avgConfidence: avgConfidenceResult.avgConfidence ?? 0,
+      autoRemediations: autoRemediationResult.count,
+      falsePositives: falsePositiveResult.count,
+      totalCompleted: totalResult.count
+    };
   }
 }
 

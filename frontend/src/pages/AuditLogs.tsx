@@ -91,7 +91,7 @@ export default function AuditLogs() {
                   <p className="text-sm text-text-secondary">今日操作</p>
                   <p className="text-2xl font-bold text-blue-500">{statsData.todayCount}</p>
                 </div>
-                <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-blue-500/10 rounded-lg flex items-center justify-center">
                   <Clock className="w-6 h-6 text-blue-500" />
                 </div>
               </div>
@@ -102,7 +102,7 @@ export default function AuditLogs() {
                   <p className="text-sm text-text-secondary">操作失败</p>
                   <p className="text-2xl font-bold text-red-500">{statsData.failureCount}</p>
                 </div>
-                <div className="w-12 h-12 bg-red-50 rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-red-500/10 rounded-lg flex items-center justify-center">
                   <User className="w-6 h-6 text-red-500" />
                 </div>
               </div>
@@ -113,7 +113,7 @@ export default function AuditLogs() {
                   <p className="text-sm text-text-secondary">操作类型</p>
                   <p className="text-2xl font-bold text-green-500">{statsData.actionStats?.length || 0}</p>
                 </div>
-                <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center">
                   <Database className="w-6 h-6 text-green-500" />
                 </div>
               </div>
@@ -124,7 +124,7 @@ export default function AuditLogs() {
                   <p className="text-sm text-text-secondary">资源类型</p>
                   <p className="text-2xl font-bold text-purple-500">{statsData.resourceStats?.length || 0}</p>
                 </div>
-                <div className="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-purple-500/10 rounded-lg flex items-center justify-center">
                   <FileText className="w-6 h-6 text-purple-500" />
                 </div>
               </div>
@@ -217,9 +217,9 @@ export default function AuditLogs() {
                     <td className="px-4 py-3 text-sm">
                       <span className={clsx(
                         "px-2 py-1 rounded text-xs font-medium",
-                        log.status === 'success' ? "bg-green-100 text-green-700" :
-                        log.status === 'failure' ? "bg-red-100 text-red-700" :
-                        "bg-yellow-100 text-yellow-700"
+                        log.status === 'success' ? "bg-green-500/10 text-green-500" :
+                        log.status === 'failure' ? "bg-red-500/10 text-red-500" :
+                        "bg-yellow-500/10 text-yellow-500"
                       )}>
                         {log.status}
                       </span>
@@ -274,11 +274,11 @@ export default function AuditLogs() {
                 <div>
                   <p className="text-sm text-text-secondary mb-1">状态</p>
                   <span className={clsx(
-                    "px-2 py-1 rounded text-xs font-medium",
-                    selectedLog.status === 'success' ? "bg-green-100 text-green-700" :
-                    selectedLog.status === 'failure' ? "bg-red-100 text-red-700" :
-                    "bg-yellow-100 text-yellow-700"
-                  )}>
+                  "px-2 py-1 rounded text-xs font-medium",
+                  selectedLog.status === 'success' ? "bg-green-500/10 text-green-500" :
+                  selectedLog.status === 'failure' ? "bg-red-500/10 text-red-500" :
+                  "bg-yellow-500/10 text-yellow-500"
+                )}>
                     {selectedLog.status}
                   </span>
                 </div>

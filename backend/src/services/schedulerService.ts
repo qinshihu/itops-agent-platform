@@ -19,6 +19,7 @@ class SchedulerService {
   private jobs: Map<string, Job> = new Map();
   private initialized: boolean = false;
   private runningWorkflows: Set<string> = new Set();
+  private runningTasks: Set<string> = new Set();
 
   constructor() {
     // 延迟初始化，等待数据库准备好
@@ -110,10 +111,15 @@ class SchedulerService {
       const job = scheduleJob(task.schedule, async () => {
         logger.info(`⏰ Executing scheduled task: ${task.name} (${task.id})`);
         
+        if (this.runningTasks.has(task.id)) {
+          logger.warn(`⚠️ Task ${task.id} is already running, skipping execution`);
+          return;
+        }
+
         let executionStatus: 'success' | 'failed' | 'timeout' = 'success';
         
         try {
-          // 如果关联了工作流，则执行
+          this.runningTasks.add(task.id);
           if (task.workflow_id) {
             await this.executeWorkflow(task);
           }
@@ -123,6 +129,7 @@ class SchedulerService {
           executionStatus = 'failed';
           logger.error(`❌ Scheduled task ${task.name} execution failed:`, error);
         } finally {
+          this.runningTasks.delete(task.id);
           // 记录执行结果
           db.prepare(`
             UPDATE scheduled_tasks 

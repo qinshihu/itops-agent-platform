@@ -137,8 +137,9 @@ $EnvContent = @"
 # JWT Configuration
 JWT_SECRET=$JwtSecret
 
-# Administrator Initial Password (change after first login)
-ADMIN_INITIAL_PASSWORD=admin
+# Administrator Initial Password (optional - defaults to 'admin')
+# Leave empty to use default 'admin' password
+ADMIN_INITIAL_PASSWORD=
 
 # LLM API Configuration (configure at least one)
 # Doubao (豆包)

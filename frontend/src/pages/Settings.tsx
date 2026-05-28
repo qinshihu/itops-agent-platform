@@ -6,6 +6,7 @@ import clsx from 'clsx';
 import { useTheme } from '../hooks/useTheme';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+import { validatePassword, getPasswordStrength } from '../utils/passwordValidator';
 
 export default function Settings() {
   const [searchParams] = useSearchParams();
@@ -271,8 +272,9 @@ export default function Settings() {
       return;
     }
     
-    if (newPassword.length < 8) {
-      setPasswordError('密码长度至少8位');
+    const passwordCheck = validatePassword(newPassword);
+    if (!passwordCheck.valid) {
+      setPasswordError(passwordCheck.message);
       setPasswordStatus('error');
       setTimeout(() => setPasswordStatus('idle'), 3000);
       return;
@@ -1321,6 +1323,42 @@ export default function Settings() {
                           placeholder="请输入新密码（至少8位）"
                           className="w-full px-4 py-2 bg-surface border border-border rounded-lg text-text-primary focus:outline-none focus:border-primary"
                         />
+                        {newPassword && (
+                          <div className="mt-2 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-text-secondary">密码强度</span>
+                              <span className={`text-sm font-medium ${getPasswordStrength(newPassword).color}`}>
+                                {getPasswordStrength(newPassword).label}
+                              </span>
+                            </div>
+                            <div className="flex gap-1">
+                              {[1, 2, 3, 4, 5].map((i) => (
+                                <div
+                                  key={i}
+                                  className={`h-1 flex-1 rounded-full ${
+                                    i <= getPasswordStrength(newPassword).score
+                                      ? getPasswordStrength(newPassword).color.replace('text-', 'bg-')
+                                      : 'bg-border'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <div className="grid grid-cols-2 gap-1 text-xs">
+                              {Object.entries(validatePassword(newPassword).details).map(([key, value]) => (
+                                <div key={key} className={`flex items-center gap-1 ${value ? 'text-status-success' : 'text-text-tertiary'}`}>
+                                  {value ? <CheckCircle2 className="w-3 h-3" /> : <div className="w-3 h-3 rounded-full border border-current" />}
+                                  <span>
+                                    {key === 'minLength' && '至少8位'}
+                                    {key === 'uppercase' && '大写字母'}
+                                    {key === 'lowercase' && '小写字母'}
+                                    {key === 'number' && '数字'}
+                                    {key === 'special' && '特殊字符'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-text-secondary mb-2">确认新密码</label>
@@ -1331,6 +1369,21 @@ export default function Settings() {
                           placeholder="请再次输入新密码"
                           className="w-full px-4 py-2 bg-surface border border-border rounded-lg text-text-primary focus:outline-none focus:border-primary"
                         />
+                        {confirmPassword && newPassword && (
+                          <div className="mt-1 flex items-center gap-1 text-xs">
+                            {newPassword === confirmPassword ? (
+                              <>
+                                <CheckCircle2 className="w-3 h-3 text-status-success" />
+                                <span className="text-status-success">密码匹配</span>
+                              </>
+                            ) : (
+                              <>
+                                <AlertCircle className="w-3 h-3 text-status-failed" />
+                                <span className="text-status-failed">密码不匹配</span>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                       {passwordError && (
                         <p className="text-sm text-status-failed flex items-center gap-1">

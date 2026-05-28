@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { Bot, GitBranch, Play, Bell, TrendingUp, Clock, Server, BookOpen, Zap, Activity, Shield } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import { useNavigate } from 'react-router-dom';
+import { Bot, GitBranch, Play, Bell, TrendingUp, TrendingDown, Minus, Clock, Server, BookOpen, Zap, Activity, Shield, FolderOpen } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
 import api from '../lib/api';
+import { safeFormatDistance } from '../lib/date';
 
 interface Agent {
   id: string;
@@ -86,53 +86,61 @@ export default function Dashboard() {
     },
   ];
 
-  const { data: agents } = useQuery({
+  const { data: agents, isLoading: agentsLoading } = useQuery({
     queryKey: ['agents'],
     queryFn: async () => {
       const res = await api.get('/api/agents');
       return res.data.data as Agent[];
     },
+    staleTime: 60000,
   });
 
-  const { data: servers } = useQuery({
+  const { data: servers, isLoading: serversLoading } = useQuery({
     queryKey: ['servers'],
     queryFn: async () => {
       const res = await api.get('/api/servers');
       return res.data.data as Server[];
     },
+    staleTime: 60000,
   });
 
-  const { data: workflows } = useQuery({
+  const { data: workflows, isLoading: workflowsLoading } = useQuery({
     queryKey: ['workflows'],
     queryFn: async () => {
       const res = await api.get('/api/workflows');
       return res.data.data as Workflow[];
     },
+    staleTime: 120000,
   });
 
-  const { data: knowledge } = useQuery({
+  const { data: knowledge, isLoading: knowledgeLoading } = useQuery({
     queryKey: ['knowledge'],
     queryFn: async () => {
       const res = await api.get('/api/knowledge');
       return res.data.data as Knowledge[];
     },
+    staleTime: 120000,
   });
 
-  const { data: tasks } = useQuery({
+  const { data: tasks, isLoading: tasksLoading } = useQuery({
     queryKey: ['tasks', { limit: 5 }],
     queryFn: async () => {
       const res = await api.get('/api/tasks', { params: { limit: 5 } });
       return res.data.data as Task[];
     },
+    staleTime: 30000,
   });
 
-  const { data: alerts } = useQuery({
+  const { data: alerts, isLoading: alertsLoading } = useQuery({
     queryKey: ['alerts', { limit: 5 }],
     queryFn: async () => {
       const res = await api.get('/api/alerts', { params: { limit: 5 } });
       return res.data.data as Alert[];
     },
+    staleTime: 30000,
   });
+
+  const isLoading = agentsLoading || serversLoading || workflowsLoading || knowledgeLoading || tasksLoading || alertsLoading;
 
   const stats = [
     {
@@ -197,17 +205,35 @@ export default function Dashboard() {
           </a>
         </div>
 
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="bg-surface rounded-xl p-6 border border-border animate-pulse">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 rounded-lg bg-border/50" />
+                  <div className="w-8 h-8 rounded bg-border/50" />
+                </div>
+                <div className="h-8 w-16 bg-border/50 rounded mb-2" />
+                <div className="h-4 w-24 bg-border/50 rounded" />
+              </div>
+            ))}
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {stats.map((stat) => (
             <div
               key={stat.name}
-              className="bg-surface rounded-xl p-6 border border-border hover:border-primary/50 transition-all"
+              className="bg-surface rounded-xl p-6 border border-border hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 transition-all"
             >
               <div className="flex items-center justify-between mb-4">
                 <div className={`p-3 rounded-lg ${stat.bg}`}>
                   <stat.icon className={`w-6 h-6 ${stat.color}`} />
                 </div>
-                <TrendingUp className="w-5 h-5 text-status-success" />
+                {(() => {
+                  const TrendIcon = stat.value > 5 ? TrendingUp : stat.value === 0 ? TrendingDown : Minus;
+                  const trendColor = stat.value > 5 ? 'text-status-success' : stat.value === 0 ? 'text-status-failed' : 'text-text-secondary';
+                  return <TrendIcon className={`w-5 h-5 ${trendColor}`} />;
+                })()}
               </div>
               <h3 className="text-3xl font-bold text-text-primary mb-1">
                 {stat.value}
@@ -216,6 +242,7 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+        )}
 
         <div className="bg-surface rounded-xl p-6 border border-border">
           <div className="flex items-center justify-between mb-6">
@@ -248,9 +275,9 @@ export default function Dashboard() {
                 <Server className="w-5 h-5 text-purple-500" />
                 服务器
               </h2>
-              <a href="/servers" className="text-sm text-primary hover:underline">
+              <Link to="/servers" className="text-sm text-primary hover:underline">
                 查看全部
-              </a>
+              </Link>
             </div>
             <div className="space-y-3">
               {(Array.isArray(servers) ? servers : []).slice(0, 5).map((server) => (
@@ -258,8 +285,8 @@ export default function Dashboard() {
                   key={server.id}
                   className="flex items-center gap-3 p-3 rounded-lg bg-background hover:bg-background/80 transition-all"
                 >
-                  <div className={`p-2 rounded-lg ${server.enabled ? 'bg-purple-500/10' : 'bg-gray-500/10'}`}>
-                    <Server className={`w-5 h-5 ${server.enabled ? 'text-purple-500' : 'text-gray-500'}`} />
+                  <div className={`p-2 rounded-lg ${server.enabled ? 'bg-purple-500/10' : 'bg-status-failed/10'}`}>
+                    <Server className={`w-5 h-5 ${server.enabled ? 'text-purple-500' : 'text-text-secondary'}`} />
                   </div>
                   <div className="flex-1">
                     <h3 className="font-medium text-text-primary">{server.name}</h3>
@@ -277,8 +304,18 @@ export default function Dashboard() {
                 </div>
               ))}
               {!servers || servers.length === 0 ? (
-                <div className="text-center py-6 text-text-secondary">
-                  暂无服务器，请先添加
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="p-4 rounded-xl bg-surface border border-border mb-3">
+                    <Server className="w-8 h-8 text-text-secondary opacity-50" />
+                  </div>
+                  <p className="text-sm text-text-secondary mb-2">暂无服务器</p>
+                  <p className="text-xs text-text-tertiary mb-3">添加服务器以开始管理</p>
+                  <button
+                    onClick={() => navigate('/servers')}
+                    className="px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-xs hover:bg-primary/20 transition-colors"
+                  >
+                    前往服务器管理
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -290,9 +327,9 @@ export default function Dashboard() {
                 <Bot className="w-5 h-5 text-primary" />
                 在线Agent
               </h2>
-              <a href="/agents" className="text-sm text-primary hover:underline">
+              <Link to="/agents" className="text-sm text-primary hover:underline">
                 查看全部
-              </a>
+              </Link>
             </div>
             <div className="space-y-3">
               {agents?.slice(0, 5).map((agent) => (
@@ -325,9 +362,9 @@ export default function Dashboard() {
                 <BookOpen className="w-5 h-5 text-cyan-500" />
                 知识库
               </h2>
-              <a href="/knowledge" className="text-sm text-primary hover:underline">
+              <Link to="/knowledge" className="text-sm text-primary hover:underline">
                 查看全部
-              </a>
+              </Link>
             </div>
             <div className="space-y-3">
               {knowledge?.slice(0, 5).map((item) => (
@@ -350,8 +387,18 @@ export default function Dashboard() {
                 </div>
               ))}
               {!knowledge || knowledge.length === 0 ? (
-                <div className="text-center py-6 text-text-secondary">
-                  暂无知识条目
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="p-4 rounded-xl bg-surface border border-border mb-3">
+                    <BookOpen className="w-8 h-8 text-text-secondary opacity-50" />
+                  </div>
+                  <p className="text-sm text-text-secondary mb-2">暂无知识条目</p>
+                  <p className="text-xs text-text-tertiary mb-3">添加运维知识以便快速查阅</p>
+                  <button
+                    onClick={() => navigate('/knowledge')}
+                    className="px-3 py-1.5 bg-cyan-500/10 text-cyan-500 rounded-lg text-xs hover:bg-cyan-500/20 transition-colors"
+                  >
+                    前往知识库
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -363,9 +410,9 @@ export default function Dashboard() {
                 <Bell className="w-5 h-5 text-red-500" />
                 最新告警
               </h2>
-              <a href="/alerts" className="text-sm text-primary hover:underline">
+              <Link to="/alerts" className="text-sm text-primary hover:underline">
                 查看全部
-              </a>
+              </Link>
             </div>
             <div className="space-y-3">
               {alerts?.slice(0, 5).map((alert) => (
@@ -389,7 +436,7 @@ export default function Dashboard() {
                   </div>
                   <div className="flex items-center gap-2 text-xs text-text-secondary">
                     <Clock className="w-3 h-3" />
-                    {formatDistanceToNow(new Date(alert.created_at), { addSuffix: true })}
+                    {safeFormatDistance(alert.created_at)}
                   </div>
                 </div>
               ))}
@@ -402,9 +449,9 @@ export default function Dashboard() {
                 <Play className="w-5 h-5 text-green-500" />
                 最近任务
               </h2>
-              <a href="/tasks" className="text-sm text-primary hover:underline">
+              <Link to="/tasks" className="text-sm text-primary hover:underline">
                 查看全部
-              </a>
+              </Link>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -435,7 +482,7 @@ export default function Dashboard() {
                         </span>
                       </td>
                       <td className="py-3 text-sm text-text-secondary">
-                        {formatDistanceToNow(new Date(task.created_at), { addSuffix: true })}
+                        {safeFormatDistance(task.created_at)}
                       </td>
                     </tr>
                   ))}

@@ -22,6 +22,14 @@ const api = axios.create({
   },
 });
 
+const refreshApi = axios.create({
+  baseURL: '',
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -77,7 +85,7 @@ api.interceptors.response.use(
       }
 
       try {
-        const { data } = await axios.post('/api/auth/refresh', { refreshToken });
+        const { data } = await refreshApi.post('/api/auth/refresh', { refreshToken });
 
         if (data.success) {
           const { token: newToken, refreshToken: newRefreshToken } = data.data;
@@ -95,9 +103,6 @@ api.interceptors.response.use(
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         localStorage.removeItem('refreshToken');
-        
-        const allRejected = failedQueue.map(p => p.reject(refreshError));
-        failedQueue = [];
         
         window.location.href = '/login';
         return Promise.reject(refreshError);

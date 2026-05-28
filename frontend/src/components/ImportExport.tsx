@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Upload, Download, AlertCircle, CheckCircle, X } from 'lucide-react';
 import api from '../lib/api';
+import { useToast } from '../contexts/ToastContext';
 
 interface ImportResult {
   imported: number;
@@ -21,6 +22,7 @@ const resourceLabels: Record<string, string> = {
 };
 
 export function ImportExport({ resourceType, onImportSuccess }: ImportExportProps) {
+  const toast = useToast();
   const [showImport, setShowImport] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -63,8 +65,9 @@ export function ImportExport({ resourceType, onImportSuccess }: ImportExportProp
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('导出失败:', error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '未知错误';
+      toast.error(`导出${resourceLabels[resourceType]}失败: ${message}`);
     } finally {
       setExporting(false);
     }
@@ -72,7 +75,7 @@ export function ImportExport({ resourceType, onImportSuccess }: ImportExportProp
 
   const handleImport = async (file: File) => {
     if (!file.name.endsWith('.csv')) {
-      alert('仅支持CSV格式文件');
+      toast.warning('仅支持CSV格式文件');
       return;
     }
 
@@ -90,12 +93,13 @@ export function ImportExport({ resourceType, onImportSuccess }: ImportExportProp
       
       if (response.data.data.imported > 0 && onImportSuccess) {
         onImportSuccess();
+        toast.success(`成功导入 ${response.data.data.imported} 条`);
       }
     } catch (error: any) {
       if (error.response?.data?.data) {
         setImportResult(error.response.data.data);
       } else {
-        alert('导入失败: ' + (error.response?.data?.message || '未知错误'));
+        toast.error('导入失败: ' + (error.response?.data?.message || '未知错误'));
       }
     } finally {
       setImporting(false);
@@ -133,8 +137,9 @@ export function ImportExport({ resourceType, onImportSuccess }: ImportExportProp
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('下载模板失败:', error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '未知错误';
+      toast.error(`下载模板失败: ${message}`);
     }
   };
 

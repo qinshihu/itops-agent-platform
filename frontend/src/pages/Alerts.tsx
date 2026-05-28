@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { io, Socket } from 'socket.io-client';
-import { Bell, CheckCircle, Clock, AlertCircle } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { Bell, CheckCircle, Clock, AlertCircle, Search } from 'lucide-react';
+import { safeFormatDistance } from '../lib/date';
 import clsx from 'clsx';
 import api from '../lib/api';
 import { ImportExport } from '../components/ImportExport';
@@ -10,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { sanitizeText } from '../lib/xss';
 
 const wsUrl = window.location.origin;
+const WS_RECONNECT_INTERVALS = [1000, 2000, 5000, 10000, 30000];
 
 interface Alert {
   id: string;
@@ -24,14 +25,107 @@ interface Alert {
 
 export default function Alerts() {
   const { token } = useAuth();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [severityFilter, setSeverityFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [wsConnected, setWsConnected] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: alerts, refetch } = useQuery({
-    queryKey: ['alerts'],
+    queryKey: ['alerts', statusFilter, severityFilter],
     queryFn: async () => {
-      const res = await api.get('/api/alerts');
+      const params: Record<string, string> = {};
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (severityFilter !== 'all') params.severity = severityFilter;
+      const res = await api.get('/api/alerts', { params });
       return res.data.data as Alert[];
     },
+    staleTime: 30000,
   });
+
+  const scheduleReconnect = useCallback(() => {
+    if (reconnectAttemptRef.current >= WS_RECONNECT_INTERVALS.length) return;
+    const delay = WS_RECONNECT_INTERVALS[reconnectAttemptRef.current];
+    reconnectTimerRef.current = setTimeout(() => {
+      reconnectAttemptRef.current++;
+      connectWebSocket();
+    }, delay);
+  }, [token]);
+
+  const connectWebSocket = useCallback(() => {
+    if (!token) return;
+
+    const socket: Socket = io(wsUrl, {
+      transports: ['websocket', 'polling'],
+      auth: { token },
+      reconnection: false,
+    });
+
+    socket.on('connect', () => {
+      setWsConnected(true);
+      reconnectAttemptRef.current = 0;
+      socket.emit('alert:subscribe');
+    });
+
+    socket.on('disconnect', () => {
+      setWsConnected(false);
+      scheduleReconnect();
+    });
+
+    socket.on('connect_error', () => {
+      setWsConnected(false);
+      scheduleReconnect();
+    });
+
+    socket.on('alert:new', () => {
+      refetch();
+    });
+
+    socket.on('alert:updated', () => {
+      refetch();
+    });
+
+    socketRef.current = socket;
+
+    return () => {
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('connect_error');
+      socket.off('alert:new');
+      socket.off('alert:updated');
+      socket.emit('alert:unsubscribe');
+      socket.disconnect();
+    };
+  }, [token, refetch, scheduleReconnect]);
+
+  useEffect(() => {
+    const cleanup = connectWebSocket();
+    return () => {
+      cleanup?.();
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
+    };
+  }, [connectWebSocket]);
+
+  const serverSideFilteredAlerts = alerts?.filter((alert) => {
+    if (!searchQuery) return true;
+    return alert.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      alert.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      alert.source.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
+  const getSeverityLabel = (severity: string) => {
+    const labels: Record<string, string> = {
+      critical: '严重',
+      high: '高',
+      medium: '中',
+      low: '低',
+    };
+    return labels[severity] || severity;
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -94,64 +188,92 @@ export default function Alerts() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-surface rounded-lg p-4 border border-border">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-status-failed/10 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-status-failed" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-text-primary">
-                  {alerts?.filter((a) => a.status === 'new').length || 0}
-                </p>
-                <p className="text-sm text-text-secondary">新告警</p>
-              </div>
+          <div className="bg-surface rounded-xl p-5 border border-border hover:border-status-failed/30 transition-all">
+            <div className="p-2 bg-status-failed/10 rounded-lg w-fit mb-3">
+              <AlertCircle className="w-5 h-5 text-status-failed" />
             </div>
+            <p className="text-3xl font-bold text-text-primary mb-1">
+              {alerts?.filter((a) => a.status === 'new').length || 0}
+            </p>
+            <p className="text-sm text-text-secondary">新告警</p>
           </div>
-          <div className="bg-surface rounded-lg p-4 border border-border">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-status-warning/10 rounded-lg">
-                <Clock className="w-5 h-5 text-status-warning" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-text-primary">
-                  {alerts?.filter((a) => a.status === 'acknowledged').length || 0}
-                </p>
-                <p className="text-sm text-text-secondary">已确认</p>
-              </div>
+          <div className="bg-surface rounded-xl p-5 border border-border hover:border-status-warning/30 transition-all">
+            <div className="p-2 bg-status-warning/10 rounded-lg w-fit mb-3">
+              <Clock className="w-5 h-5 text-status-warning" />
             </div>
+            <p className="text-3xl font-bold text-text-primary mb-1">
+              {alerts?.filter((a) => a.status === 'acknowledged').length || 0}
+            </p>
+            <p className="text-sm text-text-secondary">已确认</p>
           </div>
-          <div className="bg-surface rounded-lg p-4 border border-border">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-status-success/10 rounded-lg">
-                <CheckCircle className="w-5 h-5 text-status-success" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-text-primary">
-                  {alerts?.filter((a) => a.status === 'resolved').length || 0}
-                </p>
-                <p className="text-sm text-text-secondary">已解决</p>
-              </div>
+          <div className="bg-surface rounded-xl p-5 border border-border hover:border-status-success/30 transition-all">
+            <div className="p-2 bg-status-success/10 rounded-lg w-fit mb-3">
+              <CheckCircle className="w-5 h-5 text-status-success" />
             </div>
+            <p className="text-3xl font-bold text-text-primary mb-1">
+              {alerts?.filter((a) => a.status === 'resolved').length || 0}
+            </p>
+            <p className="text-sm text-text-secondary">已解决</p>
           </div>
-          <div className="bg-surface rounded-lg p-4 border border-border">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Bell className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-text-primary">{alerts?.length || 0}</p>
-                <p className="text-sm text-text-secondary">总计</p>
-              </div>
+          <div className="bg-surface rounded-xl p-5 border border-border hover:border-primary/30 transition-all">
+            <div className="p-2 bg-primary/10 rounded-lg w-fit mb-3">
+              <Bell className="w-5 h-5 text-primary" />
             </div>
+            <p className="text-3xl font-bold text-text-primary mb-1">{alerts?.length || 0}</p>
+            <p className="text-sm text-text-secondary">总计</p>
           </div>
         </div>
 
         <div className="bg-surface rounded-xl border border-border overflow-hidden">
           <div className="p-6 border-b border-border">
-            <h2 className="text-lg font-semibold text-text-primary">告警列表</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-text-primary">告警列表</h2>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
+                <input
+                  type="text"
+                  placeholder="搜索告警..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-text-primary placeholder:text-text-secondary focus:outline-none focus:border-primary"
+                />
+              </div>
+              <select
+                value={severityFilter}
+                onChange={(e) => setSeverityFilter(e.target.value)}
+                className="px-3 py-2 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:border-primary"
+              >
+                <option value="all">所有级别</option>
+                <option value="critical">严重</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:border-primary"
+              >
+                <option value="all">所有状态</option>
+                <option value="new">新</option>
+                <option value="acknowledged">已确认</option>
+                <option value="resolved">已解决</option>
+              </select>
+            </div>
           </div>
           <div className="divide-y divide-border">
-            {alerts?.map((alert) => (
+            {serverSideFilteredAlerts?.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="p-4 rounded-xl bg-surface border border-border mb-3">
+                  <Bell className="w-8 h-8 text-text-secondary opacity-50" />
+                </div>
+                <p className="text-sm text-text-secondary mb-1">暂无告警</p>
+                <p className="text-xs text-text-tertiary">系统运行正常，没有告警信息</p>
+              </div>
+            ) : (
+              serverSideFilteredAlerts?.map((alert: Alert) => (
               <div key={alert.id} className="p-6 hover:bg-background/50 transition-all">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -165,7 +287,7 @@ export default function Alerts() {
                           alert.severity === 'low' && 'bg-status-pending/10 text-status-pending'
                         )}
                       >
-                        {alert.severity}
+                        {getSeverityLabel(alert.severity)}
                       </span>
                       <span
                         className={clsx(
@@ -185,7 +307,7 @@ export default function Alerts() {
                     <div className="flex items-center gap-4 text-xs text-text-secondary">
                       <span>来源: {sanitizeText(alert.source)}</span>
                       <span>
-                        {formatDistanceToNow(new Date(alert.created_at), { addSuffix: true })}
+                        {safeFormatDistance(alert.created_at)}
                       </span>
                     </div>
                   </div>
@@ -209,7 +331,8 @@ export default function Alerts() {
                   </div>
                 </div>
               </div>
-            ))}
+            ))
+            )}
           </div>
         </div>
       </div>

@@ -75,11 +75,15 @@ graph TB
 |---------|------|
 | **🔐 AES-256-GCM 加密** | 服务器密码和 SSH 密钥采用银行级加密存储，密钥自动生成 |
 | **🎫 JWT 双令牌认证** | Access Token + Refresh Token 机制，自动刷新，黑名单登出 |
+| **🔒 登录失败锁定** | 连续 5 次登录失败自动锁定账户 30 分钟，防止暴力破解 |
+| **💪 密码复杂度校验** | 强制要求密码包含大小写字母、数字和特殊字符（8 位以上） |
 | **📜 完整操作审计** | 所有登录、命令执行、配置变更均有详细审计日志，可追溯 |
 | **🚫 敏感信息脱敏** | 密码、API 密钥等敏感信息在日志和输出中自动脱敏 |
 | **🛡️ 非 root 运行** | Docker 容器以非 root 用户运行，遵循最小权限原则 |
 | **🧱 Nginx 安全头** | HSTS、CSP、X-Frame-Options、XSS 防护等安全配置 |
 | **⚡ API 速率限制** | 防止恶意请求和暴力破解，保护接口安全 |
+| **🌐 Webhook IP 白名单** | 支持配置告警 Webhook 来源 IP 白名单，防止伪造告警 |
+| **✍️ Webhook 签名验证** | HMAC-SHA256 签名验证，确保告警来源可信 |
 | **🏠 本地 AI 支持** | 支持 Ollama、LM Studio、vLLM 等本地部署模型，数据 100% 不出域 |
 | **🔑 强制密码修改** | 首次登录系统强制要求修改默认密码，杜绝弱口令风险 |
 
@@ -374,36 +378,67 @@ cd frontend && npm install && npm run dev
 
 ## 环境变量
 
-| 变量                | 说明            | 默认值                                        |
-| ----------------- | ------------- | ------------------------------------------ |
-| `NODE_ENV`        | 运行环境          | development                                |
-| `PORT`            | 后端端口          | 3001                                       |
-| `DATABASE_PATH`   | 数据库路径         | ./data/app.db                              |
-| `JWT_SECRET`      | JWT 签名密钥      | 开发环境自动生成                                   |
-| `JWT_EXPIRES_IN`  | Token 有效期     | 24h                                        |
-| `ALLOWED_ORIGINS` | CORS 允许来源     | <http://localhost:3000>                    |
-| `DOUBAO_API_KEY`  | 豆包 API 密钥     | -                                          |
-| `DOUBAO_API_BASE` | 豆包 API 地址     | <https://ark.cn-beijing.volces.com/api/v3> |
-| `DOUBAO_MODEL`    | 豆包模型          | doubao-4o                                  |
-| `OPENAI_API_KEY`  | OpenAI API 密钥 | -                                          |
-| `OPENAI_API_BASE` | OpenAI API 地址 | <https://api.openai.com/v1>                |
-| `OPENAI_MODEL`    | OpenAI 模型     | gpt-4o                                     |
-| `LOG_LEVEL`       | 日志级别          | info                                       |
+| 变量                     | 说明                                      | 默认值                                        |
+| ------------------------ | ---------------------------------------- | ------------------------------------------ |
+| `NODE_ENV`               | 运行环境                                  | production |
+| `PORT`                   | 后端端口                                  | 3001                                       |
+| `DATABASE_PATH`          | 数据库路径                                 | ./data/app.db                              |
+| `JWT_SECRET`             | JWT 签名密钥（生产环境必须修改）            | 开发环境自动生成                                   |
+| `JWT_EXPIRES_IN`         | Access Token 有效期                      | 24h                                        |
+| `ADMIN_INITIAL_PASSWORD` | 管理员初始密码（可选）                       | admin（默认）                               |
+| `ALLOWED_ORIGINS`        | CORS 允许源列表（逗号分隔）                   | http://localhost:3000,http://localhost:80,http://localhost:8080 |
+| `DOUBAO_API_KEY`         | 豆包 API 密钥（也可在网页设置）               | -                                          |
+| `DOUBAO_API_BASE`        | 豆包 API 地址                             | https://ark.cn-beijing.volces.com/api/v3 |
+| `DOUBAO_MODEL`           | 豆包模型名称                               | doubao-4o                                  |
+| `OPENAI_API_KEY`         | OpenAI API 密钥（也可在网页设置）          | -                                          |
+| `OPENAI_API_BASE`        | OpenAI API 地址                            | https://api.openai.com/v1                |
+| `OPENAI_MODEL`           | OpenAI 模型名称                           | gpt-4o                                     |
+| `LOCAL_AI_API_BASE`      | 本地 AI API 地址（Ollama 等）              | -                                          |
+| `LOCAL_AI_MODEL`         | 本地 AI 模型名称                            | -                                          |
+| `WEBHOOK_VERIFY_ENABLED` | 是否启用 Webhook 签名验证（生产环境建议开启） | false                                      |
+| `WEBHOOK_SECRET`         | Webhook 签名密钥（启用签名验证时必须）       | -                                          |
+| `WEBHOOK_IP_WHITELIST`   | Webhook IP 白名单（逗号分隔，空为允许所有）    | -                                          |
+| `LOG_LEVEL`              | 日志级别                                   | info                                       |
 
-## 安全特性
+## 安全特性详解
 
-- 服务器密码和 SSH 密钥 AES-256-GCM 加密存储
-- JWT 认证 + Token 黑名单机制（数据库错误时安全降级：拒绝）
-- access_token + refresh_token 双 token 机制，自动刷新
-- API 速率限制
-- bcrypt 密码哈希（成本因子 12）
-- 完整操作审计日志
-- 敏感信息自动脱敏
-- Nginx 安全头（HSTS/CSP/X-Frame-Options/XSS-Protection）
-- 部署脚本默认 admin/admin 初始密码，首次登录强制修改
-- 邮件模板 XSS 防护（HTML 转义）
-- Graceful Shutdown（优雅关闭，30s 超时保护）
-- 非 root 用户容器运行 + 最小权限文件权限
+### 认证与访问控制
+
+- **JWT 双令牌认证**：Access Token (24h) + Refresh Token (7d)，自动刷新，黑名单登出
+- **登录失败锁定**：连续 5 次登录失败自动锁定账户 30 分钟，防止暴力破解
+- **强制密码修改**：首次登录系统强制要求修改默认密码，杜绝弱口令风险
+- **密码复杂度校验**：要求密码至少 8 位，包含大小写字母、数字、特殊字符
+
+### 数据加密与安全
+
+- **AES-256-GCM 加密存储**：服务器密码和 SSH 密钥采用银行级加密，密钥自动生成
+- **bcrypt 密码哈希**：成本因子 12，抗彩虹表攻击
+- **敏感信息自动脱敏**：密码、API 密钥等敏感信息在日志和输出中自动脱敏
+- **邮件模板 XSS 防护**：HTML 自动转义，防止注入攻击
+
+### API 与网络安全
+
+- **API 速率限制**：不同接口有不同频率限制，防止恶意请求和暴力破解
+- **Nginx 安全头**：HSTS/CSP/X-Frame-Options/XSS-Protection/Referrer-Policy/Permissions-Policy
+- **CORS 白名单控制**：可配置允许的跨域来源
+- **Webhook 安全**：
+  - HMAC-SHA256 签名验证，确保告警来源可信
+  - IP 白名单，只允许指定告警源 IP 发送请求
+  - 速率限制，防止拒绝服务攻击
+
+### 容器与部署安全
+
+- **非 root 用户运行**：Docker 容器以非 root 用户运行，遵循最小权限原则
+- **优雅关闭机制**：SIGTERM/SIGINT 信号处理，30s 超时保护，确保资源正确释放
+- **全局异常处理**：uncaughtException/unhandledRejection 捕获，防止进程崩溃
+- **定时清理机制**：Token 黑名单、终端会话、用户缓存均有 TTL 自动清理
+
+### 审计与溯源
+
+- **完整操作审计日志**：所有登录、命令执行、配置变更均有详细记录，可追溯
+- **用户锁定审计**：登录失败、账户锁定、解锁操作均有日志记录
+
+> 🔒 **零信任安全模型**：所有服务器凭证只在本地加密存储，不会发送给任何第三方 AI。Agent 执行的命令和输出也只在您的服务器内部流转。
 
 ## 🚀 CI/CD 自动化
 

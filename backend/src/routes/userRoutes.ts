@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { createAuditLog } from '../services/auditService';
 import { requireRole, authenticateToken, invalidateUserCache } from '../middleware/auth';
+import { validatePassword } from '../utils/passwordPolicy';
 
 const router = Router();
 
@@ -11,7 +12,11 @@ router.use(authenticateToken);
 
 router.get('/', (_req: Request, res: Response) => {
   try {
-    const users = db.prepare('SELECT id, username, email, role, enabled, created_at FROM users ORDER BY created_at DESC').all();
+    const users = db.prepare(`
+      SELECT id, username, email, role, enabled, failed_login_attempts, locked_until, created_at 
+      FROM users 
+      ORDER BY created_at DESC
+    `).all();
     res.json({ success: true, data: users });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -21,7 +26,11 @@ router.get('/', (_req: Request, res: Response) => {
 router.get('/:id', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const user = db.prepare('SELECT id, username, email, role, enabled, created_at FROM users WHERE id = ?').get(id);
+    const user = db.prepare(`
+      SELECT id, username, email, role, enabled, failed_login_attempts, locked_until, created_at 
+      FROM users 
+      WHERE id = ?
+    `).get(id);
     
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
@@ -39,6 +48,11 @@ router.post('/', requireRole('admin'), async (req: Request, res: Response) => {
     
     if (!username || !password) {
       return res.status(400).json({ success: false, error: 'Username and password are required' });
+    }
+    
+    const passwordCheck = validatePassword(password);
+    if (!passwordCheck.valid) {
+      return res.status(400).json({ success: false, error: passwordCheck.message });
     }
     
     const existingUser = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
@@ -103,6 +117,10 @@ router.put('/:id', requireRole('admin'), async (req: Request, res: Response) => 
       params.push(enabled ? 1 : 0);
     }
     if (password) {
+      const passwordCheck = validatePassword(password);
+      if (!passwordCheck.valid) {
+        return res.status(400).json({ success: false, error: passwordCheck.message });
+      }
       const saltRounds = 12;
       const hashedPassword = await bcrypt.hash(password, saltRounds);
       updates.push('password = ?');
@@ -128,6 +146,38 @@ router.put('/:id', requireRole('admin'), async (req: Request, res: Response) => 
     });
     
     res.json({ success: true, message: 'User updated' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+router.post('/:id/unlock', requireRole('admin'), (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(id) as { username: string };
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    db.prepare(`
+      UPDATE users 
+      SET failed_login_attempts = 0, locked_until = NULL, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ?
+    `).run(id);
+    
+    invalidateUserCache(id);
+    
+    const reqUser = (req as { user?: { id: string } }).user;
+    createAuditLog({
+      user_id: reqUser?.id || 'system',
+      action: 'unlock_user',
+      resource_type: 'user',
+      resource_id: id,
+      details: { username: user.username }
+    });
+    
+    res.json({ success: true, message: 'User account unlocked' });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }

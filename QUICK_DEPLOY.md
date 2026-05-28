@@ -257,9 +257,50 @@ DOUBAO_MODEL=doubao-4o
 OPENAI_API_KEY=your-openai-key
 OPENAI_API_BASE=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4o
+
+# 本地 AI（Ollama / LM Studio / vLLM 等）
+LOCAL_AI_API_BASE=http://localhost:11434/v1
+LOCAL_AI_MODEL=qwen2.5
 ```
 
-> 两个 AI 模型都是可选的，至少配置一个才能使用 AI 功能。
+> AI 模型都是可选的，至少配置一个才能使用 AI 功能。
+
+---
+
+## 安全配置（生产环境建议）
+
+### 🔐 登录安全
+
+系统默认已启用以下安全机制：
+- **强制初始密码修改**：首次登录必须修改 `admin/admin` 默认密码
+- **密码复杂度校验**：至少 8 位，必须包含大小写字母、数字和特殊字符
+- **登录失败锁定**：连续 5 次失败锁定 30 分钟，防止暴力破解
+
+### 🌐 Webhook 安全（告警接收）
+
+生产环境建议启用：
+
+```env
+# 1. IP 白名单（只允许指定 IP 发送告警）
+WEBHOOK_IP_WHITELIST=192.168.1.100,10.0.0.50
+
+# 2. 签名验证（HMAC-SHA256）
+WEBHOOK_VERIFY_ENABLED=true
+WEBHOOK_SECRET=$(openssl rand -hex 32)
+```
+
+### 🛡️ 其他安全建议
+
+```env
+# 必须设置强 JWT 密钥
+JWT_SECRET=$(openssl rand -hex 32)
+
+# 限制 CORS 来源（逗号分隔）
+ALLOWED_ORIGINS=https://your-domain.com,https://www.your-domain.com
+
+# 设置运行环境
+NODE_ENV=production
+```
 
 ---
 
@@ -352,7 +393,7 @@ sudo ufw reload
 
 | 组件 | 版本 |
 |------|------|
-| 项目版本 | v3.0.4 |
+| 项目版本 | v3.0.5 |
 | Docker | 20.10+ |
 | Docker Compose | v2.0+ |
 | Node.js (容器) | 18+ |
@@ -370,5 +411,5 @@ sudo ufw reload
 
 ---
 
-> 📅 最后更新：2026-05-27  
-> 📝 本文档基于 v3.0.4 版本编写
+> 📅 最后更新：2026-05-28  
+> 📝 本文档基于 v3.0.5 版本编写

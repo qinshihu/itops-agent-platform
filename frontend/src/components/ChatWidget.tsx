@@ -3,11 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Send, Bot, User, Trash2, MessageSquare, Loader2, X, MinusCircle } from 'lucide-react';
 import api from '../lib/api';
 import MarkdownOutput from './MarkdownOutput';
+import { useToast } from '../contexts/ToastContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
-  timestamp: Date;
+  timestamp: Date | string;
 }
 
 interface Conversation {
@@ -17,6 +19,9 @@ interface Conversation {
 
 export default function ChatWidget() {
   const queryClient = useQueryClient();
+  const toast = useToast();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -54,7 +59,7 @@ export default function ChatWidget() {
       setInputValue('');
     },
     onError: () => {
-      alert(`发送消息失败: 未知错误`);
+      toast.error('发送消息失败，请重试');
     },
   });
 
@@ -68,11 +73,11 @@ export default function ChatWidget() {
         setCurrentConversationId(data.data.id);
         queryClient.invalidateQueries({ queryKey: ['copilot-conversations'] });
       } else {
-        alert(`创建对话失败: ${data.error}`);
+        toast.error(`创建对话失败: ${data.error}`);
       }
     },
     onError: () => {
-      alert(`创建对话出错`);
+      toast.error('创建对话出错');
     },
   });
 
@@ -95,14 +100,12 @@ export default function ChatWidget() {
     if (!message.trim()) return;
 
     if (!currentConversationId) {
-      // 没有对话，先创建对话，再发送消息
       await createConversationMutation.mutateAsync().then((data) => {
         if (data && data.success) {
           sendMessageMutation.mutate({ conversationId: data.data.id, message });
         }
       });
     } else {
-      // 有对话，直接发送
       sendMessageMutation.mutate({ conversationId: currentConversationId, message });
     }
   };
@@ -111,19 +114,37 @@ export default function ChatWidget() {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center text-white hover:scale-110 z-50"
+        className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 transition-all duration-300 flex items-center justify-center text-white hover:scale-[1.05] active:scale-[0.95] z-50"
       >
         <Bot className="w-7 h-7" />
       </button>
     );
   }
 
+  const bgMain = isDark ? 'bg-gradient-to-br from-slate-800/95 to-slate-900/95' : 'bg-white';
+  const borderColor = isDark ? 'border-slate-700/50' : 'border-gray-200';
+  const sidebarBg = isDark ? 'bg-slate-900/80' : 'bg-gray-50';
+  const sidebarBorder = isDark ? 'border-slate-700/30' : 'border-gray-200';
+  const chatBg = isDark ? 'bg-gradient-to-br from-slate-900/95 to-slate-950/95' : 'bg-gray-50';
+  const textPrimary = isDark ? 'text-white' : 'text-gray-900';
+  const textSecondary = isDark ? 'text-slate-400' : 'text-gray-500';
+  const textMuted = isDark ? 'text-slate-500' : 'text-gray-400';
+  const inputBg = isDark ? 'bg-slate-800/50' : 'bg-white';
+  const inputBorder = isDark ? 'border-slate-700/50' : 'border-gray-300';
+  const cardBg = isDark ? 'bg-slate-800/50' : 'bg-white';
+  const cardBorder = isDark ? 'border-slate-700/50' : 'border-gray-200';
+  const hoverBg = isDark ? 'hover:bg-slate-700/50' : 'hover:bg-gray-100';
+  const dividerBg = isDark ? 'border-slate-700/30' : 'border-gray-200';
+  const msgBg = isDark ? 'bg-slate-800/80' : 'bg-white';
+  const msgBorder = isDark ? 'border-slate-700/50' : 'border-gray-200';
+  const minimizedBg = isDark ? 'bg-slate-800' : 'bg-white';
+  const minimizedBorder = isDark ? 'border-slate-700' : 'border-gray-200';
+
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
       {!isMinimized && (
-        <div className="w-[420px] h-[600px] bg-slate-900 rounded-xl shadow-2xl border border-slate-700 flex flex-col mb-3 overflow-hidden">
-          {/* 头部 */}
-          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 border-b border-slate-700">
+        <div className={`w-[420px] h-[600px] ${bgMain} rounded-2xl shadow-2xl border ${borderColor} flex flex-col mb-3 overflow-hidden animate-slide-up`}>
+          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 flex-shrink-0">
             <div className="flex items-center gap-2">
               <Bot className="w-5 h-5 text-white" />
               <h3 className="font-semibold text-white">IT运维助手</h3>
@@ -131,13 +152,13 @@ export default function ChatWidget() {
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setIsMinimized(true)}
-                className="p-1.5 hover:bg-white/20 rounded transition-all"
+                className="p-1.5 hover:bg-white/20 rounded-lg transition-all"
               >
                 <MinusCircle className="w-4 h-4 text-white" />
               </button>
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1.5 hover:bg-white/20 rounded transition-all"
+                className="p-1.5 hover:bg-white/20 rounded-lg transition-all"
               >
                 <X className="w-4 h-4 text-white" />
               </button>
@@ -145,13 +166,12 @@ export default function ChatWidget() {
           </div>
 
           <div className="flex-1 flex overflow-hidden">
-            {/* 对话列表侧边栏 */}
-            <div className="w-32 bg-slate-800 border-r border-slate-700 flex flex-col">
+            <div className={`w-32 ${sidebarBg} border-r ${sidebarBorder} flex flex-col flex-shrink-0`}>
               <button
                 onClick={() => {
                   createConversationMutation.mutate();
                 }}
-                className="m-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400 text-white text-sm rounded-lg flex items-center justify-center gap-1.5 transition-all"
+                className="m-2 px-3 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:opacity-50 text-white text-xs rounded-lg flex items-center justify-center gap-1.5 transition-all font-medium"
                 disabled={createConversationMutation.isPending}
               >
                 {createConversationMutation.isPending ? (
@@ -162,19 +182,19 @@ export default function ChatWidget() {
                 {createConversationMutation.isPending ? '创建中...' : '新对话'}
               </button>
 
-              <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+              <div className="flex-1 overflow-y-auto p-2 space-y-1.5 scrollbar-thin">
                 {conversations?.map((c: Conversation) => (
                   <div
                     key={c.id}
                     onClick={() => setCurrentConversationId(c.id)}
-                    className={`p-2 rounded-lg cursor-pointer transition-all text-sm ${
+                    className={`p-2 rounded-lg cursor-pointer transition-all text-xs ${
                       c.id === currentConversationId
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'
+                        ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/20'
+                        : `${cardBg} ${textSecondary} ${hoverBg}`
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="truncate text-xs">
+                      <span className="truncate">
                         {c.messages[0]?.content?.substring(0, 12) || '新对话'}
                       </span>
                       <button
@@ -182,7 +202,7 @@ export default function ChatWidget() {
                           e.stopPropagation();
                           deleteConversationMutation.mutate(c.id);
                         }}
-                        className="ml-1 opacity-60 hover:opacity-100"
+                        className="ml-1 opacity-60 hover:opacity-100 transition-opacity"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
@@ -192,13 +212,12 @@ export default function ChatWidget() {
               </div>
             </div>
 
-            {/* 聊天区域 */}
-            <div className="flex-1 flex flex-col bg-slate-900">
+            <div className={`flex-1 flex flex-col ${chatBg}`}>
               {!currentConversationId ? (
                 <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-                  <Bot className="w-12 h-12 text-blue-400 mb-4" />
-                  <h3 className="text-lg font-semibold text-white mb-2">需要帮助？</h3>
-                  <p className="text-slate-400 text-sm mb-6">
+                  <Bot className="w-12 h-12 text-blue-500 mb-4" />
+                  <h3 className={`text-lg font-semibold ${textPrimary} mb-2`}>需要帮助？</h3>
+                  <p className={`${textSecondary} text-sm mb-6`}>
                     选择或创建对话开始
                   </p>
                   <div className="grid grid-cols-1 gap-2 w-full">
@@ -208,7 +227,7 @@ export default function ChatWidget() {
                         onClick={() => {
                           handleSend(suggestion);
                         }}
-                        className="p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-left text-sm text-slate-300 hover:text-white transition-all"
+                        className={`p-3 ${cardBg} ${hoverBg} border ${cardBorder} rounded-xl text-left text-sm ${textSecondary} hover:${textPrimary} transition-all`}
                       >
                         {suggestion}
                       </button>
@@ -217,23 +236,22 @@ export default function ChatWidget() {
                 </div>
               ) : (
                 <>
-                  {/* 消息列表 */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin">
                     {currentConversation?.messages?.map((msg: Message, index: number) => (
                       <div
-                        key={`${msg.role}-${msg.timestamp.getTime()}-${index}`}
-                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                        key={`${msg.role}-${new Date(msg.timestamp).getTime()}-${index}`}
+                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}
                       >
                         <div className="flex items-start gap-2 max-w-[85%]">
                           {msg.role === 'assistant' && (
-                            <div className="w-7 h-7 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                            <div className="w-7 h-7 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/20">
                               <Bot className="w-4 h-4 text-white" />
                             </div>
                           )}
-                          <div className={`p-3 rounded-lg ${
+                          <div className={`p-3 rounded-xl ${
                             msg.role === 'user'
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-slate-800 text-slate-200'
+                              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/20'
+                              : `${msgBg} ${textSecondary} border ${msgBorder}`
                           }`}>
                             {msg.role === 'assistant' ? (
                               <MarkdownOutput content={msg.content} />
@@ -250,13 +268,17 @@ export default function ChatWidget() {
                       </div>
                     ))}
                     {sendMessageMutation.isPending && (
-                      <div className="flex justify-start">
+                      <div className="flex justify-start animate-fade-in">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center">
+                          <div className="w-7 h-7 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/20">
                             <Loader2 className="w-4 h-4 text-white animate-spin" />
                           </div>
-                          <div className="p-3 bg-slate-800 rounded-lg text-slate-300">
-                            思考中...
+                          <div className={`p-3 ${msgBg} ${textSecondary} rounded-xl border ${msgBorder} flex items-center gap-2`}>
+                            <div className="flex gap-1">
+                              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -264,8 +286,7 @@ export default function ChatWidget() {
                     <div ref={messagesEndRef} />
                   </div>
 
-                  {/* 输入区域 */}
-                  <div className="p-3 border-t border-slate-700 bg-slate-850">
+                  <div className={`p-3 border-t ${dividerBg} ${inputBg} flex-shrink-0`}>
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -273,12 +294,12 @@ export default function ChatWidget() {
                         onChange={(e) => setInputValue(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                         placeholder="输入您的问题..."
-                        className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+                        className={`flex-1 ${inputBg} border ${inputBorder} rounded-xl px-3 py-2.5 text-sm ${textPrimary} placeholder:${textMuted} focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 transition-all`}
                       />
                       <button
                         onClick={() => handleSend()}
                         disabled={!inputValue.trim()}
-                        className="px-3 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white transition-all"
+                        className="px-3 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-white transition-all shadow-lg shadow-blue-500/20"
                       >
                         <Send className="w-4 h-4" />
                       </button>
@@ -291,25 +312,22 @@ export default function ChatWidget() {
         </div>
       )}
 
-      {/* 最小化/关闭按钮 */}
-      <div className="flex gap-2">
-        {isMinimized && (
-          <>
-            <button
-              onClick={() => setIsMinimized(false)}
-              className="w-14 h-14 bg-slate-800 hover:bg-slate-700 rounded-full shadow-lg border border-slate-700 flex items-center justify-center text-white z-50"
-            >
-              <MessageSquare className="w-7 h-7" />
-            </button>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="w-14 h-14 bg-red-600 hover:bg-red-500 rounded-full shadow-lg flex items-center justify-center text-white z-50"
-            >
-              <X className="w-7 h-7" />
-            </button>
-          </>
-        )}
-      </div>
+      {isMinimized && (
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsMinimized(false)}
+            className={`w-12 h-12 ${minimizedBg} ${hoverBg} rounded-full shadow-lg border ${minimizedBorder} flex items-center justify-center ${textPrimary} transition-all hover:scale-[1.05] active:scale-[0.95]`}
+          >
+            <MessageSquare className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setIsOpen(false)}
+            className="w-12 h-12 bg-red-600 hover:bg-red-500 rounded-full shadow-lg shadow-red-500/20 flex items-center justify-center text-white transition-all hover:scale-[1.05] active:scale-[0.95]"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

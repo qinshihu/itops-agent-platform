@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { remediationService } from '../services/remediationService';
 import { logger } from '../utils/logger';
+import db from '../models/database';
+import { authenticateToken as authenticate } from '../middleware/auth';
 
 const router = Router();
 
@@ -70,6 +72,88 @@ router.post('/:id/retry', (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Failed to retry execution'
+    });
+  }
+});
+
+router.post('/', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { rca_id, policy_id, server_id, risk_level } = req.body;
+
+    if (!server_id || !risk_level) {
+      return res.status(400).json({
+        success: false,
+        message: 'server_id and risk_level are required'
+      });
+    }
+
+    const audit = remediationService.createAudit({
+      rca_id,
+      policy_id,
+      server_id,
+      risk_level
+    });
+
+    res.json({ success: true, data: audit, message: 'Remediation audit created' });
+  } catch (error) {
+    logger.error('Failed to create remediation audit:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to create remediation audit'
+    });
+  }
+});
+
+router.post('/:id/execute', authenticate, async (req: Request, res: Response) => {
+  try {
+    const result = await remediationService.executeAudit(req.params.id);
+    res.json({ success: true, data: result, message: 'Remediation executed' });
+  } catch (error) {
+    logger.error('Failed to execute remediation audit:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to execute remediation'
+    });
+  }
+});
+
+router.post('/:id/rollback', authenticate, async (req: Request, res: Response) => {
+  try {
+    const audit = db.prepare('SELECT * FROM remediation_audits WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+    if (!audit) {
+      return res.status(404).json({
+        success: false,
+        message: 'Audit not found'
+      });
+    }
+
+    if ((audit.status as string) !== 'success' && (audit.status as string) !== 'failed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Audit must be completed before rollback'
+      });
+    }
+
+    await remediationService.rollbackAudit(req.params.id);
+    res.json({ success: true, message: 'Remediation rolled back' });
+  } catch (error) {
+    logger.error('Failed to rollback remediation audit:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to rollback remediation'
+    });
+  }
+});
+
+router.post('/:id/verify', authenticate, async (req: Request, res: Response) => {
+  try {
+    const result = await remediationService.verifyAudit(req.params.id);
+    res.json({ success: true, data: result, message: 'Remediation verified' });
+  } catch (error) {
+    logger.error('Failed to verify remediation audit:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to verify remediation'
     });
   }
 });

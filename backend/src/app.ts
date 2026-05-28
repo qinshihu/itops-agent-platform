@@ -34,10 +34,15 @@ import serverManagementRoutes from './routes/serverManagementRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import remediationPolicyRoutes from './routes/remediationPolicyRoutes';
 import remediationExecutionRoutes from './routes/remediationExecutionRoutes';
+import remediationAuditRoutes from './routes/remediationAuditRoutes';
 import backupRoutes from './routes/backupRoutes';
 import databaseRoutes from './routes/databaseRoutes';
 import knowledgeQAnythingRoutes from './routes/knowledgeQAnythingRoutes';
 import vncRoutes from './routes/vncRoutes';
+import networkDeviceRoutes from './routes/networkDeviceRoutes';
+import sshKeyRoutes from './routes/sshKeyRoutes';
+import topologyRoutes from './routes/topologyRoutes';
+import changeRoutes from './routes/changeRoutes';
 import { schedulerService } from './services/schedulerService';
 import { reportService } from './services/reportService';
 import { copilotService } from './services/copilotService';
@@ -46,12 +51,13 @@ import { notificationService } from './services/notificationService';
 import { remediationService } from './services/remediationService';
 import { vncProxyService } from './services/vncProxyService';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
-import { authenticateToken } from './middleware/auth';
-import { rateLimiter } from './middleware/rateLimiter';
+import { authenticateToken, requirePasswordChange } from './middleware/auth';
+import { rateLimiter, webhookIpFilter } from './middleware/rateLimiter';
 import { traceMiddleware } from './middleware/trace';
 import { env } from './utils/env';
 import { logger } from './utils/logger';
 import { initTokenBlacklist } from './services/tokenBlacklist';
+import { startCircuitBreakerCleanup } from './services/llmService';
 import { healthService } from './services/healthService';
 import { backupService } from './services/backupService';
 import { setServerInstances } from './services/restartService';
@@ -85,18 +91,28 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
 import { initAlertService } from './services/alertService';
 
-initializeDatabase();
+async function initializeApp() {
+  await initializeDatabase();
+  
+  // 初始化各个服务
+  initAlertService();
+  reportService.init();
+  copilotService.init();
+  rootCauseAnalysisService.init();
+  schedulerService.init();
+  notificationService.init();
+  remediationService.init();
+  backupService.init();
+  initTokenBlacklist();
+  startCircuitBreakerCleanup();
+  
+  logger.info('✅ Application initialization complete');
+}
 
-// 初始化各个服务
-initAlertService();
-reportService.init();
-copilotService.init();
-rootCauseAnalysisService.init();
-schedulerService.init();
-notificationService.init();
-remediationService.init();
-backupService.init();
-initTokenBlacklist();
+initializeApp().catch(error => {
+  logger.error('❌ Failed to initialize application', error as Error);
+  process.exit(1);
+});
 
 setupWebSocket(io);
 setIOInstance(io);
@@ -106,7 +122,7 @@ vncProxyService.initialize(io);
 app.use('/api/auth', rateLimiter, authRoutes);
 
 // Webhook 路由不需要认证（外部系统推送告警）
-app.use('/api/webhooks', rateLimiter, webhookRoutes);
+app.use('/api/webhooks', webhookIpFilter, rateLimiter, webhookRoutes);
 
 // 健康检查 - 不需要认证
 app.get('/health', async (_req, res) => {
@@ -129,18 +145,24 @@ app.get('/health/ready', async (_req, res) => {
   });
 });
 
-app.get('/api/health/summary', authenticateToken, (_req, res) => {
+// 以下所有路由都需要认证
+app.use(authenticateToken);
+
+// Auth相关接口 - 允许未修改密码的用户访问
+app.use('/api/auth', rateLimiter, authRoutes);
+
+// 健康检查接口（已认证）- 无需强制改密码检查
+app.get('/api/health/summary', (_req, res) => {
   const summary = healthService.getHealthSummary();
   res.json({ success: true, data: summary });
 });
-
-app.get('/api/health/history', authenticateToken, (_req, res) => {
+app.get('/api/health/history', (_req, res) => {
   const history = healthService.getHealthHistory();
   res.json({ success: true, data: history });
 });
 
-// 以下所有路由都需要认证
-app.use(authenticateToken);
+// 以下所有路由需要检查是否已修改初始密码
+app.use(requirePasswordChange);
 
 // 受保护的路由 - 也应用速率限制
 app.use('/api/copilot', rateLimiter, copilotRoutes);
@@ -168,11 +190,16 @@ app.use('/api/multi-agent', rateLimiter, multiAgentRoutes);
 app.use('/api/dashboard', rateLimiter, dashboardRoutes);
 app.use('/api/remediation-policies', rateLimiter, remediationPolicyRoutes);
 app.use('/api/remediation-executions', rateLimiter, remediationExecutionRoutes);
+app.use('/api/remediation-audits', rateLimiter, remediationAuditRoutes);
 app.use('/api/backups', rateLimiter, backupRoutes);
 app.use('/api/database', rateLimiter, databaseRoutes);
 app.use('/api/knowledge/qanything', rateLimiter, knowledgeQAnythingRoutes);
 app.use('/api/import-export', rateLimiter, importExportRouter);
 app.use('/api/vnc', rateLimiter, vncRoutes);
+app.use('/api/network-devices', rateLimiter, networkDeviceRoutes);
+app.use('/api/ssh-keys', rateLimiter, sshKeyRoutes);
+app.use('/api/topology', rateLimiter, topologyRoutes);
+app.use('/api/changes', rateLimiter, changeRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

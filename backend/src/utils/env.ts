@@ -22,6 +22,7 @@ interface EnvConfig {
   LOCAL_AI_MODEL?: string;
   WEBHOOK_VERIFY_ENABLED?: boolean;
   WEBHOOK_SECRET?: string;
+  WEBHOOK_IP_WHITELIST?: string;
   ALERT_WEBHOOK_URL?: string;
   ALERT_EMAIL_HOST?: string;
   ALERT_EMAIL_PORT?: number;

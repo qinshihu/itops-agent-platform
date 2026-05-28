@@ -69,9 +69,10 @@ class EnhancedRAGService {
       return [];
     }
 
-    // 对每个结果进行评分
+    const totalDocs = (db.prepare('SELECT COUNT(*) as count FROM knowledge_base').get() as { count: number }).count;
+
     const scoredResults = knowledgeItems.map(item => {
-      const score = this.calculateRelevanceScore(query, item);
+      const score = this.calculateRelevanceScore(query, item, totalDocs);
       const highlight = this.generateHighlight(query, item);
       
       return {
@@ -95,41 +96,77 @@ class EnhancedRAGService {
     category: string;
     usage_count: number;
     created_at: string;
-  }): number {
+  }, totalDocs: number): number {
     let score = 0;
     const queryLower = query.toLowerCase();
-    const contentLower = `${item.title} ${item.content} ${item.category}`.toLowerCase();
+    const fullText = `${item.title} ${item.content} ${item.category}`.toLowerCase();
     
-    // 1. 精确匹配分数（最高）
-    if (contentLower.includes(queryLower)) {
-      score += 0.5;
+    // 1. TF-IDF 相似度（核心评分，权重 0.4）
+    const tfidfScore = this.calculateTfIdf(query, fullText, totalDocs);
+    score += tfidfScore * 0.4;
+
+    // 2. 精确匹配分数（权重 0.3）
+    if (fullText.includes(queryLower)) {
+      score += 0.3;
     }
 
-    // 2. 关键词匹配
-    const keywords = this.extractKeywords(query);
-    let matchCount = 0;
-    
-    for (const keyword of keywords) {
-      if (contentLower.includes(keyword.toLowerCase())) {
-        matchCount++;
-      }
+    // 3. 标题匹配加分（标题中出现关键词权重更高）
+    const titleLower = item.title.toLowerCase();
+    const titleKeywords = this.extractKeywords(query).filter(kw =>
+      titleLower.includes(kw.toLowerCase())
+    );
+    if (titleKeywords.length > 0) {
+      score += (titleKeywords.length / this.extractKeywords(query).length) * 0.2;
     }
 
-    if (keywords.length > 0) {
-      score += (matchCount / keywords.length) * 0.3;
-    }
+    // 4. 使用频率权重（权重 0.05）
+    score += Math.min((item.usage_count || 0) * 0.01, 0.05);
 
-    // 3. 使用频率权重（常用的知识更重要）
-    score += Math.min((item.usage_count || 0) * 0.01, 0.15);
-
-    // 4. 时间衰减因子（新内容略优）
+    // 5. 时间衰减因子（权重 0.05）
     const itemDate = new Date(item.created_at);
     const now = new Date();
     const daysDiff = (now.getTime() - itemDate.getTime()) / (1000 * 60 * 60 * 24);
-    const timeDecay = Math.max(0, 1 - daysDiff / 365); // 一年内的有额外权重
+    const timeDecay = Math.max(0, 1 - daysDiff / 365);
     score += timeDecay * 0.05;
 
-    return Math.min(score, 1.0); // 最高分1.0
+    return Math.min(score, 1.0);
+  }
+
+  /**
+   * 计算 TF-IDF 相似度
+   * 使用余弦相似度变体：TF(query_terms, document) / ||TF|| * IDF 权重
+   */
+  private calculateTfIdf(query: string, document: string, totalDocs: number): number {
+    const queryTerms = this.extractKeywords(query);
+    if (queryTerms.length === 0) return 0;
+
+    const docTerms = this.extractKeywords(document);
+    const docLength = Math.max(docTerms.length, 1);
+
+    const idfMap = new Map<string, number>();
+    for (const term of queryTerms) {
+      const docFreq = docTerms.filter(t => t === term.toLowerCase()).length;
+      const idf = Math.log(totalDocs / (docFreq + 1)) + 1;
+      idfMap.set(term, idf);
+    }
+
+    // 计算查询向量和文档向量的余弦相似度
+    let dotProduct = 0;
+    let queryNorm = 0;
+    let docNorm = 0;
+
+    for (const [term, idf] of idfMap.entries()) {
+      const tf = docTerms.filter(t => t === term.toLowerCase()).length / docLength;
+      const weightedTf = tf * idf;
+      dotProduct += idf * weightedTf;
+      queryNorm += idf * idf;
+      docNorm += weightedTf * weightedTf;
+    }
+
+    const denominator = Math.sqrt(queryNorm) * Math.sqrt(docNorm);
+    if (denominator === 0) return 0;
+
+    return dotProduct / denominator;
   }
 
   /**
@@ -324,20 +361,22 @@ class EnhancedRAGService {
     let imported = 0;
     let failed = 0;
 
-    for (const item of items) {
-      try {
-        await this.addKnowledge(
-          item.title,
-          item.content,
-          item.category || '未分类',
-          item.tags || []
-        );
-        imported++;
-      } catch (error) {
-        console.error('Failed to import knowledge item:', error);
-        failed++;
+    db.transaction(() => {
+      for (const item of items) {
+        try {
+          this.addKnowledge(
+            item.title,
+            item.content,
+            item.category || '未分类',
+            item.tags || []
+          );
+          imported++;
+        } catch (error) {
+          console.error('Failed to import knowledge item:', error);
+          failed++;
+        }
       }
-    }
+    })();
 
     return { imported, failed };
   }

@@ -1,5 +1,6 @@
 import db from '../models/database';
 import { randomUUID } from 'crypto';
+import { logger } from '../utils/logger';
 
 export interface ReportTemplate {
   id: string;

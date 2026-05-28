@@ -15,7 +15,7 @@ curl http://localhost:3001/health
 # 登录获取 Token
 curl -X POST http://localhost:3001/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}'
+  -d '{"username":"admin","password":"admin"}'
 
 # 使用 Token 访问受保护接口
 curl http://localhost:3001/api/agents \
@@ -80,4 +80,4 @@ docker-compose -f docker-compose.simple.yml build
 | 后端 API | http://localhost:3001 |
 | 健康检查 | http://localhost:3001/health |
 
-**测试账户**: `admin` / `admin123`
+**测试账户**: `admin` / `admin`
