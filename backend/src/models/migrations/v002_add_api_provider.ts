@@ -8,6 +8,19 @@ const v002AddApiProvider: Migration = {
   description: 'Add api_provider field to agents table to explicitly specify which LLM provider to use',
   
   up: async (db: any) => {
+    // Check if api_provider column already exists (may have been added by v001 defensive ALTER TABLE)
+    try {
+      const columns = db.prepare("PRAGMA table_info(agents)").all();
+      const columnNames = columns.map((col: any) => col.name);
+      
+      if (columnNames.includes('api_provider')) {
+        logger.info('✅ api_provider column already exists on agents table, skipping');
+        return;
+      }
+    } catch {
+      // Table might not exist yet, proceed with ALTER TABLE
+    }
+
     logger.info('🔄 Adding api_provider column to agents table...');
 
     db.exec(`
