@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -6,12 +6,15 @@ import { logger, LogLevel, LogEntry } from './logger';
 
 describe('Logger', () => {
   let logStats: any;
+  let consoleSpy: any;
 
   beforeEach(() => {
     logStats = logger.getStats();
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
   });
 
   afterEach(() => {
+    consoleSpy?.mockRestore();
   });
 
   describe('log levels', () => {
