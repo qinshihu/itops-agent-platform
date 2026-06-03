@@ -330,6 +330,14 @@ export function getParser(vendor: VendorType, type: InspectionType): (output: st
       version: parseVersion,
       routes: parseRoutes,
       log: parseLogBuffer
+    },
+    hikvision: {
+      cpu: parseH3cCpu,
+      memory: parseH3cMemory,
+      interface: parseInterfaceBrief,
+      version: parseVersion,
+      routes: parseRoutes,
+      log: parseLogBuffer
     }
   };
 

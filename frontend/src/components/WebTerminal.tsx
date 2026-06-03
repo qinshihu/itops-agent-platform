@@ -74,9 +74,10 @@ export default function WebTerminal({ serverId, serverName, token, onClose }: Te
     term.open(terminalRef.current);
     fitAddon.fit();
 
-    const socket = io(undefined, {
+    const socket = io(window.location.origin, {
+      path: '/socket.io/',
       auth: { token },
-      transports: ['websocket']
+      transports: ['websocket', 'polling']
     });
     socketRef.current = socket;
 

@@ -57,6 +57,7 @@ interface ServerInfo {
   username: string;
   password: string | null;
   private_key: string | null;
+  ssh_key_id: string | null;
   use_ssh_key: number;
   enabled?: number;
 }
@@ -81,8 +82,35 @@ export class TerminalService {
       return { sessionId: '', shell: null as unknown as ClientChannel, error: 'Server is disabled' };
     }
 
-    const decryptedPassword = server.password ? decrypt(server.password) : undefined;
-    const decryptedPrivateKey = server.private_key ? decrypt(server.private_key) : undefined;
+    let decryptedPassword = server.password ? decrypt(server.password) : undefined;
+    let decryptedPrivateKey = server.private_key ? decrypt(server.private_key) : undefined;
+    let decryptedPassphrase: string | undefined;
+
+    // 优先使用 ssh_key_id 从认证凭证表获取认证信息
+    if (server.ssh_key_id) {
+      const sshKey = db.prepare('SELECT auth_type, private_key, passphrase, username, password FROM ssh_keys WHERE id = ?').get(server.ssh_key_id) as { auth_type: string; private_key: string; passphrase?: string; username?: string; password?: string } | undefined;
+      if (sshKey) {
+        try {
+          if (sshKey.auth_type === 'password') {
+            // 密码类型：使用凭证表中的用户名和密码
+            if (sshKey.password) {
+              decryptedPassword = decrypt(sshKey.password);
+            }
+            if (sshKey.username) {
+              server.username = sshKey.username;
+            }
+          } else {
+            // SSH 密钥类型
+            decryptedPrivateKey = decrypt(sshKey.private_key);
+            if (sshKey.passphrase) {
+              decryptedPassphrase = decrypt(sshKey.passphrase);
+            }
+          }
+        } catch (error) {
+          return { sessionId: '', shell: null as unknown as ClientChannel, error: `Failed to decrypt SSH credential: ${(error as Error).message}` };
+        }
+      }
+    }
 
     return new Promise((resolve) => {
       const conn = new Client();
@@ -175,6 +203,9 @@ export class TerminalService {
 
       if (server.use_ssh_key && decryptedPrivateKey) {
         connectConfig.privateKey = decryptedPrivateKey;
+        if (decryptedPassphrase) {
+          connectConfig.passphrase = decryptedPassphrase;
+        }
       } else if (decryptedPassword) {
         connectConfig.password = decryptedPassword;
       } else {

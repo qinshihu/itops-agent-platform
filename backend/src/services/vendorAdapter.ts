@@ -1,6 +1,6 @@
 import { logger } from '../utils/logger';
 
-export type VendorType = 'huawei' | 'cisco' | 'h3c' | 'ruijie' | 'zte';
+export type VendorType = 'huawei' | 'cisco' | 'h3c' | 'ruijie' | 'zte' | 'hikvision';
 
 export type InspectionType = 
   | 'cpu' 
@@ -556,13 +556,119 @@ class ZteAdapter implements VendorAdapter {
   }
 }
 
+class HikvisionAdapter implements VendorAdapter {
+  vendor: VendorType = 'hikvision';
+
+  private templates: Record<InspectionType, CommandTemplate> = {
+    cpu: {
+      type: 'cpu',
+      name: 'CPU 使用率',
+      command: 'display cpu-usage',
+      description: '检查设备 CPU 使用率，正常应低于 80%',
+      expectedPattern: 'CPU utilization',
+      thresholds: { warning: 70, critical: 85 }
+    },
+    memory: {
+      type: 'memory',
+      name: '内存使用率',
+      command: 'display memory',
+      description: '检查设备内存使用情况，正常应低于 85%',
+      expectedPattern: 'Memory',
+      thresholds: { warning: 75, critical: 90 }
+    },
+    interface: {
+      type: 'interface',
+      name: '接口状态',
+      command: 'display interface brief',
+      description: '检查所有接口物理状态和协议状态',
+      expectedPattern: 'Link|Protocol'
+    },
+    version: {
+      type: 'version',
+      name: '系统版本',
+      command: 'display version',
+      description: '检查设备型号、软件版本和运行时间'
+    },
+    routes: {
+      type: 'routes',
+      name: '路由表',
+      command: 'display ip routing-table',
+      description: '检查路由表状态和路由数量'
+    },
+    log: {
+      type: 'log',
+      name: '日志缓冲区',
+      command: 'display logbuffer',
+      description: '检查最近的系统日志和告警信息'
+    },
+    environment: {
+      type: 'environment',
+      name: '环境状态',
+      command: 'display environment',
+      description: '检查设备温度和电压状态'
+    },
+    power: {
+      type: 'power',
+      name: '电源状态',
+      command: 'display power',
+      description: '检查电源模块状态'
+    },
+    fan: {
+      type: 'fan',
+      name: '风扇状态',
+      command: 'display fan',
+      description: '检查风扇模块运行状态'
+    },
+    stp: {
+      type: 'stp',
+      name: 'STP 状态',
+      command: 'display stp brief',
+      description: '检查生成树协议状态和端口角色'
+    },
+    vlan: {
+      type: 'vlan',
+      name: 'VLAN 信息',
+      command: 'display vlan all',
+      description: '检查 VLAN 配置和端口成员'
+    },
+    arp: {
+      type: 'arp',
+      name: 'ARP 表',
+      command: 'display arp',
+      description: '检查 ARP 表项数量和状态'
+    },
+    mac: {
+      type: 'mac',
+      name: 'MAC 地址表',
+      command: 'display mac-address',
+      description: '检查 MAC 地址表项'
+    }
+  };
+
+  getCommands(types?: InspectionType[]): CommandTemplate[] {
+    if (!types) {
+      return Object.values(this.templates);
+    }
+    return types.map(type => this.templates[type]).filter(Boolean);
+  }
+
+  getCommand(type: InspectionType): CommandTemplate | undefined {
+    return this.templates[type];
+  }
+
+  supportsEnablePassword(): boolean {
+    return true;
+  }
+}
+
 export function createVendorAdapter(vendor: VendorType): VendorAdapter {
   const adapters: Record<VendorType, VendorAdapter> = {
     huawei: new HuaweiAdapter(),
     cisco: new CiscoAdapter(),
     h3c: new H3cAdapter(),
     ruijie: new RuijieAdapter(),
-    zte: new ZteAdapter()
+    zte: new ZteAdapter(),
+    hikvision: new HikvisionAdapter()
   };
 
   const adapter = adapters[vendor];
