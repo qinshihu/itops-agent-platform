@@ -199,12 +199,13 @@ export default function NetworkDevices() {
     return result;
   }, [devices, selectedVendor, searchQuery]);
 
-  const vendors = ['all', 'huawei', 'cisco', 'h3c', 'ruijie', 'zte'];
+  const vendors = ['all', 'huawei', 'cisco', 'h3c', 'hikvision', 'ruijie', 'zte'];
   const vendorLabels: Record<string, string> = {
     all: '全部厂商',
     huawei: '华为',
     cisco: '思科',
     h3c: '华三',
+    hikvision: '海康',
     ruijie: '锐捷',
     zte: '中兴'
   };

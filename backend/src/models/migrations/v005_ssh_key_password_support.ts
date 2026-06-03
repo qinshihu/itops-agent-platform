@@ -21,13 +21,14 @@ const v005SSHKeyPasswordSupport: Migration = {
         username TEXT,
         password TEXT,
         private_key TEXT,
+        passphrase TEXT,
         description TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
-      INSERT INTO ssh_keys_new (id, name, auth_type, key_type, fingerprint, private_key, description, created_at, updated_at)
-      SELECT id, name, 'key', key_type, fingerprint, private_key, description, created_at, updated_at
+      INSERT INTO ssh_keys_new (id, name, auth_type, key_type, fingerprint, private_key, passphrase, description, created_at, updated_at)
+      SELECT id, name, 'key', key_type, fingerprint, private_key, NULL, description, created_at, updated_at
       FROM ssh_keys;
 
       DROP TABLE ssh_keys;
@@ -52,13 +53,14 @@ const v005SSHKeyPasswordSupport: Migration = {
         key_type TEXT NOT NULL,
         fingerprint TEXT,
         private_key TEXT NOT NULL,
+        passphrase TEXT,
         description TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
-      INSERT INTO ssh_keys_backup (id, name, key_type, fingerprint, private_key, description, created_at, updated_at)
-      SELECT id, name, COALESCE(key_type, 'unknown'), fingerprint, COALESCE(private_key, ''), description, created_at, updated_at
+      INSERT INTO ssh_keys_backup (id, name, key_type, fingerprint, private_key, passphrase, description, created_at, updated_at)
+      SELECT id, name, COALESCE(key_type, 'unknown'), fingerprint, COALESCE(private_key, ''), passphrase, description, created_at, updated_at
       FROM ssh_keys;
 
       DROP TABLE ssh_keys;

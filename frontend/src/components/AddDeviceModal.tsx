@@ -40,6 +40,7 @@ const vendors = [
   { value: 'huawei', label: '华为 (Huawei)' },
   { value: 'cisco', label: '思科 (Cisco)' },
   { value: 'h3c', label: '华三 (H3C)' },
+  { value: 'hikvision', label: '海康 (Hikvision)' },
   { value: 'ruijie', label: '锐捷 (Ruijie)' },
   { value: 'zte', label: '中兴 (ZTE)' }
 ];

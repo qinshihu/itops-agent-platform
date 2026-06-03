@@ -32,6 +32,7 @@ const vendorConfig: Record<string, { label: string; color: string; bgClass: stri
   huawei: { label: '华为', color: 'text-red-400', bgClass: 'bg-red-500/10 border border-red-500/20', icon: '🔴' },
   cisco: { label: '思科', color: 'text-blue-400', bgClass: 'bg-blue-500/10 border border-blue-500/20', icon: '🔵' },
   h3c: { label: '华三', color: 'text-green-400', bgClass: 'bg-green-500/10 border border-green-500/20', icon: '' },
+  hikvision: { label: '海康', color: 'text-cyan-400', bgClass: 'bg-cyan-500/10 border border-cyan-500/20', icon: '' },
   ruijie: { label: '锐捷', color: 'text-purple-400', bgClass: 'bg-purple-500/10 border border-purple-500/20', icon: '🟣' },
   zte: { label: '中兴', color: 'text-orange-400', bgClass: 'bg-orange-500/10 border border-orange-500/20', icon: '' }
 };
