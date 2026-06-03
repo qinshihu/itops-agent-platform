@@ -1,4 +1,4 @@
-import { Network, MoreHorizontal, Cpu, MemoryStick, Wifi, History, Play, Settings, Edit, Trash2 } from 'lucide-react';
+import { Network, MoreHorizontal, Cpu, Wifi, History, Play, Settings, Edit, Trash2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 interface NetworkDevice {

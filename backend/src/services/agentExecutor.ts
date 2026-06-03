@@ -1,7 +1,7 @@
 import db from '../models/database';
 import { logger } from '../utils/logger';
 import { executeAgentWithLLM } from './llmService';
-import { executeCommand, runComplianceCheck, complianceChecks } from './sshService';
+import { executeCommand, runComplianceCheck } from './sshService';
 import { Agent, Server } from '../types';
 
 const AGENT_EXECUTION_TIMEOUT = 300000; // 5 分钟

@@ -517,7 +517,7 @@ export default function AIModels() {
             <div className="text-center py-12">
               <Bot className="w-12 h-12 mx-auto text-text-secondary mb-4" />
               <p className="text-text-secondary mb-2">暂无 AI 模型配置</p>
-              <p className="text-sm text-text-tertiary mb-4">点击"添加模型"开始配置</p>
+              <p className="text-sm text-text-tertiary mb-4">点击&apos;添加模型&apos;开始配置</p>
               <button
                 onClick={handleAddModel}
                 className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all"

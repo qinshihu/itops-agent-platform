@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import db from '../models/database';
 import { logger } from '../utils/logger';
-import { getApiKey, getModelId, getApiBase, buildApiEndpoint } from '../utils/apiConfig';
+import { getApiBase, buildApiEndpoint } from '../utils/apiConfig';
 import axios from 'axios';
 
 export interface AIModel {
@@ -344,7 +344,7 @@ export async function testModelConnectivity(modelId: string): Promise<{
       finalApiBase = finalApiBase.replace('/chat/completions', '');
     }
     
-    const response = await axios.post(
+    await axios.post(
       buildApiEndpoint(finalApiBase, 'chat/completions'),
       {
         model: model.model_id,

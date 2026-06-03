@@ -27,7 +27,7 @@ export default function Alerts() {
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [wsConnected, setWsConnected] = useState(false);
+  const [_wsConnected, setWsConnected] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -146,7 +146,6 @@ export default function Alerts() {
     };
 
     const handleAlertNew = (data: Alert) => {
-      console.log('New alert:', data);
       refetch();
     };
 

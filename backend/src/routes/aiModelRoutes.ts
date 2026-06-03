@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import { randomUUID } from 'crypto';
 import { requireRole } from '../middleware/auth';
 import * as aiModelService from '../services/aiModelService';
 
@@ -17,7 +16,7 @@ router.get('/', (req: Request, res: Response) => {
     }
     
     res.json({ success: true, data: models });
-  } catch (error) {
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to fetch models' });
   }
 });
@@ -31,7 +30,7 @@ router.get('/default', (req: Request, res: Response) => {
     }
     
     res.json({ success: true, data: defaultModel });
-  } catch (error) {
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to fetch default model' });
   }
 });
@@ -45,7 +44,7 @@ router.get('/:id', (req: Request, res: Response) => {
     }
     
     res.json({ success: true, data: model });
-  } catch (error) {
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to fetch model' });
   }
 });

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../models/database';
 import bcrypt from 'bcryptjs';
-import jwt, { JwtPayload, SignOptions } from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 import { env } from '../utils/env';
 import { tokenBlacklist } from '../services/tokenBlacklist';

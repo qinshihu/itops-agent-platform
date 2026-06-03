@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
-import { AlertService, AlertRule, AlertSeverity } from './alertService';
+import { AlertService, AlertRule } from './alertService';
 import { initializeDatabase } from '../models/database';
 import db from '../models/database';
 

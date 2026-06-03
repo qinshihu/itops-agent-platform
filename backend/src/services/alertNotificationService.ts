@@ -1,6 +1,5 @@
 import db from '../models/database';
 import { logger } from '../utils/logger';
-import { env } from '../utils/env';
 
 export type AlertLevel = 'info' | 'warning' | 'critical';
 export type AlertChannel = 'email' | 'webhook' | 'database';

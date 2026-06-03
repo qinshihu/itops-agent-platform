@@ -78,7 +78,7 @@ router.get('/api-keys', (_req: Request, res: Response) => {
           apiBase: openaiApiBase
         },
         localAi: {
-          configured: !!localAiApiBase && localAiApiBase !== 'http://host.docker.internal:11434/v1',
+          configured: !!localAiKey && localAiApiBase !== 'http://host.docker.internal:11434/v1',
           model: localAiModel,
           apiBase: localAiApiBase
         }

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import db from '../models/database';
 import { decrypt, encrypt } from '../services/encryptionService';
 import { logger } from '../utils/logger';
@@ -6,9 +6,9 @@ import { logger } from '../utils/logger';
 const router = Router();
 
 // 获取服务器 VNC 配置
-router.get('/config/:serverId', (req, res) => {
+router.get('/config/:serverId', (_req: Request, res: Response) => {
   try {
-    const server = db.prepare('SELECT hostname, vnc_port, vnc_password FROM servers WHERE id = ?').get(req.params.serverId) as any;
+    const server = db.prepare('SELECT hostname, vnc_port, vnc_password FROM servers WHERE id = ?').get(_req.params.serverId) as { hostname: string; vnc_port: number; vnc_password: string } | undefined;
 
     if (!server) {
       return res.status(404).json({ success: false, error: 'Server not found' });
@@ -19,7 +19,7 @@ router.get('/config/:serverId', (req, res) => {
     if (server.vnc_password) {
       try {
         decryptedPassword = decrypt(server.vnc_password);
-      } catch (err) {
+      } catch {
         logger.warn('Failed to decrypt VNC password');
       }
     }
@@ -32,13 +32,13 @@ router.get('/config/:serverId', (req, res) => {
         vnc_password: decryptedPassword
       }
     });
-  } catch (error) {
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to get VNC config' });
   }
 });
 
 // 更新服务器 VNC 配置
-router.put('/config/:serverId', (req, res) => {
+router.put('/config/:serverId', (req: Request, res: Response) => {
   try {
     const { vnc_port, vnc_password } = req.body as { vnc_port?: number; vnc_password?: string };
 
@@ -70,7 +70,7 @@ router.put('/config/:serverId', (req, res) => {
 
     logger.info(`VNC config updated for server ${req.params.serverId}`);
     res.json({ success: true, message: 'VNC config updated successfully' });
-  } catch (error) {
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to update VNC config' });
   }
 });

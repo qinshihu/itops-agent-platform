@@ -1,5 +1,3 @@
-import { logger } from '../utils/logger';
-
 export interface NormalizedAlert {
   external_id?: string;
   source: string;
