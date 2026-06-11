@@ -30,12 +30,17 @@ export async function executeAgentNode(
   
   // 其他 Agent - 调用真实 LLM，增加超时保护
   logger.info(`🤖 Calling LLM for agent ${agentName}`);
-  return await Promise.race([
-    executeAgentWithLLM(agentId, input),
-    new Promise<string>((_, reject) =>
-      setTimeout(() => reject(new Error(`Agent 执行超时（${AGENT_EXECUTION_TIMEOUT / 1000}s）`)), AGENT_EXECUTION_TIMEOUT)
-    )
-  ]);
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      executeAgentWithLLM(agentId, input),
+      new Promise<string>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`Agent 执行超时（${AGENT_EXECUTION_TIMEOUT / 1000}s）`)), AGENT_EXECUTION_TIMEOUT);
+      })
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
 /**

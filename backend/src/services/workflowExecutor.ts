@@ -100,13 +100,18 @@ export async function executeWorkflow(
     
     io?.to(`task:${taskId}`).emit('task:started', { taskId, executionOrder });
     
+    let truncated = false;
+    let cancelled = false;
+
     for (const nodeId of executionOrder) {
       if (executionDepth++ >= MAX_EXECUTION_DEPTH) {
         logger.error(`❌ Workflow ${workflow.name} exceeded maximum execution depth`);
+        truncated = true;
         break;
       }
       const task = db.prepare('SELECT status FROM tasks WHERE id = ?').get(taskId) as { status: string } | undefined;
       if (task?.status === 'cancelled') {
+        cancelled = true;
         break;
       }
       
@@ -203,12 +208,14 @@ export async function executeWorkflow(
       }
     }
     
+    const finalStatus = truncated ? 'failed' : cancelled ? 'cancelled' : 'completed';
+    
     db.prepare(`
       UPDATE tasks 
       SET status = ?, end_time = CURRENT_TIMESTAMP, 
           node_results = ?, current_node_id = NULL
       WHERE id = ?
-    `).run('completed', JSON.stringify(nodeResults), taskId);
+    `).run(finalStatus, JSON.stringify(nodeResults), taskId);
     
     try {
       const failedNodes = Object.entries(nodeResults)

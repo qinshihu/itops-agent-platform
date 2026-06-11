@@ -599,18 +599,23 @@ export async function generateCompletion(
   agentId: string = ''
 ): Promise<string> {
   const timeoutMs = 120000;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error(`LLM generateCompletion 超时 (${timeoutMs / 1000}s)`)), timeoutMs);
+    timeoutId = setTimeout(() => reject(new Error(`LLM generateCompletion 超时 (${timeoutMs / 1000}s)`)), timeoutMs);
   });
 
   // 优先使用 AI 模型池中的默认模型
   const defaultModel = aiModelService.getDefaultModel();
   if (defaultModel && defaultModel.enabled) {
     logger.info(`🤖 [generateCompletion] Using default model from AI Model Pool: ${defaultModel.name} (${defaultModel.provider_type})`);
-    return Promise.race([
-      callModelWithConfig(defaultModel, systemPrompt, prompt, 'LLM', temperature, agentId),
-      timeoutPromise
-    ]);
+    try {
+      return await Promise.race([
+        callModelWithConfig(defaultModel, systemPrompt, prompt, 'LLM', temperature, agentId),
+        timeoutPromise
+      ]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
   }
 
   // 如果没有配置模型池，回退到旧逻辑
@@ -647,7 +652,9 @@ export async function generateCompletion(
     }
   };
 
-  return Promise.race([executeCompletion(), timeoutPromise]);
+  return Promise.race([executeCompletion(), timeoutPromise]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
 }
 
 /**

@@ -202,13 +202,16 @@ class RemediationService {
 
     sql += ' ORDER BY created_at DESC';
 
-    const page = filters.page || 1;
-    const limit = filters.limit || 20;
+    const page = Math.max(1, Math.floor(Number(filters.page) || 1));
+    const limit = Math.min(100, Math.max(1, Math.floor(Number(filters.limit) || 20)));
     const offset = (page - 1) * limit;
-    sql += ` LIMIT ${limit} OFFSET ${offset}`;
+
+    const totalResult = db.prepare(countSql).get(...params) as { count: number };
+
+    sql += ' LIMIT ? OFFSET ?';
+    params.push(limit, offset);
 
     const policies = db.prepare(sql).all(...params) as RemediationPolicy[];
-    const totalResult = db.prepare(countSql).get(...params) as { count: number };
 
     return { policies, total: totalResult.count };
   }
@@ -477,7 +480,7 @@ class RemediationService {
       }
 
       const params = this.resolveParams(policy.verification_params, alert);
-      const timeout = policy.verification_timeout_seconds * 1000;
+      const timeout = (policy.verification_timeout_seconds ?? 300) * 1000;
       const taskId = uuidv4();
 
       db.prepare(`
@@ -699,13 +702,16 @@ class RemediationService {
 
     sql += ' ORDER BY created_at DESC';
 
-    const page = filters.page || 1;
-    const limit = filters.limit || 20;
+    const page = Math.max(1, Math.floor(Number(filters.page) || 1));
+    const limit = Math.min(100, Math.max(1, Math.floor(Number(filters.limit) || 20)));
     const offset = (page - 1) * limit;
-    sql += ` LIMIT ${limit} OFFSET ${offset}`;
+
+    const totalResult = db.prepare(countSql).get(...params) as { count: number };
+
+    sql += ' LIMIT ? OFFSET ?';
+    params.push(limit, offset);
 
     const executions = db.prepare(sql).all(...params) as RemediationExecution[];
-    const totalResult = db.prepare(countSql).get(...params) as { count: number };
 
     return { executions, total: totalResult.count };
   }
@@ -1283,13 +1289,16 @@ class RemediationService {
 
     sql += ' ORDER BY a.created_at DESC';
 
-    const page = filters.page || 1;
-    const limit = filters.limit || 20;
+    const page = Math.max(1, Math.floor(Number(filters.page) || 1));
+    const limit = Math.min(100, Math.max(1, Math.floor(Number(filters.limit) || 20)));
     const offset = (page - 1) * limit;
-    sql += ` LIMIT ${limit} OFFSET ${offset}`;
+
+    const totalResult = db.prepare(countSql).get(...params) as { count: number };
+
+    sql += ' LIMIT ? OFFSET ?';
+    params.push(limit, offset);
 
     const audits = db.prepare(sql).all(...params) as Array<Record<string, unknown>>;
-    const totalResult = db.prepare(countSql).get(...params) as { count: number };
 
     return { audits, total: totalResult.count };
   }
