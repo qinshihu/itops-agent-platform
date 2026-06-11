@@ -129,6 +129,8 @@ export function rotateEncryptionKey(): void {
   
   try {
     rotateTransaction();
+    // Invalidate cached key so subsequent encrypt/decrypt calls use the new key
+    _encryptionKey = null;
     logger.info('🔄 Encryption key rotated successfully');
   } catch (error) {
     logger.error('❌ Encryption key rotation failed, all changes rolled back:', error);
