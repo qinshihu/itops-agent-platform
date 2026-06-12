@@ -193,7 +193,7 @@ router.put('/:id', requireRole('admin'), validateParams(sshKeyIdSchema), validat
            password = CASE WHEN ? IS NOT NULL THEN ? ELSE password END,
            private_key = CASE WHEN ? IS NOT NULL THEN ? ELSE private_key END,
            description = COALESCE(?, description),
-           updated_at = CURRENT_TIMESTAMP
+           updated_at = datetime('now','localtime')
        WHERE id = ?`
     ).run(
       name,

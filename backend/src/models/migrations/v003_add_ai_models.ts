@@ -24,8 +24,8 @@ const v003AddAIModelsTable: Migration = {
         tags TEXT,
         last_test_status TEXT,
         last_test_time DATETIME,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_ai_models_enabled ON ai_models(enabled);

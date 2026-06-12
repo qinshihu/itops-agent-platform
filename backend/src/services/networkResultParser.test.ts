@@ -244,5 +244,4 @@ Destination/Mask    Proto   Pre  Cost      NextHop         Interface
       const result = parser('some log output');
       expect(result.success).toBe(true);
     });
-  });
-});
+  });});

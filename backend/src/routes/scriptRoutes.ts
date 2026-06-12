@@ -100,7 +100,7 @@ router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Respons
     db.prepare(`
       UPDATE scripts
       SET name = ?, description = ?, type = ?, content = ?,
-          parameters = ?, category = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP
+          parameters = ?, category = ?, version = version + 1, updated_at = datetime('now','localtime')
       WHERE id = ?
     `).run(
       name,

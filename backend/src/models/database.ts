@@ -14,6 +14,7 @@ import { initializePresetScripts } from './presets/initScripts';
 import { initializeAlertMappings } from './presets/initAlertMappings';
 import { initializePresetScheduledTasks } from './presets/initScheduledTasks';
 import { initRemediationPolicies } from './presets/initRemediationPolicies';
+import { linkRemediationWorkflows } from './presets/linkRemediationWorkflows';
 import type { Server as SocketIOServer } from 'socket.io';
 
 let ioInstance: SocketIOServer | null = null;
@@ -108,16 +109,24 @@ const dbProxy = new Proxy({}, {
   }
 }) as Database.Database;
 
-export default dbProxy;
+// Database singleton - single centralized export
+// All modules should import via:
+//   import { db } from '../models/database';
+//   import db from '../models/database';
 
-export const db = new Proxy({}, {
+type DatabaseProxy = Database.Database;
+
+const db: DatabaseProxy = new Proxy({}, {
   get(target, prop) {
     if (!dbInstance) {
       throw new Error('Database not initialized. Call initializeDatabase() first.');
     }
     return (dbInstance as any)[prop];
   }
-}) as Database.Database;
+}) as DatabaseProxy;
+
+export default db;
+export { db };
 
 /**
  * 执行数据库维护操作
@@ -409,7 +418,7 @@ function initializeDefaultData(): void {
   if (configuredModel) {
     const updateStmt = db.prepare(`
       UPDATE agents 
-      SET model = ?, updated_at = CURRENT_TIMESTAMP 
+      SET model = ?, updated_at = datetime('now','localtime') 
       WHERE is_preset = 1
     `);
     const result = updateStmt.run(configuredModel);
@@ -417,7 +426,7 @@ function initializeDefaultData(): void {
   } else {
     const updateStmt = db.prepare(`
       UPDATE agents 
-      SET model = NULL, updated_at = CURRENT_TIMESTAMP 
+      SET model = NULL, updated_at = datetime('now','localtime') 
       WHERE is_preset = 1
     `);
     const result = updateStmt.run();
@@ -451,10 +460,7 @@ function initializeDefaultData(): void {
   }
 
   // 预设告警映射
-  const mappingsCount = db.prepare('SELECT COUNT(*) as count FROM alert_workflow_mappings').get() as { count: number };
-  if (mappingsCount.count === 0) {
-    initializeAlertMappings();
-  }
+  initializeAlertMappings();
 
   // 预设定时任务
   const scheduledTasksCount = db.prepare('SELECT COUNT(*) as count FROM scheduled_tasks').get() as { count: number };
@@ -462,11 +468,13 @@ function initializeDefaultData(): void {
     initializePresetScheduledTasks();
   }
 
-  // 预设修复策略
+  // 预设修复策略 + 关联工作流
   const remediationCount = db.prepare('SELECT COUNT(*) as count FROM remediation_policies').get() as { count: number };
   if (remediationCount.count === 0) {
     initRemediationPolicies();
   }
+  // 关联策略 → 工作流（智能匹配，创建额外高级策略）
+  linkRemediationWorkflows();
 }
 
 /**

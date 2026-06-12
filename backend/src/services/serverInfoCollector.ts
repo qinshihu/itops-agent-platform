@@ -127,7 +127,7 @@ class ServerInfoCollector {
                 db.prepare(`
                   UPDATE servers 
                   SET os = ?, cpu_cores = ?, memory_gb = ?, disk_gb = ?, 
-                      ip_address = ?, private_ip = ?, os_type = ?, updated_at = CURRENT_TIMESTAMP
+                      ip_address = ?, private_ip = ?, os_type = ?, updated_at = datetime('now','localtime')
                   WHERE id = ?
                 `).run(data.os, data.cpu_cores, data.memory_gb, data.disk_gb, data.ip_address, data.private_ip, detectedOS, serverId);
 
@@ -239,7 +239,7 @@ class ServerInfoCollector {
                   id, server_id, cpu_usage, memory_usage, memory_total_gb, memory_used_gb,
                   disk_usage, disk_total_gb, disk_used_gb, network_in_mbps, network_out_mbps,
                   load_1min, load_5min, load_15min, uptime_seconds, collected_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
               `).run(
                 uuidv4(),
                 serverId,

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import db from '../models/database';
 import { safeLog, safeError, maskApiKey } from '../utils/sensitiveMask';
 import { getApiKey, getModelId, getApiBase } from '../utils/apiConfig';
+import { credentialService } from '../services/credentialService';
 
 const router = Router();
 
@@ -31,8 +32,8 @@ router.put('/', (req: Request, res: Response) => {
     if (Object.keys(settings).length > 0) {
       const upsertStmt = db.prepare(`
         INSERT INTO settings (key, value, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = CURRENT_TIMESTAMP
+        VALUES (?, ?, datetime('now','localtime'))
+        ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now','localtime')
       `);
       
       for (const [key, value] of Object.entries(settings)) {
@@ -52,9 +53,17 @@ router.put('/', (req: Request, res: Response) => {
 
 router.get('/api-keys', (_req: Request, res: Response) => {
   try {
-    const doubaoKey = getApiKey(db, 'DOUBAO_API_KEY', 'DOUBAO_API_KEY');
-    const openaiKey = getApiKey(db, 'OPENAI_API_KEY', 'OPENAI_API_KEY');
-    const localAiKey = getApiKey(db, 'LOCAL_AI_API_KEY', 'LOCAL_AI_API_KEY');
+    // Use credential service to get API key status with masked display
+    const providers = credentialService.listProviders();
+    
+    const doubaoProvider = providers.find(p => p.provider === 'doubao');
+    const openaiProvider = providers.find(p => p.provider === 'openai');
+    const localAiProvider = providers.find(p => p.provider === 'local_ai');
+    
+    const doubaoKey = doubaoProvider?.configured ? credentialService.getCredential('doubao') : undefined;
+    const openaiKey = openaiProvider?.configured ? credentialService.getCredential('openai') : undefined;
+    const localAiKey = localAiProvider?.configured ? credentialService.getCredential('local_ai') : undefined;
+    
     const doubaoModel = getModelId(db, 'DOUBAO_MODEL', 'DOUBAO_MODEL', 'doubao-4o');
     const openaiModel = getModelId(db, 'OPENAI_MODEL', 'OPENAI_MODEL', 'gpt-4o');
     const localAiModel = getModelId(db, 'LOCAL_AI_MODEL', 'LOCAL_AI_MODEL', 'qwen2.5:7b');
@@ -67,18 +76,19 @@ router.get('/api-keys', (_req: Request, res: Response) => {
       data: {
         doubao: {
           configured: !!doubaoKey,
-          masked: doubaoKey ? '***' + doubaoKey.slice(-4) : null,
+          masked: doubaoKey ? credentialService.mask(doubaoKey) : null,
           model: doubaoModel,
           apiBase: doubaoApiBase
         },
         openai: {
           configured: !!openaiKey,
-          masked: openaiKey ? '***' + openaiKey.slice(-4) : null,
+          masked: openaiKey ? credentialService.mask(openaiKey) : null,
           model: openaiModel,
           apiBase: openaiApiBase
         },
         localAi: {
-          configured: !!localAiKey && localAiApiBase !== 'http://host.docker.internal:11434/v1',
+          configured: !!localAiApiBase && localAiApiBase !== 'http://host.docker.internal:11434/v1',
+          masked: localAiKey ? credentialService.mask(localAiKey) : null,
           model: localAiModel,
           apiBase: localAiApiBase
         }
@@ -191,28 +201,34 @@ router.put('/api-keys', (req: Request, res: Response) => {
     
     const upsertStmt = db.prepare(`
       INSERT INTO settings (key, value, updated_at)
-      VALUES (?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = CURRENT_TIMESTAMP
+      VALUES (?, ?, datetime('now','localtime'))
+      ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now','localtime')
     `);
     
-    // 保存豆包 API 密钥（如果提供）
+    // 保存豆包 API 密钥（如果提供）- store encrypted via credential service
     if (doubaoApiKey !== undefined) {
       if (doubaoApiKey === '') {
         safeLog('Deleting DOUBAO_API_KEY');
         db.prepare('DELETE FROM settings WHERE key = ?').run('DOUBAO_API_KEY');
+        credentialService.deleteCredential('doubao');
       } else {
-        safeLog('Saving DOUBAO_API_KEY:', maskApiKey(doubaoApiKey));
+        safeLog('Saving DOUBAO_API_KEY (encrypted):', maskApiKey(doubaoApiKey));
+        credentialService.setCredential('doubao', doubaoApiKey);
+        // Also keep in settings for backwards compatibility
         upsertStmt.run('DOUBAO_API_KEY', doubaoApiKey, doubaoApiKey);
       }
     }
     
-    // 保存 OpenAI API 密钥（如果提供）
+    // 保存 OpenAI API 密钥（如果提供）- store encrypted via credential service
     if (openaiApiKey !== undefined) {
       if (openaiApiKey === '') {
         safeLog('Deleting OPENAI_API_KEY');
         db.prepare('DELETE FROM settings WHERE key = ?').run('OPENAI_API_KEY');
+        credentialService.deleteCredential('openai');
       } else {
-        safeLog('Saving OPENAI_API_KEY:', maskApiKey(openaiApiKey));
+        safeLog('Saving OPENAI_API_KEY (encrypted):', maskApiKey(openaiApiKey));
+        credentialService.setCredential('openai', openaiApiKey);
+        // Also keep in settings for backwards compatibility
         upsertStmt.run('OPENAI_API_KEY', openaiApiKey, openaiApiKey);
       }
     }
@@ -271,9 +287,24 @@ router.put('/api-keys', (req: Request, res: Response) => {
       }
     }
     
+    // Store local AI key if there's a way to provide it
+    // (local model settings currently don't include apiKey field, but we check if it was sent)
+    if ((req.body as any).localAiApiKey !== undefined) {
+      const localAiApiKey = (req.body as any).localAiApiKey;
+      if (localAiApiKey === '') {
+        credentialService.deleteCredential('local_ai');
+      } else if (localAiApiKey) {
+        credentialService.setCredential('local_ai', localAiApiKey);
+      }
+    }
+    
     // 自动更新预设Agent的模型字段
     // 先确定用户配置的模型（优先检查本地 AI，然后是豆包，最后是 OpenAI）
-    let configuredModel = null;
+    let configuredModel: string | null = null;
+    
+    // Check credential service first for API keys
+    const credDoubaoKey = credentialService.getCredential('doubao');
+    const credOpenaiKey = credentialService.getCredential('openai');
     
     // 优先检查本地 AI（如果配置了非默认地址）
     const localAiApiBaseResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('LOCAL_AI_API_BASE');
@@ -282,19 +313,28 @@ router.put('/api-keys', (req: Request, res: Response) => {
       const localAiModelResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('LOCAL_AI_MODEL');
       configuredModel = (localAiModelResult && (localAiModelResult as { value: string }).value) ? (localAiModelResult as { value: string }).value : 'qwen2.5:7b';
     } else {
-      // 检查豆包模型
-      const doubaoKeyResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('DOUBAO_API_KEY');
-      const doubaoModelResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('DOUBAO_MODEL');
-      
-      if (doubaoKeyResult && (doubaoKeyResult as { value: string }).value && (doubaoKeyResult as { value: string }).value !== 'your-doubao-api-key-here') {
+      // 检查豆包是否已配置（via credential or settings）
+      if (credDoubaoKey && credDoubaoKey !== 'your-doubao-api-key-here') {
+        const doubaoModelResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('DOUBAO_MODEL');
         configuredModel = (doubaoModelResult && (doubaoModelResult as { value: string }).value) ? (doubaoModelResult as { value: string }).value : 'doubao-4o';
       } else {
-        // 如果豆包没有配置，检查OpenAI
-        const openaiKeyResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('OPENAI_API_KEY');
-        const openaiModelResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('OPENAI_MODEL');
-        
-        if (openaiKeyResult && (openaiKeyResult as { value: string }).value && (openaiKeyResult as { value: string }).value !== 'your-openai-api-key-here') {
-          configuredModel = (openaiModelResult && (openaiModelResult as { value: string }).value) ? (openaiModelResult as { value: string }).value : 'gpt-4o';
+        // 如果豆包没有配置，回退到 settings 表（backwards compat）
+        const doubaoKeyResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('DOUBAO_API_KEY');
+        const doubaoModelResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('DOUBAO_MODEL');
+        if (doubaoKeyResult && (doubaoKeyResult as { value: string }).value && (doubaoKeyResult as { value: string }).value !== 'your-doubao-api-key-here') {
+          configuredModel = (doubaoModelResult && (doubaoModelResult as { value: string }).value) ? (doubaoModelResult as { value: string }).value : 'doubao-4o';
+        } else {
+          // 检查OpenAI（via credential or settings）
+          if (credOpenaiKey && credOpenaiKey !== 'your-openai-api-key-here') {
+            const openaiModelResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('OPENAI_MODEL');
+            configuredModel = (openaiModelResult && (openaiModelResult as { value: string }).value) ? (openaiModelResult as { value: string }).value : 'gpt-4o';
+          } else {
+            const openaiKeyResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('OPENAI_API_KEY');
+            const openaiModelResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('OPENAI_MODEL');
+            if (openaiKeyResult && (openaiKeyResult as { value: string }).value && (openaiKeyResult as { value: string }).value !== 'your-openai-api-key-here') {
+              configuredModel = (openaiModelResult && (openaiModelResult as { value: string }).value) ? (openaiModelResult as { value: string }).value : 'gpt-4o';
+            }
+          }
         }
       }
     }
@@ -303,7 +343,7 @@ router.put('/api-keys', (req: Request, res: Response) => {
     if (configuredModel) {
       const updateStmt = db.prepare(`
         UPDATE agents 
-        SET model = ?, updated_at = CURRENT_TIMESTAMP 
+        SET model = ?, updated_at = datetime('now','localtime') 
         WHERE is_preset = 1
       `);
       const result = updateStmt.run(configuredModel);
@@ -312,7 +352,7 @@ router.put('/api-keys', (req: Request, res: Response) => {
       // 如果没有配置模型，清空所有预设Agent的model字段
       const updateStmt = db.prepare(`
         UPDATE agents 
-        SET model = NULL, updated_at = CURRENT_TIMESTAMP 
+        SET model = NULL, updated_at = datetime('now','localtime') 
         WHERE is_preset = 1
       `);
       const result = updateStmt.run();
@@ -337,20 +377,27 @@ router.delete('/api-keys/:provider', (req: Request, res: Response) => {
       db.prepare('DELETE FROM settings WHERE key = ?').run('DOUBAO_API_KEY');
       db.prepare('DELETE FROM settings WHERE key = ?').run('DOUBAO_MODEL');
       db.prepare('DELETE FROM settings WHERE key = ?').run('DOUBAO_API_BASE');
+      credentialService.deleteCredential('doubao');
     } else if (provider === 'openai') {
       db.prepare('DELETE FROM settings WHERE key = ?').run('OPENAI_API_KEY');
       db.prepare('DELETE FROM settings WHERE key = ?').run('OPENAI_MODEL');
       db.prepare('DELETE FROM settings WHERE key = ?').run('OPENAI_API_BASE');
+      credentialService.deleteCredential('openai');
     } else if (provider === 'local') {
       db.prepare('DELETE FROM settings WHERE key = ?').run('LOCAL_AI_MODEL');
       db.prepare('DELETE FROM settings WHERE key = ?').run('LOCAL_AI_API_BASE');
+      credentialService.deleteCredential('local_ai');
     } else {
       return res.status(400).json({ success: false, error: 'Invalid provider' });
     }
     
     // 删除配置后，检查是否还有其他可用配置
     let hasRemainingConfig = false;
-    let configuredModel = null;
+    let configuredModel: string | null = null;
+    
+    // Check credential service for remaining keys
+    const credDoubaoKey = credentialService.getCredential('doubao');
+    const credOpenaiKey = credentialService.getCredential('openai');
     
     // 优先检查本地 AI
     const localAiApiBase = db.prepare('SELECT value FROM settings WHERE key = ?').get('LOCAL_AI_API_BASE');
@@ -359,15 +406,22 @@ router.delete('/api-keys/:provider', (req: Request, res: Response) => {
       hasRemainingConfig = true;
       const localAiModelResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('LOCAL_AI_MODEL');
       configuredModel = (localAiModelResult && (localAiModelResult as { value: string }).value) ? (localAiModelResult as { value: string }).value : 'qwen2.5:7b';
+    } else if (credDoubaoKey) {
+      hasRemainingConfig = true;
+      const doubaoModelResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('DOUBAO_MODEL');
+      configuredModel = (doubaoModelResult && (doubaoModelResult as { value: string }).value) ? (doubaoModelResult as { value: string }).value : 'doubao-4o';
+    } else if (credOpenaiKey) {
+      hasRemainingConfig = true;
+      const openaiModelResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('OPENAI_MODEL');
+      configuredModel = (openaiModelResult && (openaiModelResult as { value: string }).value) ? (openaiModelResult as { value: string }).value : 'gpt-4o';
     } else {
-      // 检查豆包是否还有配置
+      // 回退到 settings 表检查（backwards compat）
       const doubaoKey = db.prepare('SELECT value FROM settings WHERE key = ?').get('DOUBAO_API_KEY');
       if (doubaoKey && (doubaoKey as { value: string }).value && (doubaoKey as { value: string }).value !== 'your-doubao-api-key-here') {
         hasRemainingConfig = true;
         const doubaoModelResult = db.prepare('SELECT value FROM settings WHERE key = ?').get('DOUBAO_MODEL');
         configuredModel = (doubaoModelResult && (doubaoModelResult as { value: string }).value) ? (doubaoModelResult as { value: string }).value : 'doubao-4o';
       } else {
-        // 检查OpenAI是否还有配置
         const openaiKey = db.prepare('SELECT value FROM settings WHERE key = ?').get('OPENAI_API_KEY');
         if (openaiKey && (openaiKey as { value: string }).value && (openaiKey as { value: string }).value !== 'your-openai-api-key-here') {
           hasRemainingConfig = true;
@@ -381,7 +435,7 @@ router.delete('/api-keys/:provider', (req: Request, res: Response) => {
       // 如果没有配置了，清空所有预设Agent的model字段
       const updateStmt = db.prepare(`
         UPDATE agents 
-        SET model = NULL, updated_at = CURRENT_TIMESTAMP 
+        SET model = NULL, updated_at = datetime('now','localtime') 
         WHERE is_preset = 1
       `);
       const result = updateStmt.run();
@@ -389,7 +443,7 @@ router.delete('/api-keys/:provider', (req: Request, res: Response) => {
     } else if (configuredModel) {
       const updateStmt = db.prepare(`
         UPDATE agents 
-        SET model = ?, updated_at = CURRENT_TIMESTAMP 
+        SET model = ?, updated_at = datetime('now','localtime') 
         WHERE is_preset = 1
       `);
       const result = updateStmt.run(configuredModel);

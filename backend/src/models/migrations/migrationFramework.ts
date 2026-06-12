@@ -43,7 +43,7 @@ export class MigrationManager {
           id TEXT PRIMARY KEY,
           version INTEGER NOT NULL UNIQUE,
           name TEXT NOT NULL,
-          applied_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          applied_at DATETIME DEFAULT (datetime('now','localtime')),
           success INTEGER NOT NULL DEFAULT 0,
           error_message TEXT
         );
@@ -133,6 +133,9 @@ export class MigrationManager {
         try {
           await migration.up(this.db);
           
+          // Clean up any previous failed record for this version before INSERT
+          this.db.prepare('DELETE FROM schema_migrations WHERE version = ?').run(migration.version);
+
           this.db.prepare(`
             INSERT INTO schema_migrations (id, version, name, success)
             VALUES (?, ?, ?, 1)

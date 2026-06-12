@@ -18,7 +18,7 @@ function logCommandAudit(
   try {
     db.prepare(`
       INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, details, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))
     `).run(
       randomUUID(),
       userId,

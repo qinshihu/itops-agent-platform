@@ -86,7 +86,7 @@ export async function executeWorkflow(
     
     if (executionOrder.length === 0) {
       logger.error(`❌ Workflow ${workflow.name} has circular dependencies, aborting execution`);
-      db.prepare('UPDATE tasks SET status = ?, end_time = CURRENT_TIMESTAMP WHERE id = ?')
+      db.prepare('UPDATE tasks SET status = ?, end_time = datetime(\'now\',\'localtime\') WHERE id = ?')
         .run('failed', taskId);
       io?.to(`task:${taskId}`).emit('task:failed', { taskId, error: 'Circular dependency detected in workflow' });
       return;
@@ -95,7 +95,7 @@ export async function executeWorkflow(
     logger.info('📊 Parsed workflow nodes:', nodes);
     logger.info('📊 Execution order:', executionOrder);
     
-    db.prepare('UPDATE tasks SET status = ?, start_time = CURRENT_TIMESTAMP, execution_order = ? WHERE id = ?')
+    db.prepare('UPDATE tasks SET status = ?, start_time = datetime(\'now\',\'localtime\'), execution_order = ? WHERE id = ?')
       .run('running', JSON.stringify(executionOrder), taskId);
     
     io?.to(`task:${taskId}`).emit('task:started', { taskId, executionOrder });
@@ -205,7 +205,7 @@ export async function executeWorkflow(
     
     db.prepare(`
       UPDATE tasks 
-      SET status = ?, end_time = CURRENT_TIMESTAMP, 
+      SET status = ?, end_time = datetime('now','localtime'), 
           node_results = ?, current_node_id = NULL
       WHERE id = ?
     `).run('completed', JSON.stringify(nodeResults), taskId);
@@ -231,7 +231,7 @@ export async function executeWorkflow(
           
           db.prepare(`
             INSERT INTO knowledge_base (id, title, category, content, created_at)
-            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?, ?, datetime('now','localtime'))
           `).run(randomUUID(), title, '故障处理', content);
         });
         
@@ -256,7 +256,7 @@ export async function executeWorkflow(
     const errorMessage = error instanceof Error ? error.message : String(error);
     db.prepare(`
       UPDATE tasks 
-      SET status = ?, end_time = CURRENT_TIMESTAMP, current_node_id = NULL
+      SET status = ?, end_time = datetime('now','localtime'), current_node_id = NULL
       WHERE id = ?
     `).run('failed', taskId);
     
@@ -362,7 +362,7 @@ async function generateWorkflowExecutionReport(
       logger.info('📄 正在向 reports 表插入报告...');
       db.prepare(`
         INSERT INTO reports (id, name, content, format, task_id, created_at)
-        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))
       `).run(
         generatedReport.id,
         generatedReport.name,

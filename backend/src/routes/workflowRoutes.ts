@@ -68,7 +68,7 @@ router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Respons
     db.prepare(`
       UPDATE workflows 
       SET name = ?, description = ?, nodes = ?, edges = ?, agent_configs = ?, 
-          is_template = ?, updated_at = CURRENT_TIMESTAMP
+          is_template = ?, updated_at = datetime('now','localtime')
       WHERE id = ?
     `).run(
       name,

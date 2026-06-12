@@ -95,9 +95,9 @@ export function authenticateToken(req: Request & { user?: AuthUser }, res: Respo
     
     let user: AuthUser | null = getCachedUser(decoded.id);
     if (!user) {
-      const dbUser = db.prepare('SELECT id, username, email, role, enabled, password_must_change FROM users WHERE id = ?').get(decoded.id) as AuthUser | undefined;
+      const dbUser = db.prepare('SELECT id, username, email, role, enabled, password_must_change FROM users WHERE id = ?').get(decoded.id);
       if (dbUser) {
-        user = dbUser;
+        user = dbUser as AuthUser;
         setCachedUser(decoded.id, user);
       }
     }

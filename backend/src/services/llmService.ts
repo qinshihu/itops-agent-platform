@@ -243,7 +243,7 @@ function updateAgentStats(agentId: string): void {
   try {
     db.prepare(`
       UPDATE agents 
-      SET usage_count = usage_count + 1, last_used_at = CURRENT_TIMESTAMP
+      SET usage_count = usage_count + 1, last_used_at = datetime('now','localtime')
       WHERE id = ?
     `).run(agentId);
   } catch (error) {

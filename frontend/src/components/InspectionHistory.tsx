@@ -13,7 +13,7 @@ interface InspectionHistoryProps {
 interface HistoryItem {
   id: string;
   device_id: string;
-  inspection_type: 'standard' | 'custom' | 'full';
+  inspection_type: 'standard' | 'custom' | 'full' | 'snmp';
   status: 'success' | 'partial' | 'failed';
   commands_executed: number;
   commands_failed: number;
@@ -23,10 +23,11 @@ interface HistoryItem {
   created_at: string;
 }
 
-const typeLabels = {
+const typeLabels: Record<string, string> = {
   standard: '标准巡检',
   custom: '自定义巡检',
-  full: '全面巡检'
+  full: '全面巡检',
+  snmp: 'SNMP 巡检'
 };
 
 function getStatusBadge(status: string) {

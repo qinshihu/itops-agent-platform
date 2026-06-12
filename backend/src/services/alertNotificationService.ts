@@ -1,5 +1,7 @@
 import db from '../models/database';
 import { logger } from '../utils/logger';
+import { env } from '../utils/env';
+import { credentialService } from './credentialService';
 
 export type AlertLevel = 'info' | 'warning' | 'critical';
 export type AlertChannel = 'email' | 'webhook' | 'database';
@@ -86,7 +88,7 @@ export class AlertNotificationService {
           const id = `alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
           db.prepare(`
             INSERT INTO alert_configs (id, name, level, enabled, channels, rate_limit_minutes, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))
           `).run(id, alert.name, alert.level, Number(alert.enabled), JSON.stringify(alert.channels), alert.rateLimitMinutes);
         }
       }
@@ -110,16 +112,44 @@ export class AlertNotificationService {
         rate_limit_minutes: number;
       }>;
 
-      return rows.map(row => ({
-        id: row.id,
-        name: row.name,
-        level: row.level,
-        enabled: Boolean(row.enabled),
-        channels: JSON.parse(row.channels || '[]'),
-        webhookUrl: row.webhook_url,
-        emailRecipients: row.email_recipients ? JSON.parse(row.email_recipients) : undefined,
-        rateLimitMinutes: row.rate_limit_minutes
-      }));
+      return rows.map(row => {
+        // Try to get webhook URL from credential service if not set in row
+        let webhookUrl = row.webhook_url;
+        if (!webhookUrl) {
+          const credWebhook = credentialService.getCredential('alert_webhook');
+          if (credWebhook) {
+            webhookUrl = credWebhook;
+          }
+        }
+
+        // Try to get email recipients from credential service if not set in row
+        let emailRecipients = row.email_recipients ? JSON.parse(row.email_recipients) : undefined;
+        if (!emailRecipients || emailRecipients.length === 0) {
+          const emailCredStr = credentialService.getCredential('alert_email');
+          if (emailCredStr) {
+            try {
+              const emailCred = JSON.parse(emailCredStr);
+              if (emailCred.to) {
+                emailRecipients = emailCred.to.split(',').map((s: string) => s.trim());
+              }
+            } catch {
+              // Not JSON, use as plain string
+              emailRecipients = [emailCredStr];
+            }
+          }
+        }
+
+        return {
+          id: row.id,
+          name: row.name,
+          level: row.level,
+          enabled: Boolean(row.enabled),
+          channels: JSON.parse(row.channels || '[]'),
+          webhookUrl,
+          emailRecipients,
+          rateLimitMinutes: row.rate_limit_minutes
+        };
+      });
     } catch (error) {
       logger.error('Failed to get alert configs', error as Error);
       return [];
@@ -133,9 +163,29 @@ export class AlertNotificationService {
 
       const updated = { ...config, ...updates };
       
+      // If webhook URL is provided, store it in credential service (encrypted)
+      if (updates.webhookUrl) {
+        credentialService.setCredential('alert_webhook', updates.webhookUrl);
+      }
+      
+      // If email recipients are provided, store them in credential service (encrypted)
+      if (updates.emailRecipients && updates.emailRecipients.length > 0) {
+        const existingEmailCredStr = credentialService.getCredential('alert_email');
+        let emailConfig: { host?: string; user?: string; pass?: string; to?: string } = {};
+        if (existingEmailCredStr) {
+          try {
+            emailConfig = JSON.parse(existingEmailCredStr);
+          } catch {
+            // ignore
+          }
+        }
+        emailConfig.to = updates.emailRecipients.join(',');
+        credentialService.setCredential('alert_email', JSON.stringify(emailConfig));
+      }
+      
       db.prepare(`
         UPDATE alert_configs
-        SET enabled = ?, channels = ?, webhook_url = ?, email_recipients = ?, rate_limit_minutes = ?, updated_at = CURRENT_TIMESTAMP
+        SET enabled = ?, channels = ?, webhook_url = ?, email_recipients = ?, rate_limit_minutes = ?, updated_at = datetime('now','localtime')
         WHERE id = ?
       `).run(
         Number(updated.enabled),
@@ -223,14 +273,32 @@ export class AlertNotificationService {
         break;
 
       case 'webhook':
-        if (config.webhookUrl) {
-          await this.sendWebhook(config.webhookUrl, notification);
+        // Use config.webhookUrl or fall back to credential service
+        const webhookUrl = config.webhookUrl || credentialService.getCredential('alert_webhook');
+        if (webhookUrl) {
+          await this.sendWebhook(webhookUrl, notification);
         }
         break;
 
       case 'email':
-        if (config.emailRecipients && config.emailRecipients.length > 0) {
-          await this.sendEmail(config.emailRecipients, notification);
+        // Use config.emailRecipients or fall back to credential service
+        let recipients = config.emailRecipients;
+        if (!recipients || recipients.length === 0) {
+          const emailCredStr = credentialService.getCredential('alert_email');
+          if (emailCredStr) {
+            try {
+              const emailCred = JSON.parse(emailCredStr);
+              if (emailCred.to) {
+                recipients = emailCred.to.split(',').map((s: string) => s.trim());
+              }
+            } catch {
+              recipients = [emailCredStr];
+            }
+          }
+        }
+        
+        if (recipients && recipients.length > 0) {
+          await this.sendEmail(recipients, notification);
         }
         break;
     }
@@ -261,11 +329,44 @@ export class AlertNotificationService {
   }
 
   private async sendEmail(recipients: string[], notification: AlertNotification): Promise<void> {
-    logger.info('Email notification prepared (SMTP not configured)', {
-      recipients,
-      subject: `[${notification.level.toUpperCase()}] ${notification.title}`,
-      message: notification.message
-    });
+    // Get SMTP credentials from credential service
+    const emailCredStr = credentialService.getCredential('alert_email');
+    let smtpHost = '';
+    let smtpUser = '';
+    let smtpPass = '';
+
+    if (emailCredStr) {
+      try {
+        const emailCred = JSON.parse(emailCredStr);
+        smtpHost = emailCred.host || '';
+        smtpUser = emailCred.user || '';
+        smtpPass = emailCred.pass || '';
+      } catch {
+        // Use env vars as fallback
+        smtpHost = env.ALERT_EMAIL_HOST || '';
+        smtpUser = env.ALERT_EMAIL_USER || '';
+        smtpPass = env.ALERT_EMAIL_PASS || '';
+      }
+    } else {
+      // Fall back to environment variables
+      smtpHost = env.ALERT_EMAIL_HOST || '';
+      smtpUser = env.ALERT_EMAIL_USER || '';
+      smtpPass = env.ALERT_EMAIL_PASS || '';
+    }
+
+    if (smtpHost && smtpUser) {
+      logger.info('Email notification prepared (SMTP credentials found)', {
+        recipients,
+        subject: `[${notification.level.toUpperCase()}] ${notification.title}`,
+        smtpHost: smtpHost
+      });
+    } else {
+      logger.info('Email notification prepared (SMTP not configured)', {
+        recipients,
+        subject: `[${notification.level.toUpperCase()}] ${notification.title}`,
+        message: notification.message
+      });
+    }
   }
 
   private saveNotification(notification: AlertNotification): void {

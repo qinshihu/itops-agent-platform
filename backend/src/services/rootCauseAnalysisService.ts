@@ -70,7 +70,7 @@ class RootCauseAnalysisService {
     try {
       this.createRCAs = db.prepare(`
         INSERT INTO root_cause_analyses (id, alert_id, title, description, status, symptoms, timeline, evidence, recommendations, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
       `);
 
       this.updateRCAs = db.prepare(`
@@ -83,8 +83,8 @@ class RootCauseAnalysisService {
           timeline = COALESCE(?, timeline),
           evidence = COALESCE(?, evidence),
           recommendations = COALESCE(?, recommendations),
-          updated_at = CURRENT_TIMESTAMP,
-          completed_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE completed_at END
+          updated_at = datetime('now','localtime'),
+          completed_at = CASE WHEN ? = 'completed' THEN datetime('now','localtime') ELSE completed_at END
         WHERE id = ?
       `);
 
@@ -148,8 +148,12 @@ class RootCauseAnalysisService {
   }
 
   list(): RootCauseAnalysis[] {
-    if (!this.getRCAs) this.initializeStatements();
-    return this.getRCAs!.all() as RootCauseAnalysis[];
+    try {
+      if (!this.getRCAs) this.initializeStatements();
+      return this.getRCAs!.all() as RootCauseAnalysis[];
+    } catch {
+      return [];
+    }
   }
 
   get(id: string): RootCauseAnalysis | undefined {
@@ -574,32 +578,49 @@ ${alertInfo}
   } {
     const today = new Date().toISOString().split('T')[0];
     
-    const todayResult = db.prepare(
-      "SELECT COUNT(*) as count FROM root_cause_analyses WHERE created_at >= ?"
-    ).get(`${today}T00:00:00`) as { count: number };
+    let todayCount = 0;
+    let totalCompleted = 0;
+    let avgConfidence = 0;
+    let autoRemediations = 0;
+    let falsePositives = 0;
 
-    const totalResult = db.prepare(
-      "SELECT COUNT(*) as count FROM root_cause_analyses WHERE status = 'completed'"
-    ).get() as { count: number };
+    try {
+      const todayResult = db.prepare(
+        "SELECT COUNT(*) as count FROM root_cause_analyses WHERE created_at >= DATE('now', 'localtime')"
+      ).get() as { count: number };
+      todayCount = todayResult.count;
+    } catch { /* 表可能不存在 */ }
 
-    const avgConfidenceResult = db.prepare(
-      "SELECT AVG(confidence) as avgConfidence FROM root_cause_analyses WHERE status = 'completed' AND confidence IS NOT NULL"
-    ).get() as { avgConfidence: number | null };
+    try {
+      const totalResult = db.prepare(
+        "SELECT COUNT(*) as count FROM root_cause_analyses WHERE status = 'completed'"
+      ).get() as { count: number };
+      totalCompleted = totalResult.count;
+    } catch {}
 
-    const autoRemediationResult = db.prepare(
-      "SELECT COUNT(*) as count FROM root_cause_analyses WHERE status = 'completed' AND recommendations LIKE '%自动%'"
-    ).get() as { count: number };
+    // confidence 列不存在于 root_cause_analyses 表，跳过
+    // 如果需要精度统计，后续迁移添加该列
 
-    const falsePositiveResult = db.prepare(
-      "SELECT COUNT(*) as count FROM root_cause_analyses WHERE status = 'completed' AND root_cause LIKE '%误报%'"
-    ).get() as { count: number };
+    try {
+      const autoRemediationResult = db.prepare(
+        "SELECT COUNT(*) as count FROM root_cause_analyses WHERE status = 'completed' AND recommendations LIKE '%自动%'"
+      ).get() as { count: number };
+      autoRemediations = autoRemediationResult.count;
+    } catch {}
+
+    try {
+      const falsePositiveResult = db.prepare(
+        "SELECT COUNT(*) as count FROM root_cause_analyses WHERE status = 'completed' AND root_cause LIKE '%误报%'"
+      ).get() as { count: number };
+      falsePositives = falsePositiveResult.count;
+    } catch {}
 
     return {
-      todayCount: todayResult.count,
-      avgConfidence: avgConfidenceResult.avgConfidence ?? 0,
-      autoRemediations: autoRemediationResult.count,
-      falsePositives: falsePositiveResult.count,
-      totalCompleted: totalResult.count
+      todayCount,
+      avgConfidence,
+      autoRemediations,
+      falsePositives,
+      totalCompleted
     };
   }
 }

@@ -133,14 +133,14 @@ class SchedulerService {
           // 记录执行结果
           db.prepare(`
             UPDATE scheduled_tasks 
-            SET last_run = CURRENT_TIMESTAMP, last_status = ? 
+            SET last_run = datetime('now','localtime'), last_status = ? 
             WHERE id = ?
           `).run(executionStatus, task.id);
 
           // 记录审计日志
           db.prepare(`
             INSERT INTO audit_logs (id, action, resource_type, resource_id, details, created_at)
-            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))
           `).run(
             randomUUID(),
             'execute_scheduled_task',
@@ -208,7 +208,7 @@ class SchedulerService {
       const taskId = randomUUID();
       db.prepare(`
         INSERT INTO tasks (id, workflow_id, name, status, created_at)
-        VALUES (?, ?, ?, 'pending', CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, 'pending', datetime('now','localtime'))
       `).run(taskId, workflowId, `定时执行: ${workflow.name}`);
 
       logger.info(`✅ Created task ${taskId} for workflow ${workflow.name}`);

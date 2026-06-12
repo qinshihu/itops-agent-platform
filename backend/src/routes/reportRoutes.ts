@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import db from '../models/database';
 import { reportService } from '../services/reportService';
 
 const router = Router();
@@ -81,6 +82,87 @@ router.get('/', (req: Request, res: Response) => {
   }
 });
 
+router.get('/analytics', (_req: Request, res: Response) => {
+  try {
+    const alertTrends = db.prepare(`
+      SELECT DATE(created_at) as date, severity, COUNT(*) as count
+      FROM alerts
+      WHERE created_at >= DATE('now', '-7 days', 'localtime')
+      GROUP BY DATE(created_at), severity
+      ORDER BY date
+    `).all();
+
+    const analysisStats = db.prepare(`
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
+      FROM alert_auto_analysis
+    `).get() || { total: 0, completed: 0, failed: 0 };
+
+    const remediationStats = db.prepare(`
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count,
+        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_count,
+        SUM(CASE WHEN status = 'rolled_back' THEN 1 ELSE 0 END) as rolled_back
+      FROM remediation_executions
+      WHERE created_at >= DATE('now', '-30 days', 'localtime')
+    `).get() || { total: 0, success_count: 0, failed_count: 0, rolled_back: 0 };
+
+    const topDiagnoses = db.prepare(`
+      SELECT summary, COUNT(*) as count
+      FROM alert_auto_analysis
+      WHERE summary IS NOT NULL AND summary != ''
+      GROUP BY summary
+      ORDER BY count DESC
+      LIMIT 10
+    `).all();
+
+    res.json({
+      success: true,
+      data: { alertTrends, analysisStats, remediationStats, topDiagnoses }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: (error as Error).message });
+  }
+});
+
+router.get('/:id/export', async (req: Request, res: Response) => {
+  try {
+    const format = (req.query.format as 'pdf' | 'word' | 'markdown') || 'markdown';
+    const exported = await reportService.exportReport(req.params.id, format);
+    const report = reportService.getReport(req.params.id);
+    
+    const fileExtension = format === 'pdf' ? 'pdf' : format === 'word' ? 'doc' : 'md';
+    res.setHeader('Content-Type', exported.type);
+    // 清理文件名中的非法字符（HTTP 头不允许中文/特殊符号）
+    // Content-Disposition filename 仅允许可打印 ASCII，过滤非 ASCII 和特殊字符
+    let safeName = 'report';
+    if (report?.name) {
+      // 只保留字母、数字、点、连字符、下划线、空格
+      const cleaned = report.name.replace(/[^a-zA-Z0-9.\-_ ]/g, '').trim().slice(0, 80);
+      safeName = cleaned || 'report';
+    }
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.${fileExtension}"`);
+    res.send(exported.content);
+  } catch (error: any) {
+    const errMsg = typeof error === 'object' && error !== null
+      ? (error.message || String(error))
+      : String(error);
+    res.status(500).json({ success: false, error: errMsg });
+  }
+});
+
+router.get('/scheduled/all', (_req: Request, res: Response) => {
+  try {
+    const reports = reportService.getScheduledReports();
+    res.json({ success: true, data: reports });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
 router.get('/:id', (req: Request, res: Response) => {
   try {
     const report = reportService.getReport(req.params.id);
@@ -98,30 +180,6 @@ router.post('/generate', (req: Request, res: Response) => {
     const { templateId, variables, format } = req.body;
     const report = reportService.generateReport(templateId, variables, format);
     res.status(201).json({ success: true, data: report });
-  } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
-  }
-});
-
-router.get('/:id/export', async (req: Request, res: Response) => {
-  try {
-    const format = (req.query.format as 'pdf' | 'word' | 'markdown') || 'markdown';
-    const exported = await reportService.exportReport(req.params.id, format);
-    const report = reportService.getReport(req.params.id);
-    
-    const fileExtension = format === 'pdf' ? 'pdf' : format === 'word' ? 'doc' : 'md';
-    res.setHeader('Content-Type', exported.type);
-    res.setHeader('Content-Disposition', `attachment; filename="${report?.name || 'report'}.${fileExtension}"`);
-    res.send(exported.content);
-  } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
-  }
-});
-
-router.get('/scheduled/all', (_req: Request, res: Response) => {
-  try {
-    const reports = reportService.getScheduledReports();
-    res.json({ success: true, data: reports });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
@@ -187,5 +245,7 @@ router.delete('/scheduled/:id', (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
+
+// ── 融合分析数据（供报告使用） ──
 
 export default router;

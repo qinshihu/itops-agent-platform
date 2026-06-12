@@ -15,8 +15,11 @@ export interface DependencyInput {
 export interface TopologyNode {
   id: string;
   server_id: string;
+  name?: string;
   server_name?: string;
+  ip?: string;
   server_ip?: string;
+  status: string;
   type: string;
   x?: number;
   y?: number;
@@ -26,6 +29,7 @@ export interface TopologyEdge {
   id: string;
   source: string;
   target: string;
+  type: string;
   dependency_type: string;
   protocol?: string;
   port?: number;
@@ -143,8 +147,11 @@ class TopologyService {
     nodes.push({
       id: server.id,
       server_id: server.id,
+      name: server.name,
       server_name: server.name,
+      ip: server.hostname,
       server_ip: server.hostname,
+      status: 'online',
       type: 'server',
     });
 
@@ -168,8 +175,11 @@ class TopologyService {
         nodes.push({
           id: dep.source_server_id,
           server_id: dep.source_server_id,
+          name: dep.source_name || undefined,
           server_name: dep.source_name || undefined,
+          ip: dep.source_ip || undefined,
           server_ip: dep.source_ip || undefined,
+          status: 'online',
           type: 'server',
         });
       }
@@ -179,8 +189,11 @@ class TopologyService {
         nodes.push({
           id: dep.target_server_id,
           server_id: dep.target_server_id,
+          name: dep.target_name || undefined,
           server_name: dep.target_name || undefined,
+          ip: dep.target_ip || undefined,
           server_ip: dep.target_ip || undefined,
+          status: 'online',
           type: 'server',
         });
       }
@@ -203,8 +216,11 @@ class TopologyService {
     const nodes: TopologyNode[] = servers.map(s => ({
       id: s.id,
       server_id: s.id,
+      name: s.name,
       server_name: s.name,
+      ip: s.hostname,
       server_ip: s.hostname,
+      status: 'online',
       type: 'server',
     }));
 
@@ -374,6 +390,7 @@ class TopologyService {
       id: dep.id,
       source: dep.source_server_id,
       target: dep.target_server_id,
+      type: dep.dependency_type,
       dependency_type: dep.dependency_type,
       protocol: dep.protocol || undefined,
       port: dep.port || undefined,
@@ -386,6 +403,7 @@ class TopologyService {
       id: dep.id,
       source: dep.source_server_id,
       target: dep.target_server_id,
+      type: dep.dependency_type,
       dependency_type: dep.dependency_type,
       protocol: dep.protocol || undefined,
       port: dep.port || undefined,

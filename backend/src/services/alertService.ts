@@ -3,6 +3,7 @@ import { env } from '../utils/env';
 import db from '../models/database';
 import { rootCauseAnalysisService } from './rootCauseAnalysisService';
 import { circuitBreakers } from './llmService';
+import { credentialService } from './credentialService';
 
 export type AlertSeverity = 'critical' | 'warning' | 'info';
 export type AlertChannel = 'email' | 'webhook' | 'log';
@@ -93,20 +94,69 @@ export class AlertService {
   private rules: Map<string, AlertRule> = new Map();
   private alertHistory: AlertNotification[] = [];
   private maxHistorySize = 1000;
-  private webhookUrl: string;
+  private webhookUrl: string = '';
   private emailConfig?: { host: string; port: number; user: string; pass: string; to: string };
   private initialized = false;
 
   constructor() {
-    this.webhookUrl = env.ALERT_WEBHOOK_URL || '';
-    this.emailConfig = env.ALERT_EMAIL_HOST ? {
-      host: env.ALERT_EMAIL_HOST,
-      port: env.ALERT_EMAIL_PORT || 587,
-      user: env.ALERT_EMAIL_USER || '',
-      pass: env.ALERT_EMAIL_PASS || '',
-      to: env.ALERT_EMAIL_TO || ''
-    } : undefined;
+    this.loadCredentials();
     // 延迟初始化，等待数据库准备就绪
+  }
+
+  private loadCredentials(): void {
+    this.webhookUrl = env.ALERT_WEBHOOK_URL || '';
+    
+    // Check credential service for overrides (values set through UI)
+    try {
+      const credWebhook = credentialService.getCredential('alert_webhook');
+      if (credWebhook) {
+        this.webhookUrl = credWebhook;
+      }
+      
+      const emailCredStr = credentialService.getCredential('alert_email');
+      if (emailCredStr) {
+        try {
+          const emailCred = JSON.parse(emailCredStr);
+          this.emailConfig = {
+            host: emailCred.host || env.ALERT_EMAIL_HOST || '',
+            port: emailCred.port ? parseInt(emailCred.port, 10) : (env.ALERT_EMAIL_PORT || 587),
+            user: emailCred.user || env.ALERT_EMAIL_USER || '',
+            pass: emailCred.pass || env.ALERT_EMAIL_PASS || '',
+            to: emailCred.to || env.ALERT_EMAIL_TO || ''
+          };
+        } catch {
+          // Not a valid JSON, fall back to env
+          if (env.ALERT_EMAIL_HOST) {
+            this.emailConfig = {
+              host: env.ALERT_EMAIL_HOST,
+              port: env.ALERT_EMAIL_PORT || 587,
+              user: env.ALERT_EMAIL_USER || '',
+              pass: env.ALERT_EMAIL_PASS || '',
+              to: env.ALERT_EMAIL_TO || ''
+            };
+          }
+        }
+      } else if (env.ALERT_EMAIL_HOST) {
+        this.emailConfig = {
+          host: env.ALERT_EMAIL_HOST,
+          port: env.ALERT_EMAIL_PORT || 587,
+          user: env.ALERT_EMAIL_USER || '',
+          pass: env.ALERT_EMAIL_PASS || '',
+          to: env.ALERT_EMAIL_TO || ''
+        };
+      }
+    } catch {
+      // Credential service not available yet, use env as fallback
+      if (env.ALERT_EMAIL_HOST) {
+        this.emailConfig = {
+          host: env.ALERT_EMAIL_HOST,
+          port: env.ALERT_EMAIL_PORT || 587,
+          user: env.ALERT_EMAIL_USER || '',
+          pass: env.ALERT_EMAIL_PASS || '',
+          to: env.ALERT_EMAIL_TO || ''
+        };
+      }
+    }
   }
 
   init(): void {
@@ -139,7 +189,7 @@ export class AlertService {
     const json = JSON.stringify(rules);
     db.prepare(`
       INSERT OR REPLACE INTO settings (key, value, updated_at)
-      VALUES ('alert_rules', ?, CURRENT_TIMESTAMP)
+      VALUES ('alert_rules', ?, datetime('now','localtime'))
     `).run(json);
   }
 

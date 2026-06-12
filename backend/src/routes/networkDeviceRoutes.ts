@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { networkDeviceService } from '../services/networkDeviceService';
 import { networkInspectionService } from '../services/networkInspectionService';
 import { networkCommandGenerator } from '../services/networkCommandGenerator';
+import { snmpPollingService } from '../services/snmpPollingService';
 import { logger } from '../utils/logger';
 import { requireRole } from '../middleware/auth';
 
@@ -35,20 +36,12 @@ router.get('/:id', (req: Request, res: Response) => {
 // Create device
 router.post('/', requireRole('admin'), (req: Request, res: Response) => {
   try {
-    const { name, ip_address, vendor, model, os_version, ssh_port, ssh_key_id, username, password, enable_password, location, role } = req.body;
+    const { name, ip_address, vendor, model, os_version, ssh_port, ssh_key_id, username, password, enable_password, location, role, snmp_enabled, snmp_credential_id, snmp_port } = req.body;
 
     if (!name || !ip_address || !vendor) {
       return res.status(400).json({ 
         success: false, 
         error: 'Missing required fields: name, ip_address, vendor' 
-      });
-    }
-
-    // 如果没有选择凭证，则必须提供用户名和密码
-    if (!ssh_key_id && (!username || !password)) {
-      return res.status(400).json({ 
-        success: false, 
-        error: '请选择认证凭证或手动输入用户名和密码' 
       });
     }
 
@@ -64,7 +57,10 @@ router.post('/', requireRole('admin'), (req: Request, res: Response) => {
       password,
       enable_password,
       location,
-      role
+      role,
+      snmp_enabled,
+      snmp_credential_id,
+      snmp_port
     });
 
     res.status(201).json({ success: true, data: device });
@@ -174,6 +170,20 @@ router.post('/batch-inspect', requireRole('admin'), async (req: Request, res: Re
   } catch (error) {
     logger.error('Failed to execute batch inspection:', error);
     res.status(500).json({ success: false, error: 'Failed to execute batch inspection' });
+  }
+});
+
+// SNMP 巡检单台设备
+router.post('/:id/inspect-snmp', requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const result = await snmpPollingService.inspectDevice(req.params.id);
+    if (!result) {
+      return res.status(400).json({ success: false, error: '设备未启用 SNMP 或不存在' });
+    }
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    logger.error('SNMP inspection failed:', error);
+    res.status(500).json({ success: false, error: error.message || 'SNMP 巡检失败' });
   }
 });
 

@@ -277,7 +277,7 @@ class EnhancedRAGService {
         db.prepare(`
           UPDATE knowledge_base 
           SET usage_count = usage_count + 1, 
-              updated_at = CURRENT_TIMESTAMP 
+              updated_at = datetime('now','localtime') 
           WHERE id = ?
         `).run(result.item.id);
       } catch (error) {
@@ -343,7 +343,7 @@ class EnhancedRAGService {
 
     db.prepare(`
       INSERT INTO knowledge_base (id, title, content, category, tags, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
     `).run(id, title, content, category, JSON.stringify(autoTags));
 
     return id;

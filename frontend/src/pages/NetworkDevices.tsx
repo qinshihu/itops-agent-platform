@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, RefreshCw, CheckCircle2,
-  Wifi, X, Loader2, Network, Search, ClipboardCheck,
+  Zap, Wifi, X, Loader2, Network, Search, ClipboardCheck,
   AlertTriangle, CheckSquare, Square
 } from 'lucide-react';
 import api from '../lib/api';
@@ -10,8 +11,10 @@ import { useToast } from '../contexts/ToastContext';
 import AddDeviceModal from '../components/AddDeviceModal';
 import NetworkDeviceCard from '../components/NetworkDeviceCard';
 import InspectionResult from '../components/InspectionResult';
+import SnmpInspectionResult from '../components/SnmpInspectionResult';
 import InspectionHistory from '../components/InspectionHistory';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { safeFormatDistance } from '../lib/date';
 
 interface NetworkDevice {
   id: string;
@@ -29,6 +32,9 @@ interface NetworkDevice {
   last_inspection_result?: string;
   created_at: string;
   updated_at: string;
+  snmp_enabled?: number;
+  snmp_credential_id?: string;
+  snmp_credential_name?: string;
 }
 
 export default function NetworkDevices() {
@@ -39,6 +45,7 @@ export default function NetworkDevices() {
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [inspectionResult, setInspectionResult] = useState<any>(null);
+  const [snmpInspectionResult, setSnmpInspectionResult] = useState<any>(null);
   const [showInspectionModal, setShowInspectionModal] = useState(false);
   const [inspectingDevice, setInspectingDevice] = useState<NetworkDevice | null>(null);
   const [inspectionType, setInspectionType] = useState<'standard' | 'custom' | 'full'>('standard');
@@ -55,6 +62,7 @@ export default function NetworkDevices() {
   useEscapeKey({ onEscape: () => setShowBatchModal(false), enabled: showBatchModal });
   useEscapeKey({ onEscape: () => { setDeleteConfirmDevice(null); }, enabled: !!deleteConfirmDevice });
   useEscapeKey({ onEscape: () => { setInspectionResult(null); setInspectingDevice(null); }, enabled: !!inspectionResult });
+  useEscapeKey({ onEscape: () => { setSnmpInspectionResult(null); }, enabled: !!snmpInspectionResult });
   useEscapeKey({ onEscape: () => setShowHistory(null), enabled: !!showHistory });
 
   const { data: devices = [], isLoading } = useQuery({
@@ -92,6 +100,37 @@ export default function NetworkDevices() {
     setInspectionType(type);
     setCustomDescription('');
     setShowInspectionModal(true);
+  };
+
+  const handleSnmpInspect = async (device: NetworkDevice) => {
+    try {
+      const response = await api.post(`/api/network-devices/${device.id}/inspect-snmp`);
+      const data = response.data.data;
+      data._deviceName = device.name;
+      setSnmpInspectionResult(data);
+      queryClient.invalidateQueries({ queryKey: ['network-devices'] });
+    } catch (error: any) {
+      toast.error('SNMP 巡检失败: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const handleSnmpTestConnection = async (device: NetworkDevice) => {
+    if (!device.snmp_credential_id) {
+      toast.error('该设备未关联 SNMP 凭证');
+      return;
+    }
+    try {
+      const response = await api.post(`/api/snmp/credentials/${device.snmp_credential_id}/test`, {
+        host: device.ip_address
+      });
+      if (response.data.code === 0) {
+        toast.success('SNMP 连接成功 ✅');
+      } else {
+        toast.error('SNMP 连接失败: ' + (response.data.message || ''));
+      }
+    } catch (error: any) {
+      toast.error('SNMP 测试失败: ' + (error.response?.data?.message || error.message));
+    }
   };
 
   const handleTestConnection = async (device: NetworkDevice) => {
@@ -199,13 +238,39 @@ export default function NetworkDevices() {
     return result;
   }, [devices, selectedVendor, searchQuery]);
 
-  const vendors = ['all', 'huawei', 'cisco', 'h3c', 'hikvision', 'ruijie', 'zte'];
+  // 关联数据：各设备的最近巡检/分析/修复概览
+  const { data: linkageData = { alerts: [], analyses: [], inspections: [], executions: [] } } = useQuery({
+    queryKey: ['device-linkage'],
+    queryFn: () => api.get('/api/dashboard/linkage').then(r => r.data.data || {}),
+    refetchInterval: 60000,
+  });
+
+  // 收集各设备最近活动时间轴
+  const { data: deviceTimeline = {} } = useQuery({
+    queryKey: ['device-timeline'],
+    queryFn: async () => {
+      const res = await api.get('/api/inspection-center?limit=300');
+      const items = (res.data.data || []) as any[];
+      // 按 device_id 分组，取最新一条 per source
+      const map: Record<string, { lastAnalysis?: any; lastInspection?: any; lastExecution?: any }> = {};
+      items.forEach((item: any) => {
+        if (!map[item.device_id]) map[item.device_id] = {};
+        if (item.source === 'analysis' && !map[item.device_id].lastAnalysis) map[item.device_id].lastAnalysis = item;
+        if (item.source === 'inspection' && !map[item.device_id].lastInspection) map[item.device_id].lastInspection = item;
+      });
+      return map;
+    },
+    refetchInterval: 60000,
+  });
+
+  const navigate = useNavigate();
+
+  const vendors = ['all', 'huawei', 'cisco', 'h3c', 'ruijie', 'zte'];
   const vendorLabels: Record<string, string> = {
     all: '全部厂商',
     huawei: '华为',
     cisco: '思科',
     h3c: '华三',
-    hikvision: '海康',
     ruijie: '锐捷',
     zte: '中兴'
   };
@@ -344,9 +409,40 @@ export default function NetworkDevices() {
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     onInspect={handleInspect}
+                    onSnmpInspect={handleSnmpInspect}
+                    onSnmpTestConnection={handleSnmpTestConnection}
                     onTestConnection={handleTestConnection}
                     onHistory={handleHistory}
                   />
+                  {/* 设备状态栏 */}
+                  {(deviceTimeline as any)[device.id] && (
+                    <div className="flex items-center gap-3 px-4 py-2 mt-0.5 bg-background/40 border border-border/50 rounded-lg">
+                      {(deviceTimeline as any)[device.id].lastAnalysis && (
+                        <button
+                          onClick={() => navigate(`/alert-auto-analysis?deviceId=${device.id}`)}
+                          className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                        >
+                          <Zap className="w-3 h-3" />
+                          分析:{' '}
+                          {(() => {
+                            const a = (deviceTimeline as any)[device.id].lastAnalysis; try { const d = new Date(a.created_at); const n = new Date(); const m = Math.floor((n.getTime() - d.getTime()) / 60000); return m < 60 ? `${m}分前` : `${Math.floor(m / 60)}h前`; } catch { return ''; }
+                          })()}
+                        </button>
+                      )}
+                      {(deviceTimeline as any)[device.id].lastInspection && (
+                        <button
+                          onClick={() => navigate(`/inspection-center?deviceId=${device.id}`)}
+                          className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                          <ClipboardCheck className="w-3 h-3" />
+                          巡检:{' '}
+                          {(() => {
+                            const i = (deviceTimeline as any)[device.id].lastInspection; try { const d = new Date(i.created_at); const n = new Date(); const m = Math.floor((n.getTime() - d.getTime()) / 60000); return m < 60 ? `${m}分前` : `${Math.floor(m / 60)}h前`; } catch { return ''; }
+                          })()}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -506,6 +602,14 @@ export default function NetworkDevices() {
           result={inspectionResult}
           deviceName={inspectingDevice?.name || ''}
           onClose={() => setInspectionResult(null)}
+        />
+      )}
+
+      {snmpInspectionResult && (
+        <SnmpInspectionResult
+          result={snmpInspectionResult}
+          deviceName={snmpInspectionResult._deviceName || ''}
+          onClose={() => setSnmpInspectionResult(null)}
         />
       )}
 

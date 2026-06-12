@@ -10,13 +10,17 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "lint": "eslint src --ext ts,tsx"
+    "lint": "eslint src --ext ts,tsx",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.14.2",
     "@xyflow/react": "^12.0.0",
     "axios": "^1.6.2",
     "clsx": "^2.0.0",
+    "cytoscape": "^3.34.0",
     "date-fns": "^2.30.0",
     "dompurify": "^3.4.5",
     "lucide-react": "^0.294.0",
@@ -32,6 +36,9 @@
     "zustand": "^4.4.7"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/dompurify": "^3.2.0",
     "@types/markdown-it": "^14.0.0",
     "@types/react": "^18.2.43",
@@ -43,9 +50,11 @@
     "eslint": "^8.57.1",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "jsdom": "^29.1.1",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.3.3",
-    "vite": "^5.0.8"
+    "vite": "^5.0.8",
+    "vitest": "^4.1.8"
   }
 }

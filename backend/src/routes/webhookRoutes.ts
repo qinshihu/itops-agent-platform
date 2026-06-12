@@ -4,6 +4,8 @@ import { logger } from '../utils/logger';
 import { randomUUID } from 'crypto';
 import { createAuditLog } from '../services/auditService';
 import { createNotification } from './notificationRoutes';
+import { alertService } from '../services/alertService';
+import { remediationService } from '../services/remediationService';
 import { env } from '../utils/env';
 import crypto from 'crypto';
 import {
@@ -15,6 +17,9 @@ import {
   detectSourceType,
   NormalizedAlert,
 } from '../services/alertSourceAdapters';
+import { alertDeviceResolver } from '../services/alertDeviceResolver';
+import { alertAutoAnalyzer } from '../services/alertAutoAnalyzer';
+import { emitToAlerts } from '../websocket/handler';
 import { validateBody } from '../middleware/validation';
 import { z } from 'zod';
 
@@ -177,14 +182,14 @@ function findAndTriggerWorkflow(alertId: string, source: string, severity: strin
 function processNormalizedAlert(
   alert: NormalizedAlert,
   sourceLabel: string
-): { alertId: string; taskId: string | null; status: 'created' | 'resolved' } {
+): { alertId: string; taskId: string | null; executionIds: string[]; status: 'created' | 'resolved' } {
   const io = getIOInstance();
 
   if (alert.status === 'resolved') {
     let updated = 0;
     if (alert.external_id) {
       const result = db.prepare(
-        `UPDATE alerts SET status = 'resolved_auto', resolved_at = CURRENT_TIMESTAMP,
+        `UPDATE alerts SET status = 'resolved_auto', resolved_at = local_now(),
          resolved_by = 'auto', resolution_notes = ?
          WHERE metadata LIKE ? AND status IN ('new', 'confirmed', 'in_progress')`
       ).run(`Auto-resolved by ${sourceLabel}`, `%${alert.external_id}%`);
@@ -193,7 +198,7 @@ function processNormalizedAlert(
 
     if (updated === 0 && alert.host) {
       db.prepare(
-        `UPDATE alerts SET status = 'resolved_auto', resolved_at = CURRENT_TIMESTAMP,
+        `UPDATE alerts SET status = 'resolved_auto', resolved_at = local_now(),
          resolved_by = 'auto', resolution_notes = ?
          WHERE source = ? AND title LIKE ? AND status IN ('new', 'confirmed', 'in_progress')
          AND created_at >= datetime('now', '-24 hours')`
@@ -210,7 +215,7 @@ function processNormalizedAlert(
       io.emit('alert:resolved', { source: alert.source, title: alert.title, host: alert.host });
     }
 
-    return { alertId: '', taskId: null, status: 'resolved' };
+    return { alertId: '', taskId: null, executionIds: [], status: 'resolved' };
   }
 
   const id = randomUUID();
@@ -231,7 +236,95 @@ function processNormalizedAlert(
     'new'
   );
 
-  const taskId = findAndTriggerWorkflow(id, alert.source, severity, title);
+  // ============================================================
+  //  统一修复流水线: 修复策略匹配 + 设备关联 + RCA + WebSocket
+  // ============================================================
+  const executionIds: string[] = [];
+  setImmediate(async () => {
+    try {
+      // ── 匹配修复策略并触发执行 ──
+      const alertForMatching = {
+        id,
+        source: alert.source,
+        severity,
+        title,
+        content: alert.content,
+        tags: [] as string[],
+      };
+      if (alert.metadata?.tags) {
+        alertForMatching.tags = Array.isArray(alert.metadata.tags) ? alert.metadata.tags : [];
+      }
+
+      if (io) {
+        emitToAlerts(io, 'remediation:started', {
+          alertId: id, title, timestamp: new Date().toISOString()
+        });
+      }
+
+      // ── RCA ──
+      if (severity === 'critical' || severity === 'high' || severity === 'disaster') {
+        alertService.processDatabaseAlert(id);
+      }
+
+      // ── 设备关联 ──
+      try {
+        const assoc = alertDeviceResolver.resolve(id, title, content, alert.host, alert.source);
+        if (assoc) {
+          alertDeviceResolver.saveAssociation(id, assoc.device_type, assoc.device_id, assoc.match_method, assoc.confidence);
+        }
+      } catch (error) {
+        logger.error(`[Webhook] 告警设备关联失败: ${error instanceof Error ? error.message : error}`);
+      }
+
+      // ── AI 自动分析（高优告警即时触发） ──
+      if (severity === 'critical' || severity === 'high') {
+        alertAutoAnalyzer.analyzeAlert(id).catch((err: Error) => {
+          logger.error(`[Webhook] AI 自动分析失败: ${err.message}`);
+        });
+      }
+
+      // ── 修复策略执行 ──
+      const matchedPolicies = await remediationService.matchAlertToPolicies(alertForMatching);
+      for (const policy of matchedPolicies) {
+        logger.info(`🔧 [Webhook] 匹配到修复策略: ${policy.name}, 自动触发...`);
+        const result = await remediationService.triggerRemediation(policy, alertForMatching);
+        if (result.id) {
+          executionIds.push(result.id);
+        }
+        if (io) {
+          emitToAlerts(io, 'remediation:result', {
+            alertId: id,
+            policyId: policy.id,
+            policyName: policy.name,
+            executionId: result.id,
+            status: result.status,
+            timestamp: new Date().toISOString()
+          });
+        }
+      }
+
+      if (io) {
+        emitToAlerts(io, 'remediation:completed', {
+          alertId: id,
+          totalPolicies: matchedPolicies.length,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      if (matchedPolicies.length > 0) {
+        logger.info(`✅ [Webhook] 已触发 ${matchedPolicies.length} 个修复策略 (alert: ${id}, executions: ${executionIds.join(',')})`);
+      }
+    } catch (error) {
+      logger.error(`❌ [Webhook] 修复流水线异常: ${error instanceof Error ? error.message : error}`);
+      if (io) {
+        emitToAlerts(io, 'remediation:error', {
+          alertId: id,
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+  });
 
   createNotification({
     type: 'alert',
@@ -244,14 +337,14 @@ function processNormalizedAlert(
     action: 'alert_received',
     resource_type: 'alert',
     resource_id: id,
-    details: { source: alert.source, severity, title, taskId },
+    details: { source: alert.source, severity, title, executionIds },
   });
 
   if (io) {
-    io.emit('alert:new', { id, source: alert.source, severity, title, content, taskId, host: alert.host });
+    io.emit('alert:new', { id, source: alert.source, severity, title, content, executionIds, host: alert.host });
   }
 
-  return { alertId: id, taskId, status: 'created' };
+  return { alertId: id, taskId: executionIds[0] || null, executionIds, status: 'created' };
 }
 
 router.post('/prometheus', (req: Request, res: Response) => {

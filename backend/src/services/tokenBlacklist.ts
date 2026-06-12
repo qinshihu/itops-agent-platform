@@ -96,7 +96,7 @@ class TokenBlacklistService {
     try {
       const result = db.prepare(`
         SELECT 1 FROM token_blacklist 
-        WHERE token = ? AND expires_at > CURRENT_TIMESTAMP
+        WHERE token = ? AND expires_at > datetime('now','localtime')
       `).get(token);
       
       const isBlacklisted = !!result;
@@ -131,7 +131,7 @@ class TokenBlacklistService {
       
       const result = db.prepare(`
         DELETE FROM token_blacklist 
-        WHERE expires_at < CURRENT_TIMESTAMP
+        WHERE expires_at < datetime('now','localtime')
       `).run();
       
       logger.info(`Cleaned up ${result.changes} expired tokens from blacklist`);

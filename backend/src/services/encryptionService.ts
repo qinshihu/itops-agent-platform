@@ -114,7 +114,7 @@ export function rotateEncryptionKey(): void {
     // 使用新密钥重新加密并更新数据库
     const updateStmt = db.prepare(`
       UPDATE servers 
-      SET password = ?, private_key = ?, updated_at = CURRENT_TIMESTAMP
+      SET password = ?, private_key = ?, updated_at = datetime('now','localtime')
       WHERE id = ?
     `);
     

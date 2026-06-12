@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../models/database';
 import bcrypt from 'bcryptjs';
-import jwt, { SignOptions } from 'jsonwebtoken';
+import jwt, { JwtPayload, SignOptions } from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 import { env } from '../utils/env';
 import { tokenBlacklist } from '../services/tokenBlacklist';
@@ -78,11 +78,11 @@ router.post('/login', validateBody(authSchemas.login), async (req: Request, res:
       { expiresIn: '7d' } as SignOptions
     );
 
-    db.prepare('UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);
+    db.prepare('UPDATE users SET updated_at = datetime(\'now\',\'localtime\') WHERE id = ?').run(user.id);
 
     db.prepare(`
       INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, details, ip_address, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
     `).run(
       randomUUID(),
       user.id,
@@ -282,7 +282,7 @@ router.post('/change-password', authenticateToken, async (req: Request & { user?
     const hashedNewPassword = await bcrypt.hash(newPassword, 12);
 
     // 更新密码并清除 password_must_change 标志
-    db.prepare('UPDATE users SET password = ?, password_must_change = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(hashedNewPassword, user.id);
+    db.prepare('UPDATE users SET password = ?, password_must_change = 0, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?').run(hashedNewPassword, user.id);
     
     // 清除用户缓存，确保下一次请求获取最新状态
     invalidateUserCache(user.id);
@@ -290,7 +290,7 @@ router.post('/change-password', authenticateToken, async (req: Request & { user?
     // 记录审计日志
     db.prepare(`
       INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, details, ip_address, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
     `).run(
       randomUUID(),
       user.id,

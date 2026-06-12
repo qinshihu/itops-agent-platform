@@ -4,6 +4,7 @@ import axios from 'axios';
 import { randomUUID } from 'crypto';
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
+import { credentialService } from './credentialService';
 
 interface NotificationDB {
   id: string;
@@ -58,13 +59,28 @@ class NotificationService {
     const emailConfig = this.config?.email_config;
     if (!emailConfig?.smtp_host) return;
 
+    // Try to get the SMTP password from credential service (encrypted)
+    const emailCredStr = credentialService.getCredential('alert_email');
+    let smtpUser = emailConfig.user;
+    let smtpPass = emailConfig.password;
+
+    if (emailCredStr) {
+      try {
+        const emailCred = JSON.parse(emailCredStr);
+        if (emailCred.user) smtpUser = emailCred.user;
+        if (emailCred.pass) smtpPass = emailCred.pass;
+      } catch {
+        // Not a valid JSON, use the config values as-is
+      }
+    }
+
     this.transporter = nodemailer.createTransport({
       host: emailConfig.smtp_host,
       port: emailConfig.smtp_port || 465,
       secure: (emailConfig.smtp_port || 465) === 465,
       auth: {
-        user: emailConfig.user,
-        pass: emailConfig.password
+        user: smtpUser || emailConfig.user || '',
+        pass: smtpPass || emailConfig.password || ''
       }
     });
   }
@@ -225,8 +241,31 @@ class NotificationService {
       throw new Error('Email SMTP not configured');
     }
 
+    // Try to get SMTP credentials from credential service (encrypted)
+    const emailCredStr = credentialService.getCredential('alert_email');
+    let smtpUser = emailConfig.user;
+    let smtpPass = emailConfig.password;
+
+    if (emailCredStr) {
+      try {
+        const emailCred = JSON.parse(emailCredStr);
+        if (emailCred.user) smtpUser = emailCred.user;
+        if (emailCred.pass) smtpPass = emailCred.pass;
+      } catch {
+        // Use config values as-is
+      }
+    }
+
     if (!this.transporter) {
-      this.initializeEmail();
+      this.transporter = nodemailer.createTransport({
+        host: emailConfig.smtp_host,
+        port: emailConfig.smtp_port || 465,
+        secure: (emailConfig.smtp_port || 465) === 465,
+        auth: {
+          user: smtpUser || '',
+          pass: smtpPass || ''
+        }
+      });
     }
 
     if (!this.transporter) {
@@ -234,8 +273,8 @@ class NotificationService {
     }
 
     const info = await this.transporter.sendMail({
-      from: `"ITOps Agent Platform" <${emailConfig.user}>`,
-      to: emailConfig.user,
+      from: `"ITOps Agent Platform" <${smtpUser}>`,
+      to: smtpUser,
       subject: notification.title,
       text: notification.content,
       html: `<h2>${notification.title}</h2><pre>${notification.content}</pre><hr/><small>ITOps Agent Platform - ${new Date().toLocaleString()}</small>`

@@ -73,7 +73,7 @@ router.put('/:id', (req: Request, res: Response) => {
     db.prepare(`
       UPDATE knowledge_base 
       SET title = ?, category = ?, tags = ?, content = ?, 
-          solutions = ?, related_alerts = ?, updated_at = CURRENT_TIMESTAMP
+          solutions = ?, related_alerts = ?, updated_at = datetime('now','localtime')
       WHERE id = ?
     `).run(
       title,

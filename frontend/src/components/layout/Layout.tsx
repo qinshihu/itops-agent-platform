@@ -23,6 +23,8 @@ import {
   LogOut,
   User as UserIcon,
   Terminal,
+  Globe,
+  Layers,
   Monitor,
   MonitorPlay,
   Wrench,
@@ -40,9 +42,12 @@ import {
   ServerCog,
   Zap,
   AlertTriangle,
+  Activity,
   ShieldCheck,
   BookMarked,
   Cog,
+  FlaskConical,
+  Radio,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -64,6 +69,8 @@ const navigationGroups = [
     items: [
       { name: '服务器管理', href: '/servers', icon: Server },
       { name: '网络设备', href: '/network-devices', icon: Network },
+      { name: 'SNMP 管理', href: '/snmp', icon: Radio },
+      { name: '网络设备发现', href: '/network-discovery', icon: Globe },
       { name: '认证凭证', href: '/ssh-keys', icon: Key },
       { name: 'Web 终端', href: '/terminal', icon: Terminal },
       { name: '远程桌面', href: '/remote-desktop', icon: MonitorPlay },
@@ -87,10 +94,13 @@ const navigationGroups = [
       { name: '告警中心', href: '/alerts', icon: Bell },
       { name: '告警自动处理', href: '/alert-mappings', icon: Link2 },
       { name: '告警降噪', href: '/alert-noise', icon: Shield },
+      { name: '告警关联', href: '/alert-correlation-groups', icon: Layers },
       { name: '根因分析', href: '/root-cause-analysis', icon: Search },
       { name: 'AI 根因报告', href: '/ai-root-cause', icon: Brain },
       { name: '服务拓扑', href: '/topology', icon: Network },
       { name: 'AI 洞察', href: '/ai-insights', icon: Lightbulb },
+      { name: 'AI 自动分析', href: '/alert-auto-analysis', icon: Zap },
+      { name: '巡检中心', href: '/inspection-center', icon: Activity },
     ]
   },
   {
@@ -118,6 +128,7 @@ const navigationGroups = [
     icon: Cog,
     items: [
       { name: '用户管理', href: '/users', icon: Users },
+      { name: '前端测试中心', href: '/frontend-tests', icon: FlaskConical },
       { name: '设置', href: '/settings', icon: Settings },
     ]
   },
@@ -125,7 +136,7 @@ const navigationGroups = [
 
 export default function Layout() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
-    new Set(['首页', '服务器管理', '自动化执行', '告警与AI分析', '自动修复/自愈', '知识库与报告', '系统与用户'])
+    new Set(['首页', '服务器管理', '自动化执行', '告警与AI分析', '自动修复/自愈', '知识库与报告', '系统与用户', '开发与测试'])
   );
 
   const toggleGroup = (groupName: string) => {
@@ -189,7 +200,10 @@ export default function Layout() {
         )}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center bg-gradient-to-br from-blue-600 to-purple-600 shadow-lg shadow-blue-500/30 flex-shrink-0">
-              <img src="/logo.jpg" alt="Logo" className="w-full h-full object-contain" />
+              <img src="/logo.jpg" alt="Logo" className="w-full h-full object-contain"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }} />
             </div>
             <div>
               <h1 className={clsx('text-base font-bold tracking-tight',

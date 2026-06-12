@@ -233,7 +233,7 @@ router.post('/:id/test', async (req: Request, res: Response) => {
     // 保存执行记录
     db.prepare(`
       INSERT INTO agent_executions (id, agent_id, agent_name, input_text, output_text, status, error_message, execution_time_ms, metadata, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
     `).run(
       executionId,
       req.params.id,
@@ -250,8 +250,8 @@ router.post('/:id/test', async (req: Request, res: Response) => {
     db.prepare(`
       UPDATE agents 
       SET usage_count = usage_count + 1, 
-          last_used_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
+          last_used_at = datetime('now','localtime'),
+          updated_at = datetime('now','localtime')
       WHERE id = ?
     `).run(req.params.id);
     
@@ -311,7 +311,7 @@ router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Respons
           model = ?, temperature = ?, enabled = ?, 
           category = ?, tags = ?, description = ?, api_provider = ?,
           primary_model_id = ?, fallback_model_id = ?,
-          updated_at = CURRENT_TIMESTAMP
+          updated_at = datetime('now','localtime')
       WHERE id = ?
     `).run(
       name, avatar, role, system_prompt, 

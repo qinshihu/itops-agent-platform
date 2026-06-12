@@ -72,8 +72,7 @@ export default function AIInsights() {
       color: 'from-cyan-500/20 to-cyan-600/10',
       trend: `+${knowledge.filter((k) => {
         const date = new Date(k.created_at as string);
-        const now = new Date();
-        return (now.getTime() - date.getTime()) < 7 * 24 * 60 * 60 * 1000;
+        return (Date.now() - date.getTime()) < 7 * 24 * 60 * 60 * 1000;
       }).length} 本周`
     }
   ];

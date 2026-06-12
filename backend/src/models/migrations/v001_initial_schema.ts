@@ -43,7 +43,7 @@ const v001InitialSchema: Migration = {
         user_id TEXT,
         reason TEXT,
         expires_at DATETIME NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_token_blacklist_token ON token_blacklist(token);
@@ -61,8 +61,8 @@ const v001InitialSchema: Migration = {
         failed_login_attempts INTEGER DEFAULT 0,
         locked_until DATETIME,
         last_failed_login DATETIME,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
@@ -95,8 +95,8 @@ const v001InitialSchema: Migration = {
         vnc_port INTEGER DEFAULT 5900,
         vnc_password TEXT,
         ssh_key_id TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_servers_enabled ON servers(enabled);
@@ -113,8 +113,8 @@ const v001InitialSchema: Migration = {
         fingerprint TEXT,
         private_key TEXT NOT NULL,
         description TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_ssh_keys_name ON ssh_keys(name);
@@ -126,8 +126,8 @@ const v001InitialSchema: Migration = {
         description TEXT,
         parent_id TEXT,
         sort_order INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (parent_id) REFERENCES server_groups(id) ON DELETE SET NULL
       );
 
@@ -155,7 +155,7 @@ const v001InitialSchema: Migration = {
         success INTEGER DEFAULT 0,
         execution_time_ms INTEGER,
         executed_by TEXT,
-        executed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        executed_at DATETIME DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
       );
 
@@ -171,7 +171,7 @@ const v001InitialSchema: Migration = {
         status TEXT DEFAULT 'pending',
         started_at DATETIME,
         completed_at DATETIME,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
       );
 
@@ -184,7 +184,7 @@ const v001InitialSchema: Migration = {
         id TEXT PRIMARY KEY,
         key_type TEXT NOT NULL,
         key_value TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
         active INTEGER DEFAULT 1
       );
 
@@ -206,8 +206,8 @@ const v001InitialSchema: Migration = {
         description TEXT,
         usage_count INTEGER DEFAULT 0,
         last_used_at DATETIME,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_agents_category ON agents(category);
@@ -227,7 +227,7 @@ const v001InitialSchema: Migration = {
         execution_time_ms INTEGER,
         token_count INTEGER,
         metadata TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
       );
 
@@ -245,8 +245,8 @@ const v001InitialSchema: Migration = {
         edges TEXT,
         agent_configs TEXT,
         is_template INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_workflows_template_created ON workflows(is_template DESC, created_at DESC);
@@ -268,8 +268,8 @@ const v001InitialSchema: Migration = {
         metrics TEXT,
         execution_order TEXT,
         report_id TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
@@ -289,8 +289,8 @@ const v001InitialSchema: Migration = {
         related_task_id TEXT,
         status TEXT DEFAULT 'new',
         alert_fingerprint TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);
@@ -314,7 +314,7 @@ const v001InitialSchema: Migration = {
         ip_address TEXT,
         user_agent TEXT,
         processing_time_ms INTEGER,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_webhook_logs_source ON alert_webhook_logs(source);
@@ -348,7 +348,7 @@ const v001InitialSchema: Migration = {
         alert_title_pattern TEXT,
         workflow_id TEXT NOT NULL,
         enabled INTEGER DEFAULT 1,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_alert_mapping_enabled ON alert_workflow_mappings(enabled);
@@ -363,8 +363,8 @@ const v001InitialSchema: Migration = {
         solutions TEXT,
         related_alerts TEXT,
         usage_count INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_kb_category ON knowledge_base(category);
@@ -379,8 +379,8 @@ const v001InitialSchema: Migration = {
         language TEXT DEFAULT 'bash',
         content TEXT NOT NULL,
         tags TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_scripts_category ON scripts(category);
@@ -398,8 +398,8 @@ const v001InitialSchema: Migration = {
         variables TEXT,
         metadata TEXT,
         is_preset INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_reports_type ON reports(type);
@@ -418,8 +418,8 @@ const v001InitialSchema: Migration = {
         recipients TEXT,
         format TEXT DEFAULT 'markdown',
         last_generated DATETIME,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (template_id) REFERENCES reports(id) ON DELETE CASCADE
       );
 
@@ -438,8 +438,8 @@ const v001InitialSchema: Migration = {
         next_run DATETIME,
         last_status TEXT DEFAULT 'unknown',
         context TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
       );
 
@@ -450,7 +450,7 @@ const v001InitialSchema: Migration = {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         key TEXT UNIQUE NOT NULL,
         value TEXT,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key);
@@ -464,7 +464,7 @@ const v001InitialSchema: Migration = {
         resource_id TEXT,
         details TEXT,
         ip_address TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
@@ -479,7 +479,7 @@ const v001InitialSchema: Migration = {
         status TEXT DEFAULT 'unread',
         recipient TEXT,
         metadata TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status);
@@ -500,7 +500,7 @@ const v001InitialSchema: Migration = {
         dingtalk_config TEXT,
         alert_notification TEXT,
         task_notification TEXT,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       -- Root Cause Analyses
@@ -515,8 +515,8 @@ const v001InitialSchema: Migration = {
         timeline TEXT,
         evidence TEXT,
         recommendations TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime')),
         completed_at DATETIME,
         FOREIGN KEY (alert_id) REFERENCES alerts(id)
       );
@@ -530,8 +530,8 @@ const v001InitialSchema: Migration = {
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         messages TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_copilot_user_id ON copilot_conversations(user_id);
@@ -546,8 +546,8 @@ const v001InitialSchema: Migration = {
         webhook_url TEXT,
         email_recipients TEXT,
         rate_limit_minutes INTEGER DEFAULT 5,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_alert_configs_enabled ON alert_configs(enabled);
@@ -563,7 +563,7 @@ const v001InitialSchema: Migration = {
         metadata TEXT,
         channels TEXT NOT NULL,
         status TEXT DEFAULT 'pending',
-        triggered_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        triggered_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_alert_notifications_config_id ON alert_notifications(config_id);
@@ -581,8 +581,8 @@ const v001InitialSchema: Migration = {
         status TEXT DEFAULT 'active',
         last_verified_at TEXT,
         metadata TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (source_server_id) REFERENCES servers(id) ON DELETE CASCADE,
         FOREIGN KEY (target_server_id) REFERENCES servers(id) ON DELETE CASCADE
       );
@@ -602,7 +602,7 @@ const v001InitialSchema: Migration = {
         related_alert_id TEXT,
         is_root_cause INTEGER DEFAULT 0,
         metadata TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE,
         FOREIGN KEY (related_alert_id) REFERENCES alerts(id)
       );
@@ -636,8 +636,8 @@ const v001InitialSchema: Migration = {
         rollback_on_failure INTEGER DEFAULT 1,
         enabled INTEGER DEFAULT 1,
         created_by TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_remediation_policies_alert_source ON remediation_policies(alert_source);
@@ -668,7 +668,7 @@ const v001InitialSchema: Migration = {
         rollback_completed_at DATETIME,
         rollback_result TEXT,
         execution_duration_ms INTEGER,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (policy_id) REFERENCES remediation_policies(id),
         FOREIGN KEY (alert_id) REFERENCES alerts(id) ON DELETE CASCADE
       );
@@ -690,7 +690,7 @@ const v001InitialSchema: Migration = {
         root_cause TEXT,
         resolution TEXT,
         duration_ms INTEGER,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (policy_id) REFERENCES remediation_policies(id)
       );
 
@@ -711,7 +711,7 @@ const v001InitialSchema: Migration = {
         execution_log TEXT,
         result TEXT,
         is_rollback INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
         completed_at TEXT,
         FOREIGN KEY (rca_id) REFERENCES root_cause_analyses(id),
         FOREIGN KEY (policy_id) REFERENCES remediation_policies(id),
@@ -728,7 +728,7 @@ const v001InitialSchema: Migration = {
         policy_id TEXT NOT NULL,
         alert_id TEXT NOT NULL,
         cooldown_until DATETIME NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
         PRIMARY KEY (policy_id, alert_id),
         FOREIGN KEY (policy_id) REFERENCES remediation_policies(id) ON DELETE CASCADE,
         FOREIGN KEY (alert_id) REFERENCES alerts(id) ON DELETE CASCADE
@@ -754,7 +754,7 @@ const v001InitialSchema: Migration = {
         load_15min REAL,
         uptime_seconds INTEGER,
         collected_at DATETIME,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
       );
 
@@ -779,8 +779,8 @@ const v001InitialSchema: Migration = {
         status TEXT DEFAULT 'online',
         last_inspection_at DATETIME,
         last_inspection_result TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_network_devices_vendor ON network_devices(vendor);
@@ -798,7 +798,7 @@ const v001InitialSchema: Migration = {
         results TEXT,
         summary TEXT,
         duration_ms INTEGER,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (device_id) REFERENCES network_devices(id) ON DELETE CASCADE
       );
 

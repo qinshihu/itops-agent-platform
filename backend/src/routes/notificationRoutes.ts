@@ -124,7 +124,7 @@ router.put('/:id/send', (req: Request, res: Response) => {
     
     db.prepare(`
       UPDATE notifications 
-      SET status = 'sent', sent_at = CURRENT_TIMESTAMP 
+      SET status = 'sent' 
       WHERE id = ?
     `).run(id);
     
@@ -188,7 +188,7 @@ router.get('/stats/summary', (_req: Request, res: Response) => {
     const todaySent = db.prepare(`
       SELECT COUNT(*) as count 
       FROM notifications 
-      WHERE status = 'sent' AND sent_at >= datetime('now', 'start of day')
+      WHERE status = 'sent' AND created_at >= datetime('now', 'start of day')
     `).get() as { count: number };
     
     res.json({

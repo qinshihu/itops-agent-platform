@@ -55,7 +55,7 @@ export function recordFailedLogin(username: string): LoginAttemptResult {
     const lockoutUntil = new Date(now.getTime() + LOCKOUT_DURATION_MINUTES * 60 * 1000);
     db.prepare(`
       UPDATE users 
-      SET failed_login_attempts = ?, locked_until = ?, last_failed_login = ?, updated_at = CURRENT_TIMESTAMP 
+      SET failed_login_attempts = ?, locked_until = ?, last_failed_login = ?, updated_at = datetime('now','localtime') 
       WHERE id = ?
     `).run(newAttempts, lockoutUntil.toISOString(), now.toISOString(), user.id);
 
@@ -72,7 +72,7 @@ export function recordFailedLogin(username: string): LoginAttemptResult {
 
   db.prepare(`
     UPDATE users 
-    SET failed_login_attempts = ?, last_failed_login = ?, updated_at = CURRENT_TIMESTAMP 
+    SET failed_login_attempts = ?, last_failed_login = ?, updated_at = datetime('now','localtime') 
     WHERE id = ?
   `).run(newAttempts, now.toISOString(), user.id);
 
@@ -85,7 +85,7 @@ export function recordFailedLogin(username: string): LoginAttemptResult {
 export function resetFailedLoginAttempts(userId: string): void {
   db.prepare(`
     UPDATE users 
-    SET failed_login_attempts = 0, locked_until = NULL, updated_at = CURRENT_TIMESTAMP 
+    SET failed_login_attempts = 0, locked_until = NULL, updated_at = datetime('now','localtime') 
     WHERE id = ?
   `).run(userId);
 

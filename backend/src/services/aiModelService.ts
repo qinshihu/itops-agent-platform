@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import db from '../models/database';
 import { logger } from '../utils/logger';
-import { getApiBase, buildApiEndpoint } from '../utils/apiConfig';
+import { getApiKey, getModelId, getApiBase, buildApiEndpoint } from '../utils/apiConfig';
 import axios from 'axios';
 
 export interface AIModel {
@@ -261,7 +261,7 @@ export function updateModel(id: string, dto: UpdateAIModelDTO): AIModel {
     return existingModel;
   }
   
-  updates.push('updated_at = CURRENT_TIMESTAMP');
+  updates.push('updated_at = datetime(\'now\',\'localtime\')');
   values.push(id);
   
   db.prepare(`
@@ -307,7 +307,7 @@ export function deleteModel(id: string): void {
 }
 
 export function reorderModels(modelIds: string[]): void {
-  const stmt = db.prepare('UPDATE ai_models SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+  const stmt = db.prepare('UPDATE ai_models SET sort_order = ?, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?');
   
   modelIds.forEach((id, index) => {
     stmt.run(index, id);
@@ -344,7 +344,7 @@ export async function testModelConnectivity(modelId: string): Promise<{
       finalApiBase = finalApiBase.replace('/chat/completions', '');
     }
     
-    await axios.post(
+    const response = await axios.post(
       buildApiEndpoint(finalApiBase, 'chat/completions'),
       {
         model: model.model_id,
@@ -366,7 +366,7 @@ export async function testModelConnectivity(modelId: string): Promise<{
     
     db.prepare(`
       UPDATE ai_models 
-      SET last_test_status = 'success', last_test_time = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
+      SET last_test_status = 'success', last_test_time = datetime('now','localtime'), updated_at = datetime('now','localtime') 
       WHERE id = ?
     `).run(modelId);
     
@@ -381,7 +381,7 @@ export async function testModelConnectivity(modelId: string): Promise<{
     
     db.prepare(`
       UPDATE ai_models 
-      SET last_test_status = 'failed', last_test_time = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
+      SET last_test_status = 'failed', last_test_time = datetime('now','localtime'), updated_at = datetime('now','localtime') 
       WHERE id = ?
     `).run(modelId);
     

@@ -156,7 +156,7 @@ class ChangeService {
       return existing;
     }
 
-    fields.push('updated_at = CURRENT_TIMESTAMP');
+    fields.push('updated_at = datetime(\'now\',\'localtime\')');
     params.push(id);
 
     db.prepare(`
@@ -173,7 +173,7 @@ class ChangeService {
     }
 
     db.prepare(`
-      UPDATE change_records SET is_root_cause = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+      UPDATE change_records SET is_root_cause = 1, updated_at = datetime('now','localtime') WHERE id = ?
     `).run(id);
 
     return this.getById(id)!;

@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
-import { Bell, CheckCircle, Clock, AlertCircle, Search } from 'lucide-react';
+import { Bell, CheckCircle, Clock, AlertCircle, Search, Play, ExternalLink, X as XIcon, Loader2, ListChecks, CheckCircle2, AlertCircle as AlertCircle2, Zap, Wifi, Wrench, Terminal } from 'lucide-react';
 import { safeFormatDistance } from '../lib/date';
 import clsx from 'clsx';
 import api from '../lib/api';
@@ -22,12 +23,20 @@ interface Alert {
   created_at: string;
 }
 
+interface ProcessResult {
+  alertId: string;
+  matchedPolicies: Array<{ id: string; name: string; execution_mode: string }>;
+  executionIds: string[];
+  error: string | null;
+}
+
 export default function Alerts() {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [_wsConnected, setWsConnected] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -42,6 +51,19 @@ export default function Alerts() {
       return res.data.data as Alert[];
     },
     staleTime: 30000,
+  });
+
+  // 关联数据：AI 分析结果 + 修复执行记录
+  const { data: analysisMap = {} } = useQuery({
+    queryKey: ['alert-auto-analysis-map'],
+    queryFn: async () => {
+      const res = await api.get('/api/alert-auto-analysis?limit=200');
+      const items = (res.data.data || []) as any[];
+      const map: Record<string, any> = {};
+      items.forEach((item: any) => { if (item.alert_id && !map[item.alert_id]) map[item.alert_id] = item; });
+      return map;
+    },
+    refetchInterval: 30000,
   });
 
   const connectWebSocketRef = useRef<ReturnType<typeof connectWebSocketInner> | null>(null);
@@ -146,6 +168,7 @@ export default function Alerts() {
     };
 
     const handleAlertNew = (data: Alert) => {
+      console.log('New alert:', data);
       refetch();
     };
 
@@ -178,6 +201,21 @@ export default function Alerts() {
       await api.put(`/api/alerts/${alertId}/resolve`);
     },
     onSuccess: () => refetch(),
+  });
+
+  const [processResult, setProcessResult] = useState<ProcessResult | null>(null);
+
+  const processMutation = useMutation({
+    mutationFn: async (alertId: string) => {
+      const res = await api.post(`/api/alerts/${alertId}/process`);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      if (data?.data) {
+        setProcessResult(data.data);
+      }
+      refetch();
+    },
   });
 
   return (
@@ -315,6 +353,17 @@ export default function Alerts() {
                     </div>
                   </div>
                   <div className="flex gap-2 ml-4">
+                    {alert.status !== 'resolved' && (
+                      <button
+                        onClick={() => processMutation.mutate(alert.id)}
+                        disabled={processMutation.isPending}
+                        className="px-3 py-1 text-sm bg-purple-600/10 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-600/20 transition-colors flex items-center gap-1"
+                        title="手动触发匹配映射+修复策略+根因分析"
+                      >
+                        <Play className="w-3.5 h-3.5" />
+                        处理
+                      </button>
+                    )}
                     {alert.status === 'new' && (
                       <button
                         onClick={() => acknowledgeMutation.mutate(alert.id)}
@@ -333,12 +382,178 @@ export default function Alerts() {
                     )}
                   </div>
                 </div>
+
+                {/* ── 关联操作 ── */}
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
+                  {analysisMap[alert.id] && (
+                    <button
+                      onClick={() => navigate(`/alert-auto-analysis?alertId=${alert.id}`)}
+                      className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors px-2 py-1 rounded bg-emerald-500/5 hover:bg-emerald-500/10"
+                    >
+                      <Zap className="w-3 h-3" />
+                      AI 分析
+                    </button>
+                  )}
+                  <button
+                    onClick={() => navigate(`/remediation-executions?alertId=${alert.id}`)}
+                    className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300 transition-colors px-2 py-1 rounded bg-orange-500/5 hover:bg-orange-500/10"
+                  >
+                    <Wrench className="w-3 h-3" />
+                    修复记录
+                  </button>
+                  <button
+                    onClick={() => navigate(`/inspection-center?alertId=${alert.id}`)}
+                    className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors px-2 py-1 rounded bg-blue-500/5 hover:bg-blue-500/10"
+                  >
+                    <Wifi className="w-3 h-3" />
+                    巡检结果
+                  </button>
+                  <button
+                    onClick={() => navigate(`/root-cause-analysis?alertId=${alert.id}`)}
+                    className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 transition-colors px-2 py-1 rounded bg-purple-500/5 hover:bg-purple-500/10"
+                  >
+                    <Search className="w-3 h-3" />
+                    根因分析
+                  </button>
+                  {analysisMap[alert.id]?.status === 'completed' && (
+                    <span className="ml-auto text-xs text-emerald-500/60">
+                      ✅ 已自动诊断
+                    </span>
+                  )}
+                </div>
               </div>
             ))
             )}
           </div>
         </div>
       </div>
+
+      {/* 处理结果弹窗 */}
+      {processResult && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-xl border border-border max-w-lg w-full shadow-2xl max-h-[80vh] flex flex-col">
+            {/* 头部 */}
+            <div className={`p-4 border-b border-border flex items-center justify-between rounded-t-xl ${
+              processResult.error
+                ? 'bg-gradient-to-r from-amber-500/10 to-red-500/10'
+                : processResult.matchedPolicies.length > 0
+                  ? 'bg-gradient-to-r from-green-500/10 to-blue-500/10'
+                  : 'bg-gradient-to-r from-blue-500/10 to-purple-500/10'
+            }`}>
+              <h3 className="text-lg font-semibold text-text-primary flex items-center gap-2">
+                {processResult.error ? (
+                  <AlertCircle2 className="w-5 h-5 text-red-500" />
+                ) : processResult.matchedPolicies.length > 0 ? (
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
+                ) : (
+                  <Play className="w-5 h-5 text-blue-500" />
+                )}
+                告警处理结果
+              </h3>
+              <button
+                onClick={() => setProcessResult(null)}
+                className="p-1.5 rounded-lg hover:bg-background transition-colors"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-auto flex-1">
+              {/* 状态 */}
+              <div className={`p-3 rounded-lg border ${
+                processResult.error
+                  ? 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400'
+                  : processResult.matchedPolicies.length > 0
+                    ? 'bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400'
+                    : 'bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400'
+              }`}>
+                <p className="text-sm font-medium">
+                  {processResult.error
+                    ? '⚠️ 执行遇到错误: ' + processResult.error
+                    : processResult.matchedPolicies.length > 0
+                      ? `✅ 成功匹配 ${processResult.matchedPolicies.length} 条修复策略，${processResult.executionIds.length} 个执行已触发`
+                      : 'ℹ️ 未匹配到任何修复策略（告警级别/关键词不满足已有策略条件）'}
+                </p>
+              </div>
+
+              {/* 策略列表 */}
+              {processResult.matchedPolicies.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-text-primary mb-2 flex items-center gap-1.5">
+                    <ListChecks className="w-4 h-4 text-primary" />
+                    匹配的策略
+                  </h4>
+                  <div className="space-y-2">
+                    {processResult.matchedPolicies.map((p, i) => (
+                      <div key={p.id} className="flex items-center justify-between p-2.5 bg-background rounded-lg border border-border">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center font-bold">
+                            {i + 1}
+                          </span>
+                          <span className="text-sm text-text-primary">{p.name}</span>
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          p.execution_mode === 'auto' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
+                          p.execution_mode === 'approval' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' :
+                          'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                        }`}>
+                          {p.execution_mode === 'auto' ? '自动' : p.execution_mode === 'approval' ? '需审批' : '仅建议'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 执行ID */}
+              {processResult.executionIds.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-text-primary mb-2">执行记录 ID</h4>
+                  <div className="space-y-1">
+                    {processResult.executionIds.map(eid => (
+                      <code key={eid} className="block text-xs bg-background px-2 py-1 rounded border border-border text-text-secondary truncate">
+                        {eid}
+                      </code>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 底部操作 */}
+            <div className="p-4 border-t border-border flex justify-end gap-2">
+              <button
+                onClick={() => setProcessResult(null)}
+                className="px-4 py-2 bg-background border border-border rounded-lg text-text-primary hover:bg-surface transition-colors font-medium text-sm"
+              >
+                关闭
+              </button>
+              {processResult.executionIds.length > 0 && (
+                <button
+                  onClick={() => {
+                    setProcessResult(null);
+                    navigate('/remediation-executions');
+                  }}
+                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium text-sm flex items-center gap-1.5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  查看执行记录
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 处理中遮罩 */}
+      {processMutation.isPending && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-surface rounded-xl border border-border p-6 shadow-2xl flex items-center gap-3">
+            <Loader2 className="w-5 h-5 animate-spin text-primary" />
+            <span className="text-text-primary font-medium">正在处理告警...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

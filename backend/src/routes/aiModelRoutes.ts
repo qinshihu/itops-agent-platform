@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { randomUUID } from 'crypto';
 import { requireRole } from '../middleware/auth';
 import * as aiModelService from '../services/aiModelService';
 
@@ -16,7 +17,7 @@ router.get('/', (req: Request, res: Response) => {
     }
     
     res.json({ success: true, data: models });
-  } catch {
+  } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to fetch models' });
   }
 });
@@ -30,7 +31,7 @@ router.get('/default', (req: Request, res: Response) => {
     }
     
     res.json({ success: true, data: defaultModel });
-  } catch {
+  } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to fetch default model' });
   }
 });
@@ -44,7 +45,7 @@ router.get('/:id', (req: Request, res: Response) => {
     }
     
     res.json({ success: true, data: model });
-  } catch {
+  } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to fetch model' });
   }
 });
@@ -79,6 +80,26 @@ router.post('/', requireRole('admin'), (req: Request, res: Response) => {
     res.status(201).json({ success: true, data: model });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create model';
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+router.put('/reorder', requireRole('admin'), (req: Request, res: Response) => {
+  try {
+    const { modelIds } = req.body;
+    
+    if (!Array.isArray(modelIds)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'modelIds must be an array' 
+      });
+    }
+    
+    aiModelService.reorderModels(modelIds);
+    
+    res.json({ success: true, message: 'Models reordered successfully' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to reorder models';
     res.status(500).json({ success: false, error: message });
   }
 });
@@ -130,26 +151,6 @@ router.post('/:id/test', async (req: Request, res: Response) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to test model';
-    res.status(500).json({ success: false, error: message });
-  }
-});
-
-router.put('/reorder', requireRole('admin'), (req: Request, res: Response) => {
-  try {
-    const { modelIds } = req.body;
-    
-    if (!Array.isArray(modelIds)) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'modelIds must be an array' 
-      });
-    }
-    
-    aiModelService.reorderModels(modelIds);
-    
-    res.json({ success: true, message: 'Models reordered successfully' });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to reorder models';
     res.status(500).json({ success: false, error: message });
   }
 });

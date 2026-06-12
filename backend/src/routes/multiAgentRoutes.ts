@@ -83,7 +83,7 @@ router.post('/collaborate', async (req: Request, res: Response) => {
       // 保存协作结果到任务记录
       db.prepare(`
         INSERT INTO tasks (id, name, status, node_results, created_at)
-        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, ?, datetime('now','localtime'))
       `).run(
         taskId,
         `多Agent协作: ${query.substring(0, 50)}...`,

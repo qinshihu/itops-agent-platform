@@ -444,7 +444,7 @@ function logCommandHistory(
 
 // 更新服务器最后连接时间
 function updateLastConnected(serverId: string): void {
-  db.prepare('UPDATE servers SET last_connected = CURRENT_TIMESTAMP WHERE id = ?').run(serverId);
+  db.prepare('UPDATE servers SET last_connected = datetime(\'now\',\'localtime\') WHERE id = ?').run(serverId);
 }
 
 export async function executeCommand(
@@ -698,7 +698,7 @@ export async function runComplianceCheck(
     db.prepare(`
       INSERT INTO compliance_checks 
       (id, server_id, check_name, check_results, status, started_at)
-      VALUES (?, ?, 'Full Compliance Check', '[]', 'running', CURRENT_TIMESTAMP)
+      VALUES (?, ?, 'Full Compliance Check', '[]', 'running', datetime('now','localtime'))
     `).run(checkId, serverId);
   }
   
@@ -744,7 +744,7 @@ export async function runComplianceCheck(
   if (options.saveResults) {
     db.prepare(`
       UPDATE compliance_checks 
-      SET check_results = ?, status = 'completed', completed_at = CURRENT_TIMESTAMP
+      SET check_results = ?, status = 'completed', completed_at = datetime('now','localtime')
       WHERE id = ?
     `).run(JSON.stringify(results), checkId);
   }

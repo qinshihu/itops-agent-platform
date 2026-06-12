@@ -127,7 +127,7 @@ router.put('/:id/cancel', (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
     
-    db.prepare('UPDATE tasks SET status = ?, end_time = CURRENT_TIMESTAMP WHERE id = ?').run('cancelled', req.params.id);
+    db.prepare('UPDATE tasks SET status = ?, end_time = datetime(\'now\',\'localtime\') WHERE id = ?').run('cancelled', req.params.id);
     res.json({ success: true, message: 'Task cancelled' });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to cancel task' });

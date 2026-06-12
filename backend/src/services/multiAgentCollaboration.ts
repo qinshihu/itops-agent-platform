@@ -525,7 +525,7 @@ ${this.context.conversationHistory.slice(0, 5).map(msg =>
     
     db.prepare(`
       INSERT INTO knowledge_base (id, title, category, content, created_at)
-      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, datetime('now','localtime'))
     `).run(id, title, category, conversationText);
 
     return id;

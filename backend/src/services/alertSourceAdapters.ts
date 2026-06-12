@@ -1,3 +1,5 @@
+import { logger } from '../utils/logger';
+
 export interface NormalizedAlert {
   external_id?: string;
   source: string;
@@ -117,6 +119,7 @@ export function adaptZabbix(payload: unknown): AlertAdapterResult {
     }
 
     const host = (hostObj?.NAME as string) || (body.host as string) || ((eventObj?.host as Record<string, unknown>)?.name as string) || 'Unknown';
+    const hostIp = (hostObj?.IP as string) || (body.host_ip as string) || '';
     const rawSeverity = (triggerObj?.SEVERITY as string) || (triggerObj?.PRIORITY as string | number) || (body.severity as string | number) || ((eventObj?.severity as string));
     const severity = normalizeSeverity(rawSeverity);
     const eventId = (body.EVENT as Record<string, unknown>)?.ID || (eventObj?.id as string) || (body.eventid as string);
@@ -130,6 +133,7 @@ export function adaptZabbix(payload: unknown): AlertAdapterResult {
     const isResolved = eventValue === '0';
     const content = [
       `Host: ${host}`,
+      hostIp ? `IP: ${hostIp}` : '',
       `Trigger: ${trigger}`,
       item ? `Item: ${item}` : '',
       itemValue ? `Value: ${itemValue}` : '',
@@ -145,6 +149,7 @@ export function adaptZabbix(payload: unknown): AlertAdapterResult {
       content,
       metadata: {
         zabbix_host: host,
+        zabbix_host_ip: hostIp,
         zabbix_trigger_id: triggerId,
         zabbix_event_id: eventId,
         zabbix_item: item,

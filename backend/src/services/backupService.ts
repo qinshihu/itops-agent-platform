@@ -1,14 +1,130 @@
 import fs from 'fs';
 import path from 'path';
-import { createHash } from 'crypto';
+import crypto, { createHash, createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
 import { createGzip, createGunzip } from 'zlib';
 import { pipeline } from 'stream/promises';
 import { v4 as uuidv4 } from 'uuid';
 import Database from 'better-sqlite3';
+import { scheduleJob } from 'node-schedule';
 import db from '../models/database';
 import { logger } from '../utils/logger';
 import { env } from '../utils/env';
 import { gracefulRestart } from './restartService';
+
+// AES-256-GCM 加密配置（用于备份文件加密，带认证标签）
+const BACKUP_ENC_MAGIC = Buffer.from('ITP_ENC_V2');  // 文件头标记
+const BACKUP_ENC_ALGORITHM = 'aes-256-gcm';
+const BACKUP_ENC_KEY_LEN = 32;
+const BACKUP_ENC_IV_LEN = 16;
+const BACKUP_ENC_TAG_LEN = 16;
+const BACKUP_ENC_SALT_LEN = 32;
+
+/**
+ * 从 JWT_SECRET 派生备份加密密钥
+ * 使用 scrypt 密钥派生函数
+ */
+function deriveBackupKey(): Buffer {
+  const secret = env.JWT_SECRET || 'itops-default-backup-key';
+  const salt = `itops-backup-key-v1:${env.NODE_ENV || 'production'}`;
+  return scryptSync(secret, salt, BACKUP_ENC_KEY_LEN, { N: 16384, r: 8, p: 1 });
+}
+
+/**
+ * AES-256-GCM 加密备份文件
+ * 格式: [magic(8B)][salt(32B)][iv(16B)][ciphertext][tag(16B)]
+ */
+export async function encryptBackupFile(srcPath: string, destPath: string): Promise<{ checksum: string }> {
+  const key = deriveBackupKey();
+  const salt = randomBytes(BACKUP_ENC_SALT_LEN);
+  const iv = randomBytes(BACKUP_ENC_IV_LEN);
+  const cipher = createCipheriv(BACKUP_ENC_ALGORITHM, key, iv);
+
+  const writeStream = fs.createWriteStream(destPath);
+  // 写入头部: magic + salt + iv
+  writeStream.write(BACKUP_ENC_MAGIC);
+  writeStream.write(salt);
+  writeStream.write(iv);
+
+  await new Promise<void>((resolve, reject) => {
+    const readStream = fs.createReadStream(srcPath);
+    readStream.pipe(cipher).pipe(writeStream);
+    writeStream.on('finish', () => {
+      const tag = cipher.getAuthTag();
+      fs.appendFileSync(destPath, tag);
+      resolve();
+    });
+    writeStream.on('error', reject);
+    readStream.on('error', reject);
+    cipher.on('error', reject);
+  });
+
+  const checksum = createHash('sha256').update(fs.readFileSync(destPath)).digest('hex');
+  return { checksum };
+}
+
+/**
+ * AES-256-GCM 解密备份文件
+ */
+export async function decryptBackupFile(srcPath: string, destPath: string): Promise<void> {
+  const fd = fs.openSync(srcPath, 'r');
+  const magicBuf = Buffer.alloc(BACKUP_ENC_MAGIC.length);
+  fs.readSync(fd, magicBuf, 0, BACKUP_ENC_MAGIC.length, 0);
+
+  // 兼容旧格式：旧 CBC 格式或未加密文件
+  if (!magicBuf.equals(BACKUP_ENC_MAGIC)) {
+    fs.closeSync(fd);
+    fs.copyFileSync(srcPath, destPath);
+    return;
+  }
+
+  const salt = Buffer.alloc(BACKUP_ENC_SALT_LEN);
+  const iv = Buffer.alloc(BACKUP_ENC_IV_LEN);
+  const tag = Buffer.alloc(BACKUP_ENC_TAG_LEN);
+
+  const offset1 = BACKUP_ENC_MAGIC.length;
+  const offset2 = offset1 + BACKUP_ENC_SALT_LEN;
+  const headerSize = offset2 + BACKUP_ENC_IV_LEN;
+
+  fs.readSync(fd, salt, 0, BACKUP_ENC_SALT_LEN, offset1);
+  fs.readSync(fd, iv, 0, BACKUP_ENC_IV_LEN, offset2);
+
+  const stat = fs.fstatSync(fd);
+  const ciphertextLen = stat.size - headerSize - BACKUP_ENC_TAG_LEN;
+  fs.readSync(fd, tag, 0, BACKUP_ENC_TAG_LEN, headerSize + ciphertextLen);
+
+  const key = deriveBackupKey();
+  const decipher = createDecipheriv(BACKUP_ENC_ALGORITHM, key, iv);
+  decipher.setAuthTag(tag);
+
+  const ciphertext = Buffer.alloc(ciphertextLen);
+  fs.readSync(fd, ciphertext, 0, ciphertextLen, headerSize);
+  fs.closeSync(fd);
+
+  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  fs.writeFileSync(destPath, decrypted);
+}
+
+/**
+ * 检查备份文件是否为加密格式
+ */
+export function isEncryptedBackup(filePath: string): boolean {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const magicBuf = Buffer.alloc(BACKUP_ENC_MAGIC.length);
+    fs.readSync(fd, magicBuf, 0, BACKUP_ENC_MAGIC.length, 0);
+    fs.closeSync(fd);
+    return magicBuf.equals(BACKUP_ENC_MAGIC);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 检查是否应启用备份加密
+ */
+export function shouldEncryptBackup(): boolean {
+  return process.env.BACKUP_ENCRYPTION_ENABLED !== 'false';
+}
 
 async function runGzip(src: string, dest: string): Promise<void> {
   const srcStream = fs.createReadStream(src);
@@ -58,9 +174,34 @@ const DEFAULT_CONFIG: BackupConfig = {
 export class BackupService {
   private config: BackupConfig = DEFAULT_CONFIG;
   private timer: NodeJS.Timeout | null = null;
+  private scheduleTimer: import('node-schedule').Job | null = null;
   private backupHistory: BackupInfo[] = [];
   private isRunning = false;
   private isInitialized = false;
+
+  /**
+   * 获取自上次备份以来的小时数（供自监控服务使用）
+   * 如果超过 48 小时未备份，返回负数表示超时阈值
+   */
+  getLastBackupAgeHours(): number {
+    if (this.backupHistory.length === 0) {
+      return -1; // 从未备份
+    }
+    const lastBackup = this.backupHistory[0];
+    if (!lastBackup.createdAt) return -1;
+    const ageMs = Date.now() - new Date(lastBackup.createdAt).getTime();
+    return ageMs / (1000 * 60 * 60);
+  }
+
+  /**
+   * 检查备份是否健康（用于自监控告警）
+   */
+  isHealthy(): boolean {
+    const ageHours = this.getLastBackupAgeHours();
+    // 如果从未备份或超过 48 小时未成功备份，认为不健康
+    if (ageHours < 0) return true; // 从未备份不算不健康
+    return ageHours < 48;
+  }
 
   constructor() {
     // 构造函数不进行数据库操作，等待 init() 显式调用
@@ -155,7 +296,7 @@ export class BackupService {
     const json = JSON.stringify(this.config);
     db.prepare(`
       INSERT OR REPLACE INTO settings (key, value, updated_at)
-      VALUES ('backup_config', ?, CURRENT_TIMESTAMP)
+      VALUES ('backup_config', ?, datetime('now','localtime'))
     `).run(json);
   }
 
@@ -190,7 +331,7 @@ export class BackupService {
     const json = JSON.stringify(this.backupHistory.slice(-50));
     db.prepare(`
       INSERT OR REPLACE INTO settings (key, value, updated_at)
-      VALUES ('backup_history', ?, CURRENT_TIMESTAMP)
+      VALUES ('backup_history', ?, datetime('now','localtime'))
     `).run(json);
   }
 
@@ -283,6 +424,23 @@ export class BackupService {
         }
       }
 
+      // AES 加密备份文件（默认启用）
+      if (shouldEncryptBackup()) {
+        const encryptedPath = `${backupInfo.filePath}.enc`;
+        try {
+          logger.info('🔐 Encrypting backup file', { from: backupInfo.filePath, to: encryptedPath });
+          const { checksum } = await encryptBackupFile(backupInfo.filePath, encryptedPath);
+          logger.info('Encryption done, removing original file');
+          fs.unlinkSync(backupInfo.filePath);
+          backupInfo.filePath = encryptedPath;
+          backupInfo.filename = `${backupInfo.filename}.enc`;
+          backupInfo.checksum = checksum;
+          logger.info('Backup info updated with encryption', { newFilePath: backupInfo.filePath });
+        } catch (encryptError) {
+          logger.warn('Encryption failed, keeping unencrypted backup', encryptError as Error);
+        }
+      }
+
       // 确保文件存在
       logger.info('Checking if backup file exists', { filePath: backupInfo.filePath });
       if (!fs.existsSync(backupInfo.filePath)) {
@@ -336,32 +494,62 @@ export class BackupService {
     try {
       logger.info('Verifying backup integrity', { path: backupPath });
       
-      let dbPath = backupPath;
+      let workPath = backupPath;
+      const tempFiles: string[] = [];
       let tempDb: Database.Database | null = null;
       
-      if (backupPath.endsWith('.gz')) {
-        const tempPath = backupPath.replace('.gz', '');
-        await runGunzip(backupPath, tempPath);
-        dbPath = tempPath;
+      // 处理加密文件
+      if (isEncryptedBackup(backupPath)) {
+        const decryptedPath = backupPath + '.decrypted';
+        await decryptBackupFile(backupPath, decryptedPath);
+        tempFiles.push(decryptedPath);
+        workPath = decryptedPath;
+      }
+      
+      // 处理压缩文件
+      if (workPath.endsWith('.gz')) {
+        const decompressedPath = workPath.replace(/\.gz$/, '');
+        if (decompressedPath !== workPath) {
+          await runGunzip(workPath, decompressedPath);
+          tempFiles.push(decompressedPath);
+          workPath = decompressedPath;
+        }
+      }
+      
+      // 对于 .enc 结尾的文件，去掉 .enc
+      if (workPath.endsWith('.enc')) {
+        const decryptedPath = workPath.replace(/\.enc$/, '');
+        await decryptBackupFile(workPath, decryptedPath);
+        tempFiles.push(decryptedPath);
+        workPath = decryptedPath;
       }
       
       try {
-        tempDb = new Database(dbPath, { readonly: true });
+        tempDb = new Database(workPath, { readonly: true });
         
-        const integrityCheck = tempDb.prepare('PRAGMA integrity_check').get() as { integrity_check: string };
+        // 完整性检查
+        const integrityRow = tempDb.prepare('PRAGMA integrity_check').get() as { integrity_check: string };
+        const integrityCheck = integrityRow?.integrity_check || '';
         
-        if (integrityCheck.integrity_check !== 'ok') {
+        if (integrityCheck !== 'ok') {
           logger.error('Backup verification failed', { 
-            integrityCheck: integrityCheck.integrity_check 
+            integrityCheck
           });
           return false;
         }
         
+        // 额外验证：检查关键表是否存在
         const tableCount = (tempDb.prepare("SELECT COUNT(*) as count FROM sqlite_master WHERE type='table'").get() as { count: number }).count;
+        
+        // 检查是否有用户数据
+        const userCount = (tempDb.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number })?.count ?? 0;
+        const agentCount = (tempDb.prepare('SELECT COUNT(*) as count FROM agents').get() as { count: number })?.count ?? 0;
         
         logger.info('Backup verification successful', {
           tableCount,
-          integrityCheck: integrityCheck.integrity_check
+          integrityCheck,
+          userCount,
+          agentCount
         });
         
         return true;
@@ -370,8 +558,15 @@ export class BackupService {
           tempDb.close();
         }
         
-        if (backupPath.endsWith('.gz') && fs.existsSync(dbPath)) {
-          fs.unlinkSync(dbPath);
+        // 清理临时文件
+        for (const tmpFile of tempFiles) {
+          try {
+            if (fs.existsSync(tmpFile)) {
+              fs.unlinkSync(tmpFile);
+            }
+          } catch {
+            // 忽略清理错误
+          }
         }
       }
     } catch (error) {
@@ -424,8 +619,29 @@ export class BackupService {
   startAutoBackup(): void {
     if (!this.config.enabled) return;
     
+    // 使用 node-schedule 实现精确的定时备份
+    // 默认每天凌晨 3:00 执行
+    const backupCron = process.env.BACKUP_CRON || '0 3 * * *';
+    
+    // 同时也保留基于间隔的倒计时作为补充
     const intervalMs = this.config.intervalHours * 60 * 60 * 1000;
     
+    // 启动定时任务
+    try {
+      this.scheduleTimer = scheduleJob(backupCron, async () => {
+        try {
+          logger.info('⏰ Scheduled backup trigger (daily 3AM)');
+          await this.createBackup('auto');
+        } catch (error) {
+          logger.error('Scheduled auto backup failed', error as Error);
+        }
+      });
+      logger.info(`Scheduled backup set: ${backupCron}`);
+    } catch (error) {
+      logger.warn('Failed to set scheduled backup via cron, falling back to interval', error as Error);
+    }
+    
+    // 间隔备份作为 backup（如果定时任务失败则使用间隔）
     this.timer = setInterval(async () => {
       try {
         await this.createBackup('auto');
@@ -435,15 +651,19 @@ export class BackupService {
     }, intervalMs);
     this.timer.unref();
 
-    logger.info(`Auto backup started, interval: ${this.config.intervalHours} hours`);
+    logger.info(`Auto backup started, schedule: ${backupCron}, interval: ${this.config.intervalHours} hours`);
   }
 
   stopAutoBackup(): void {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
-      logger.info('Auto backup stopped');
     }
+    if (this.scheduleTimer) {
+      this.scheduleTimer.cancel();
+      this.scheduleTimer = null;
+    }
+    logger.info('Auto backup stopped');
   }
 
   getHistory(): BackupInfo[] {
@@ -453,10 +673,12 @@ export class BackupService {
   getStatus(): {
     isRunning: boolean;
     lastBackup?: BackupInfo;
+    lastBackupAgeHours: number;
     nextScheduledBackup?: string;
     config: BackupConfig;
     totalBackups: number;
     totalSize: number;
+    healthy: boolean;
   } {
     const files = fs.existsSync(this.config.backupDir)
       ? fs.readdirSync(this.config.backupDir).filter(f => f.startsWith('itops-backup-'))
@@ -470,12 +692,16 @@ export class BackupService {
       }
     }, 0);
 
+    const lastBackupAgeHours = this.getLastBackupAgeHours();
+
     return {
       isRunning: this.isRunning,
       lastBackup: this.backupHistory[0],
+      lastBackupAgeHours,
       config: this.getConfig(),
       totalBackups: files.length,
-      totalSize
+      totalSize,
+      healthy: this.isHealthy(),
     };
   }
 
@@ -508,17 +734,28 @@ export class BackupService {
     this.isRestoring = true;
     let restorePath = backup.filePath;
     let tempDbPath: string | null = null;
+    let afterDecryptPath: string | null = null;
     const dbPath = env.DATABASE_PATH;
 
     try {
-      if (backup.filePath.endsWith('.gz')) {
-        tempDbPath = backup.filePath.replace(/\.gz$/, '');
-        await runGunzip(backup.filePath, tempDbPath);
-        restorePath = tempDbPath;
+      // 解密加密的备份
+      if (backup.filePath.endsWith('.enc')) {
+        const decryptedPath = backup.filePath.replace(/\.enc$/, '');
+        logger.info('🔓 Decrypting backup file before restore', { from: backup.filePath });
+        await decryptBackupFile(backup.filePath, decryptedPath);
+        afterDecryptPath = decryptedPath;
+        restorePath = decryptedPath;
+      }
+
+      if (restorePath.endsWith('.gz')) {
+        const decompressedPath = restorePath.replace(/\.gz$/, '');
+        await runGunzip(restorePath, decompressedPath);
+        tempDbPath = decompressedPath;
+        restorePath = decompressedPath;
       }
 
       if (!fs.existsSync(restorePath)) {
-        throw new Error('Decompressed backup file not found');
+        throw new Error('Decompressed/decrypted backup file not found');
       }
 
       const verifyDb = new Database(restorePath, { readonly: true, fileMustExist: true });
@@ -552,6 +789,9 @@ export class BackupService {
     } finally {
       if (tempDbPath && fs.existsSync(tempDbPath)) {
         fs.unlinkSync(tempDbPath);
+      }
+      if (afterDecryptPath && fs.existsSync(afterDecryptPath)) {
+        fs.unlinkSync(afterDecryptPath);
       }
       this.isRestoring = false;
     }

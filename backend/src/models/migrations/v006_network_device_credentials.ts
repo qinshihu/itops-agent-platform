@@ -29,8 +29,8 @@ const v006NetworkDeviceCredentials: Migration = {
         status TEXT DEFAULT 'online',
         last_inspection_at DATETIME,
         last_inspection_result TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (ssh_key_id) REFERENCES ssh_keys(id) ON DELETE SET NULL
       );
 
@@ -78,8 +78,8 @@ const v006NetworkDeviceCredentials: Migration = {
         status TEXT DEFAULT 'online',
         last_inspection_at DATETIME,
         last_inspection_result TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
 
       INSERT INTO network_devices_backup (

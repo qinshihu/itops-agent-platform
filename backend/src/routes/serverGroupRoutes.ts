@@ -82,12 +82,35 @@ router.put('/:id', (req, res) => {
         description = COALESCE(?, description),
         parent_id = COALESCE(?, parent_id),
         sort_order = COALESCE(?, sort_order),
-        updated_at = CURRENT_TIMESTAMP
+        updated_at = datetime('now','localtime')
     WHERE id = ?
   `).run(name || null, description !== undefined ? description : null, parent_id !== undefined ? parent_id : null, sort_order !== undefined ? sort_order : null, id);
 
   logger.info(`Server group updated: ${id}`);
   res.json({ success: true });
+});
+
+router.delete('/mapping', (req, res) => {
+  const { server_id, group_id } = req.query as { server_id: string; group_id: string };
+
+  if (!server_id || !group_id) {
+    res.status(400).json({ success: false, error: '缺少 server_id 或 group_id' });
+    return;
+  }
+
+  db.prepare('DELETE FROM server_group_mapping WHERE server_id = ? AND group_id = ?').run(server_id, group_id);
+  res.json({ success: true });
+});
+
+router.get('/servers/:serverId', (req, res) => {
+  const { serverId } = req.params;
+  const groups = db.prepare(`
+    SELECT sg.* FROM server_groups sg
+    JOIN server_group_mapping sgm ON sg.id = sgm.group_id
+    WHERE sgm.server_id = ?
+    ORDER BY sg.sort_order ASC
+  `).all(serverId);
+  res.json({ success: true, data: groups });
 });
 
 router.delete('/:id', (req, res) => {
@@ -132,7 +155,7 @@ router.post('/:id/move', (req, res) => {
 
   db.prepare(`
     UPDATE server_groups 
-    SET parent_id = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP
+    SET parent_id = ?, sort_order = ?, updated_at = datetime('now','localtime')
     WHERE id = ?
   `).run(new_parent_id || null, sort_order !== undefined ? sort_order : group.sort_order, id);
 
@@ -166,29 +189,6 @@ router.post('/mapping', (req, res) => {
   `).run(server_id, group_id);
 
   res.json({ success: true });
-});
-
-router.delete('/mapping', (req, res) => {
-  const { server_id, group_id } = req.query as { server_id: string; group_id: string };
-
-  if (!server_id || !group_id) {
-    res.status(400).json({ success: false, error: '缺少 server_id 或 group_id' });
-    return;
-  }
-
-  db.prepare('DELETE FROM server_group_mapping WHERE server_id = ? AND group_id = ?').run(server_id, group_id);
-  res.json({ success: true });
-});
-
-router.get('/servers/:serverId', (req, res) => {
-  const { serverId } = req.params;
-  const groups = db.prepare(`
-    SELECT sg.* FROM server_groups sg
-    JOIN server_group_mapping sgm ON sg.id = sgm.group_id
-    WHERE sgm.server_id = ?
-    ORDER BY sg.sort_order ASC
-  `).all(serverId);
-  res.json({ success: true, data: groups });
 });
 
 router.get('/groups/:groupId/servers', (req, res) => {

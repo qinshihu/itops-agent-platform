@@ -162,7 +162,7 @@ router.post('/:id/unlock', requireRole('admin'), (req: Request, res: Response) =
     
     db.prepare(`
       UPDATE users 
-      SET failed_login_attempts = 0, locked_until = NULL, updated_at = CURRENT_TIMESTAMP 
+      SET failed_login_attempts = 0, locked_until = NULL, updated_at = datetime('now','localtime') 
       WHERE id = ?
     `).run(id);
     

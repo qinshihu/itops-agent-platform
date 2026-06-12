@@ -1,47 +1,72 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { lazy, Suspense } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/layout/Layout';
-import Login from './pages/Login';
-import ForcePasswordChange from './pages/ForcePasswordChange';
-import Dashboard from './pages/Dashboard';
-import Servers from './pages/Servers';
-import Agents from './pages/Agents';
-import Workflows from './pages/Workflows';
-import WorkflowEditor from './pages/WorkflowEditor';
-import Tasks from './pages/Tasks';
-import Alerts from './pages/Alerts';
-import AlertMappings from './pages/AlertMappings';
-import Knowledge from './pages/Knowledge';
-import Scripts from './pages/Scripts';
-import ScheduledTasks from './pages/ScheduledTasks';
-import AuditLogs from './pages/AuditLogs';
-import Notifications from './pages/Notifications';
-import Reports from './pages/Reports';
-import Users from './pages/Users';
-import Settings from './pages/Settings';
-import AlertNoiseManagement from './pages/AlertNoiseManagement';
-import RootCauseAnalysis from './pages/RootCauseAnalysis';
-import TerminalPage from './pages/TerminalPage';
-import RemoteDesktop from './pages/RemoteDesktop';
-import BigScreenDashboard from './pages/BigScreenDashboard';
-import RemediationPolicies from './pages/RemediationPolicies';
-import RemediationPolicyEditor from './pages/RemediationPolicyEditor';
-import RemediationExecutions from './pages/RemediationExecutions';
-import RemediationDashboard from './pages/RemediationDashboard';
-import Topology from './pages/Topology';
-import AIRootCause from './pages/AIRootCause';
-import RCADetail from './pages/RCADetail';
-import RemediationWorkbench from './pages/RemediationWorkbench';
-import AIInsights from './pages/AIInsights';
-import NetworkDevices from './pages/NetworkDevices';
-import SSHKeys from './pages/SSHKeys';
-import AIModels from './pages/AIModels';
-import NotFound from './pages/NotFound';
+
+// ==================== 代码分割（按需加载）====================
+const Login = lazy(() => import('./pages/Login'));
+const ForcePasswordChange = lazy(() => import('./pages/ForcePasswordChange'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Servers = lazy(() => import('./pages/Servers'));
+const Agents = lazy(() => import('./pages/Agents'));
+const Workflows = lazy(() => import('./pages/Workflows'));
+const WorkflowEditor = lazy(() => import('./pages/WorkflowEditor'));
+const Tasks = lazy(() => import('./pages/Tasks'));
+const Alerts = lazy(() => import('./pages/Alerts'));
+const AlertMappings = lazy(() => import('./pages/AlertMappings'));
+const Knowledge = lazy(() => import('./pages/Knowledge'));
+const Scripts = lazy(() => import('./pages/Scripts'));
+const ScheduledTasks = lazy(() => import('./pages/ScheduledTasks'));
+const AuditLogs = lazy(() => import('./pages/AuditLogs'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Users = lazy(() => import('./pages/Users'));
+const Settings = lazy(() => import('./pages/Settings'));
+const AlertNoiseManagement = lazy(() => import('./pages/AlertNoiseManagement'));
+const AlertAutoAnalysis = lazy(() => import('./pages/AlertAutoAnalysis'));
+const InspectionCenter = lazy(() => import('./pages/InspectionCenter'));
+const RootCauseAnalysis = lazy(() => import('./pages/RootCauseAnalysis'));
+const TerminalPage = lazy(() => import('./pages/TerminalPage'));
+const RemoteDesktop = lazy(() => import('./pages/RemoteDesktop'));
+const BigScreenDashboard = lazy(() => import('./pages/BigScreenDashboard'));
+const RemediationPolicies = lazy(() => import('./pages/RemediationPolicies'));
+const RemediationPolicyEditor = lazy(() => import('./pages/RemediationPolicyEditor'));
+const RemediationExecutions = lazy(() => import('./pages/RemediationExecutions'));
+const RemediationDashboard = lazy(() => import('./pages/RemediationDashboard'));
+const Topology = lazy(() => import('./pages/Topology'));
+const AIRootCause = lazy(() => import('./pages/AIRootCause'));
+const RCADetail = lazy(() => import('./pages/RCADetail'));
+const RemediationWorkbench = lazy(() => import('./pages/RemediationWorkbench'));
+const AIInsights = lazy(() => import('./pages/AIInsights'));
+const NetworkDevices = lazy(() => import('./pages/NetworkDevices'));
+const SSHKeys = lazy(() => import('./pages/SSHKeys'));
+const AIModels = lazy(() => import('./pages/AIModels'));
+const SNMPPage = lazy(() => import('./pages/SNMP'));
+const NetworkDiscoveryPage = lazy(() => import('./pages/NetworkDiscovery'));
+const AlertCorrelationGroupsPage = lazy(() => import('./pages/AlertCorrelationGroups'));
+const FrontendTests = lazy(() => import('./pages/FrontendTests'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+
+// ==================== 加载占位 ====================
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-screen bg-slate-900">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-slate-400 text-sm">加载中...</p>
+      </div>
+    </div>
+  );
+}
+
+function SuspenseRoute({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<PageLoader />}>{children}</Suspense>;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -56,57 +81,63 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
-      <AuthProvider>
-        <ToastProvider>
-          <QueryClientProvider client={queryClient}>
-            <BrowserRouter>
-            <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/force-password-change" element={<ProtectedRoute><ForcePasswordChange /></ProtectedRoute>} />
-            <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-              <Route index element={<Navigate to="/dashboard" replace />} />
-              <Route path="dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-              <Route path="servers" element={<ProtectedRoute><Servers /></ProtectedRoute>} />
-              <Route path="ssh-keys" element={<ProtectedRoute><SSHKeys /></ProtectedRoute>} />
-              <Route path="network-devices" element={<ProtectedRoute><NetworkDevices /></ProtectedRoute>} />
-              <Route path="agents" element={<ProtectedRoute><Agents /></ProtectedRoute>} />
-              <Route path="workflows" element={<ProtectedRoute><Workflows /></ProtectedRoute>} />
-              <Route path="workflows/:id" element={<ProtectedRoute><WorkflowEditor /></ProtectedRoute>} />
-              <Route path="tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
-              <Route path="alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
-              <Route path="alert-mappings" element={<ProtectedRoute><AlertMappings /></ProtectedRoute>} />
-              <Route path="knowledge" element={<ProtectedRoute><Knowledge /></ProtectedRoute>} />
-              <Route path="scripts" element={<ProtectedRoute><Scripts /></ProtectedRoute>} />
-              <Route path="scheduled-tasks" element={<ProtectedRoute><ScheduledTasks /></ProtectedRoute>} />
-              <Route path="audit" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
-              <Route path="notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-              <Route path="reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-              <Route path="users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
-              <Route path="settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-              <Route path="alert-noise" element={<ProtectedRoute><AlertNoiseManagement /></ProtectedRoute>} />
-              <Route path="root-cause-analysis" element={<ProtectedRoute><RootCauseAnalysis /></ProtectedRoute>} />
-              <Route path="terminal" element={<ProtectedRoute><TerminalPage /></ProtectedRoute>} />
-<Route path="remote-desktop" element={<ProtectedRoute><RemoteDesktop /></ProtectedRoute>} />
-<Route path="remote-desktop/:serverId" element={<ProtectedRoute><RemoteDesktop /></ProtectedRoute>} />
-<Route path="big-screen" element={<ProtectedRoute><BigScreenDashboard /></ProtectedRoute>} />
-<Route path="remediation-policies" element={<ProtectedRoute><RemediationPolicies /></ProtectedRoute>} />
-              <Route path="remediation-policies/:id" element={<ProtectedRoute><RemediationPolicyEditor /></ProtectedRoute>} />
-              <Route path="remediation-executions" element={<ProtectedRoute><RemediationExecutions /></ProtectedRoute>} />
-              <Route path="remediation-dashboard" element={<ProtectedRoute><RemediationDashboard /></ProtectedRoute>} />
-              <Route path="topology" element={<ProtectedRoute><Topology /></ProtectedRoute>} />
-              <Route path="ai-root-cause" element={<ProtectedRoute><AIRootCause /></ProtectedRoute>} />
-              <Route path="ai-root-cause/:id" element={<ProtectedRoute><RCADetail /></ProtectedRoute>} />
-              <Route path="remediation-workbench" element={<ProtectedRoute><RemediationWorkbench /></ProtectedRoute>} />
-              <Route path="ai-insights" element={<ProtectedRoute><AIInsights /></ProtectedRoute>} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </QueryClientProvider>
-    </ToastProvider>
-    </AuthProvider>
-    </ThemeProvider>
-  </ErrorBoundary>
+        <AuthProvider>
+          <ToastProvider>
+            <QueryClientProvider client={queryClient}>
+              <BrowserRouter>
+                <Routes>
+                  <Route path="/login" element={<SuspenseRoute><Login /></SuspenseRoute>} />
+                  <Route path="/force-password-change" element={<SuspenseRoute><ProtectedRoute><ForcePasswordChange /></ProtectedRoute></SuspenseRoute>} />
+                  <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                    <Route index element={<Navigate to="/dashboard" replace />} />
+                    <Route path="dashboard" element={<SuspenseRoute><ProtectedRoute><Dashboard /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="servers" element={<SuspenseRoute><ProtectedRoute><Servers /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="ssh-keys" element={<SuspenseRoute><ProtectedRoute><SSHKeys /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="network-devices" element={<SuspenseRoute><ProtectedRoute><NetworkDevices /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="agents" element={<SuspenseRoute><ProtectedRoute><Agents /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="workflows" element={<SuspenseRoute><ProtectedRoute><Workflows /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="workflows/:id" element={<SuspenseRoute><ProtectedRoute><WorkflowEditor /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="tasks" element={<SuspenseRoute><ProtectedRoute><Tasks /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="alerts" element={<SuspenseRoute><ProtectedRoute><Alerts /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="alert-mappings" element={<SuspenseRoute><ProtectedRoute><AlertMappings /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="knowledge" element={<SuspenseRoute><ProtectedRoute><Knowledge /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="scripts" element={<SuspenseRoute><ProtectedRoute><Scripts /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="scheduled-tasks" element={<SuspenseRoute><ProtectedRoute><ScheduledTasks /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="audit" element={<SuspenseRoute><ProtectedRoute><AuditLogs /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="notifications" element={<SuspenseRoute><ProtectedRoute><Notifications /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="reports" element={<SuspenseRoute><ProtectedRoute><Reports /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="users" element={<SuspenseRoute><ProtectedRoute><Users /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="settings" element={<SuspenseRoute><ProtectedRoute><Settings /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="alert-noise" element={<SuspenseRoute><ProtectedRoute><AlertNoiseManagement /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="root-cause-analysis" element={<SuspenseRoute><ProtectedRoute><RootCauseAnalysis /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="terminal" element={<SuspenseRoute><ProtectedRoute><TerminalPage /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="remote-desktop" element={<SuspenseRoute><ProtectedRoute><RemoteDesktop /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="alert-auto-analysis" element={<SuspenseRoute><ProtectedRoute><AlertAutoAnalysis /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="inspection-center" element={<SuspenseRoute><ProtectedRoute><InspectionCenter /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="remote-desktop/:serverId" element={<SuspenseRoute><ProtectedRoute><RemoteDesktop /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="big-screen" element={<SuspenseRoute><ProtectedRoute><BigScreenDashboard /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="remediation-policies" element={<SuspenseRoute><ProtectedRoute><RemediationPolicies /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="remediation-policies/:id" element={<SuspenseRoute><ProtectedRoute><RemediationPolicyEditor /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="remediation-executions" element={<SuspenseRoute><ProtectedRoute><RemediationExecutions /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="remediation-dashboard" element={<SuspenseRoute><ProtectedRoute><RemediationDashboard /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="topology" element={<SuspenseRoute><ProtectedRoute><Topology /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="ai-root-cause" element={<SuspenseRoute><ProtectedRoute><AIRootCause /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="ai-root-cause/:id" element={<SuspenseRoute><ProtectedRoute><RCADetail /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="remediation-workbench" element={<SuspenseRoute><ProtectedRoute><RemediationWorkbench /></ProtectedRoute></SuspenseRoute>} />
+                    <Route path="ai-insights" element={<SuspenseRoute><ProtectedRoute><AIInsights /></ProtectedRoute></SuspenseRoute>} />
+                  <Route path="frontend-tests" element={<SuspenseRoute><ProtectedRoute><FrontendTests /></ProtectedRoute></SuspenseRoute>} />
+                  <Route path="snmp" element={<SuspenseRoute><ProtectedRoute><SNMPPage /></ProtectedRoute></SuspenseRoute>} />
+                  <Route path="network-discovery" element={<SuspenseRoute><ProtectedRoute><NetworkDiscoveryPage /></ProtectedRoute></SuspenseRoute>} />
+                  <Route path="alert-correlation-groups" element={<SuspenseRoute><ProtectedRoute><AlertCorrelationGroupsPage /></ProtectedRoute></SuspenseRoute>} />
+                  </Route>
+                  <Route path="*" element={<SuspenseRoute><NotFound /></SuspenseRoute>} />
+                </Routes>
+              </BrowserRouter>
+            </QueryClientProvider>
+          </ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

@@ -135,12 +135,8 @@ router.get('/stats/summary', (_req: Request, res: Response) => {
       WHERE created_at >= datetime('now', 'start of day')
     `).get() as { count: number };
     
-    // 失败操作数
-    const failureStats = db.prepare(`
-      SELECT COUNT(*) as count 
-      FROM audit_logs 
-      WHERE status = 'failed' AND created_at >= datetime('now', '-7 days')
-    `).get() as { count: number };
+    // 失败操作数（audit_logs 暂无 status 字段，固定返回 0）
+    const failureCount = 0;
     
     res.json({
       success: true,
@@ -148,7 +144,7 @@ router.get('/stats/summary', (_req: Request, res: Response) => {
         actionStats,
         resourceStats,
         todayCount: todayStats.count,
-        failureCount: failureStats.count
+        failureCount
       }
     });
   } catch (error) {

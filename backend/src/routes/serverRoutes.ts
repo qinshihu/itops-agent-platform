@@ -103,7 +103,7 @@ router.put('/:id', validateParams(serverSchemas.serverId), validateBody(serverSc
            enabled = COALESCE(?, enabled),
            os_type = COALESCE(?, os_type),
            ssh_key_id = COALESCE(?, ssh_key_id),
-           updated_at = CURRENT_TIMESTAMP
+           updated_at = datetime('now','localtime')
        WHERE id = ?`
     ).run(
       name, hostname, port, username,

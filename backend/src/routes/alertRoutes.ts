@@ -6,6 +6,7 @@ import { alertNoiseReductionService } from '../services/alertNoiseReductionServi
 import { remediationService } from '../services/remediationService';
 import { rootCauseAnalysisService } from '../services/rootCauseAnalysisService';
 import { alertService } from '../services/alertService';
+import { alertAutoAnalyzer } from '../services/alertAutoAnalyzer';
 import { emitToAlerts } from '../websocket/handler';
 import { logger } from '../utils/logger';
 import { requireRole } from '../middleware/auth';
@@ -153,62 +154,14 @@ router.post('/', async (req: Request, res: Response) => {
         });
       }
 
-      setImmediate(async () => {
-        const io = getIOInstance();
-        try {
-          const tags = metadata?.tags ? (typeof metadata.tags === 'string' ? JSON.parse(metadata.tags) : metadata.tags) : [];
-          const alertForMatching = {
-            id,
-            source: source || 'unknown',
-            severity: severity || 'medium',
-            title: title,
-            content: content || '',
-            tags: Array.isArray(tags) ? tags : []
-          };
-
-          emitToAlerts(io!, 'remediation:started', {
-            alertId: id,
-            title: title,
-            timestamp: new Date().toISOString()
-          });
-
-          const autoRCAEnabled = db.prepare("SELECT value FROM settings WHERE key = 'auto_root_cause_enabled'").get() as { value: string } | undefined;
-          if (autoRCAEnabled?.value === 'true') {
-            logger.info('🔍 Auto RCA triggered for alert:', id);
-            rootCauseAnalysisService.analyzeByAlert(id, title, content || '').catch((err) => {
-              logger.error('Failed to auto-trigger RCA for alert:', err);
-            });
-          }
-
-          alertService.processDatabaseAlert(id);
-
-          const policies = await remediationService.matchAlertToPolicies(alertForMatching);
-          for (const policy of policies) {
-            const result = await remediationService.triggerRemediation(policy, alertForMatching);
-            emitToAlerts(io!, 'remediation:result', {
-              alertId: id,
-              policyId: policy.id,
-              policyName: policy.name,
-              executionId: result.id,
-              status: result.status,
-              timestamp: new Date().toISOString()
-            });
-          }
-
-          emitToAlerts(io!, 'remediation:completed', {
-            alertId: id,
-            totalPolicies: policies.length,
-            timestamp: new Date().toISOString()
-          });
-        } catch (error) {
-          logger.error('Failed to match remediation policies:', error);
-          emitToAlerts(io!, 'remediation:error', {
-            alertId: id,
-            error: error instanceof Error ? error.message : String(error),
-            timestamp: new Date().toISOString()
-          });
-        }
-      });
+      setImmediate(() => runAlertProcessingPipeline({
+        id,
+        source: source || 'unknown',
+        severity: severity || 'medium',
+        title,
+        content: content || '',
+        tags: metadata?.tags ? (Array.isArray(metadata.tags) ? metadata.tags : []): [],
+      }));
 
       res.status(201).json({
         success: true,
@@ -231,7 +184,7 @@ router.put('/:id/acknowledge', (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Alert not found' });
     }
     
-    db.prepare('UPDATE alerts SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run('acknowledged', id);
+    db.prepare('UPDATE alerts SET status = ?, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?').run('acknowledged', id);
     
     const updated = db.prepare('SELECT * FROM alerts WHERE id = ?').get(id);
     
@@ -256,7 +209,7 @@ router.put('/:id/resolve', (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Alert not found' });
     }
     
-    db.prepare('UPDATE alerts SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run('resolved', id);
+    db.prepare('UPDATE alerts SET status = ?, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?').run('resolved', id);
     
     const updated = db.prepare('SELECT * FROM alerts WHERE id = ?').get(id);
     
@@ -317,6 +270,173 @@ router.get('/stats/summary', (_req: Request, res: Response) => {
     });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to get alert stats' });
+  }
+});
+
+// ── 告警自动处理流水线（复用新建告警时的全部逻辑） ──
+interface AlertProcessingContext {
+  id: string;
+  source: string;
+  severity: string;
+  title: string;
+  content: string;
+  tags: string[];
+}
+
+async function runAlertProcessingPipeline(ctx: AlertProcessingContext): Promise<void> {
+  const io = getIOInstance();
+  try {
+    const { id, source, severity, title, content, tags } = ctx;
+
+    emitToAlerts(io!, 'remediation:started', {
+      alertId: id,
+      title,
+      timestamp: new Date().toISOString()
+    });
+
+    // 自动根因分析
+    const autoRCAEnabled = db.prepare("SELECT value FROM settings WHERE key = 'auto_root_cause_enabled'").get() as { value: string } | undefined;
+    if (autoRCAEnabled?.value === 'true') {
+      logger.info('🔍 Auto RCA triggered for alert:', id);
+      rootCauseAnalysisService.analyzeByAlert(id, title, content).catch((err) => {
+        logger.error('Failed to auto-trigger RCA for alert:', err);
+      });
+    }
+
+    // ── AI 自动分析 ──
+    if (severity === 'critical' || severity === 'high') {
+      alertAutoAnalyzer.analyzeAlert(id).catch((err: Error) => {
+        logger.error(`Failed to auto-analyze alert ${id}:`, err);
+      });
+    }
+
+    // 数据库告警处理
+    alertService.processDatabaseAlert(id);
+
+    // 匹配修复策略并执行
+    const alertForMatching = { id, source, severity, title, content, tags };
+    const policies = await remediationService.matchAlertToPolicies(alertForMatching);
+    for (const policy of policies) {
+      const result = await remediationService.triggerRemediation(policy, alertForMatching);
+      emitToAlerts(io!, 'remediation:result', {
+        alertId: id,
+        policyId: policy.id,
+        policyName: policy.name,
+        executionId: result.id,
+        status: result.status,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    emitToAlerts(io!, 'remediation:completed', {
+      alertId: id,
+      totalPolicies: policies.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Failed to process alert remediation:', error);
+    emitToAlerts(io!, 'remediation:error', {
+      alertId: ctx.id,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString()
+    });
+  }
+}
+
+// ── 手动触发告警处理（同步匹配 + 异步执行） ──
+router.post('/:id/process', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    if (!alert) {
+      return res.status(404).json({ success: false, error: '告警不存在' });
+    }
+
+    const source = (alert.source as string) || 'unknown';
+    const severity = (alert.severity as string) || 'medium';
+    const title = alert.title as string;
+    const content = (alert.content as string) || '';
+
+    // 解析 tags
+    let tags: string[] = [];
+    if (alert.metadata) {
+      try {
+        const meta = typeof alert.metadata === 'string' ? JSON.parse(alert.metadata as string) : alert.metadata;
+        tags = Array.isArray(meta.tags) ? meta.tags : [];
+      } catch { /* ignore */ }
+    }
+
+    const ctx: AlertProcessingContext = { id, source, severity, title, content, tags };
+
+    // 同步匹配：确认有哪些修复策略匹配了
+    let matchedPolicies: Array<{ id: string; name: string; execution_mode: string }> = [];
+    let executionIds: string[] = [];
+    let errorMsg: string | null = null;
+
+    try {
+      // 先跑 alertService 的数据库处理
+      alertService.processDatabaseAlert(id);
+
+      const policies = await remediationService.matchAlertToPolicies(ctx);
+      matchedPolicies = policies.map(p => ({
+        id: p.id,
+        name: p.name,
+        execution_mode: p.execution_mode
+      }));
+
+      // 触发执行（后台异步）
+      for (const policy of policies) {
+        const result = await remediationService.triggerRemediation(policy, ctx);
+        executionIds.push(result.id);
+      }
+    } catch (e) {
+      errorMsg = e instanceof Error ? e.message : String(e);
+      logger.error('Manual process alert error:', e);
+    }
+
+    // AI 自动分析 + RCA 放在后台不阻塞
+    setImmediate(() => {
+      // ── AI 自动分析 ──
+      if (severity === 'critical' || severity === 'high') {
+        alertAutoAnalyzer.analyzeAlert(id).catch((err: Error) => {
+          logger.error(`Failed to auto-analyze alert ${id}:`, err);
+        });
+      }
+
+      const autoRCAEnabled = db.prepare("SELECT value FROM settings WHERE key = 'auto_root_cause_enabled'").get() as { value: string } | undefined;
+      if (autoRCAEnabled?.value === 'true') {
+        rootCauseAnalysisService.analyzeByAlert(id, title, content).catch((err) => {
+          logger.error('Failed to auto-trigger RCA for alert:', err);
+        });
+      }
+
+      // 补发 WebSocket 事件
+      const io = getIOInstance();
+      if (io) {
+        emitToAlerts(io, 'remediation:completed', {
+          alertId: id,
+          totalPolicies: matchedPolicies.length,
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
+
+    res.json({
+      success: true,
+      message: errorMsg
+        ? `告警处理完成，但部分策略执行出错: ${errorMsg}`
+        : `成功匹配 ${matchedPolicies.length} 条修复策略${executionIds.length ? '，执行已触发' : ''}`,
+      data: {
+        alertId: id,
+        matchedPolicies,
+        executionIds,
+        error: errorMsg
+      }
+    });
+  } catch (error) {
+    logger.error('Failed to trigger manual alert processing:', error);
+    res.status(500).json({ success: false, error: '触发告警处理失败' });
   }
 });
 

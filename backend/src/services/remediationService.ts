@@ -216,32 +216,90 @@ class RemediationService {
   togglePolicy(id: string): RemediationPolicy {
     const policy = this.getPolicy(id);
     const newEnabled = policy.enabled ? 0 : 1;
-    db.prepare('UPDATE remediation_policies SET enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newEnabled, id);
+    db.prepare('UPDATE remediation_policies SET enabled = ?, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?').run(newEnabled, id);
     return this.getPolicy(id);
   }
 
+  /**
+   * 归一化严重级别为统一数字等级，解决不同监控系统的 severity 命名差异：
+   *   Zabbix:   disaster / critical / high / warning / medium / info
+   *   Prometheus:critical / warning / info
+   *   ES:        critical / high / medium / low
+   *
+   * 5=disaster  4=critical  3=high  2=warning/medium/average  1=info/low
+   */
+  private severityRank = new Map<string, number>([
+    ['disaster', 5],
+    ['critical', 4],
+    ['high', 3],
+    ['warning', 2],
+    ['medium', 2],
+    ['average', 2],
+    ['info', 1],
+    ['low', 1],
+  ]);
+
+  private severityMatches(policySeverity: string | null, alertSeverity: string | undefined): boolean {
+    if (!policySeverity) return true;
+    const pr = this.severityRank.get(policySeverity) ?? 0;
+    const ar = this.severityRank.get(alertSeverity ?? '') ?? 0;
+    // 策略要求 severity >= X，告警的 severity 也要 >= X
+    // 例: policy=warning(2) 匹配 alert=high(3) 或 warning(2) 或 medium(2)
+    //     policy=high(3) 只匹配 alert=critical(4)/high(3)
+    //     policy=medium(2) 不匹配 alert=info(1)
+    return ar >= pr;
+  }
+
   async matchAlertToPolicies(alert: { id: string; source: string; severity?: string; title?: string; content?: string; tags?: string[] }): Promise<RemediationPolicy[]> {
+    // 1. 先精确匹配 source（zabbix/prometheus/...）
+    const specificPolicies = this._matchBySource(alert);
+    if (specificPolicies.length > 0) return specificPolicies;
+
+    // 2. 没有匹配 → 降级到 source=null 的通用策略
+    const fallbackPolicies = this._matchBySource({ ...alert, source: '__any__' });
+    return fallbackPolicies;
+  }
+
+  private _matchBySource(alert: { id: string; source: string; severity?: string; title?: string; content?: string; tags?: string[] }): RemediationPolicy[] {
     const policies = db.prepare(`
       SELECT * FROM remediation_policies
-      WHERE enabled = 1 AND alert_source = ?
+      WHERE enabled = 1 AND (alert_source = ? OR alert_source = '*')
       ORDER BY
+        CASE
+          WHEN alert_source = ? THEN 0 ELSE 1
+        END,
         CASE alert_severity
           WHEN 'disaster' THEN 1
-          WHEN 'high' THEN 2
-          WHEN 'average' THEN 3
+          WHEN 'critical' THEN 2
+          WHEN 'high' THEN 3
           WHEN 'warning' THEN 4
+          WHEN 'medium' THEN 4
+          WHEN 'average' THEN 4
           ELSE 5
         END
-    `).all(alert.source) as RemediationPolicy[];
+    `).all(alert.source === '__any__' ? '*' : alert.source, alert.source) as RemediationPolicy[];
 
     return policies.filter(policy => {
-      if (policy.alert_severity && policy.alert_severity !== alert.severity) {
+      // 通配符匹配：策略的 alert_source 为 '*' 时匹配任意告警 source
+      if (!policy.alert_source || policy.alert_source === '*') {
+        // 通配符，不按 source 过滤
+      } else if (policy.alert_source !== alert.source) {
         return false;
       }
 
+      // severity 范围匹配
+      if (policy.alert_severity && !this.severityMatches(policy.alert_severity, alert.severity)) {
+        return false;
+      }
+
+      // 关键词匹配
       if (policy.alert_keywords) {
         try {
           const keywords = JSON.parse(policy.alert_keywords) as string[];
+          // __catch_all__ 特殊标记：跳过关键词检查，无条件匹配
+          if (keywords.length === 1 && keywords[0] === '__catch_all__') {
+            return true;
+          }
           const alertText = `${alert.title || ''} ${alert.content || ''}`.toLowerCase();
           if (!keywords.some(kw => alertText.includes(kw.toLowerCase()))) {
             return false;
@@ -252,9 +310,13 @@ class RemediationService {
         }
       }
 
+      // 标签匹配
       if (policy.alert_tags) {
         try {
           const tags = JSON.parse(policy.alert_tags) as string[];
+          if (tags.length === 1 && tags[0] === '__catch_all__') {
+            return true;
+          }
           const alertTags = alert.tags || [];
           if (!tags.some(t => alertTags.includes(t))) {
             return false;
@@ -267,6 +329,26 @@ class RemediationService {
 
       return true;
     });
+  }
+
+  /**
+   * 获取所有可用的 catch-all 兜底策略
+   */
+  getCatchAllPolicies(source: string): RemediationPolicy[] {
+    return db.prepare(`
+      SELECT * FROM remediation_policies
+      WHERE enabled = 1 AND alert_source = '*'
+      ORDER BY
+        CASE alert_severity
+          WHEN 'disaster' THEN 1
+          WHEN 'critical' THEN 2
+          WHEN 'high' THEN 3
+          WHEN 'warning' THEN 4
+          WHEN 'medium' THEN 4
+          WHEN 'average' THEN 4
+          ELSE 5
+        END
+    `).all() as RemediationPolicy[];
   }
 
   private isInCooldown(policy: RemediationPolicy, alert: { id: string }): boolean {
@@ -392,7 +474,7 @@ class RemediationService {
 
       db.prepare(`
         INSERT INTO tasks (id, workflow_id, name, status, context, created_at)
-        VALUES (?, ?, ?, 'pending', ?, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, 'pending', ?, datetime('now','localtime'))
       `).run(taskId, workflow.id, `自动修复: ${workflow.name}`, JSON.stringify(params));
 
       let nodes: WorkflowNode[] = [];
@@ -437,6 +519,7 @@ class RemediationService {
       } else {
         this.updateExecutionStatus(executionId, 'success');
         this.resolveAlert(execution.alert_id);
+        this.notifySelfHeal(execution.alert_id, alert?.title);
         this.updateCooldown(policy, alert);
         this.recordHistory(execution, policy, 'success');
       }
@@ -482,7 +565,7 @@ class RemediationService {
 
       db.prepare(`
         INSERT INTO tasks (id, workflow_id, name, status, context, created_at)
-        VALUES (?, ?, ?, 'pending', ?, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, 'pending', ?, datetime('now','localtime'))
       `).run(taskId, workflow.id, `修复验证: ${workflow.name}`, JSON.stringify(params));
 
       let nodes: WorkflowNode[] = [];
@@ -526,6 +609,7 @@ class RemediationService {
       });
 
       this.resolveAlert(execution.alert_id);
+      this.notifySelfHeal(execution.alert_id, alert?.title);
       this.updateCooldown(policy, alert);
       this.recordHistory(execution, policy, 'success');
 
@@ -574,7 +658,7 @@ class RemediationService {
       const taskId = uuidv4();
       db.prepare(`
         INSERT INTO tasks (id, workflow_id, name, status, context, created_at)
-        VALUES (?, ?, ?, 'pending', ?, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, 'pending', ?, datetime('now','localtime'))
       `).run(taskId, workflow.id, `回滚: ${workflow.name}`, JSON.stringify({ execution_id: executionId }));
 
       const parsedWorkflow: WorkflowParsed = {
@@ -869,7 +953,7 @@ class RemediationService {
   private resolveAlert(alertId: string): void {
     try {
       const result = db.prepare(`
-        UPDATE alerts SET status = 'resolved', updated_at = CURRENT_TIMESTAMP
+        UPDATE alerts SET status = 'resolved', updated_at = datetime('now','localtime')
         WHERE id = ?
       `).run(alertId);
       if (result.changes > 0) {
@@ -886,7 +970,7 @@ class RemediationService {
       db.prepare(`
         INSERT INTO remediation_cooldowns (policy_id, alert_id, cooldown_until)
         VALUES (?, ?, ?)
-        ON CONFLICT (policy_id, alert_id) DO UPDATE SET cooldown_until = excluded.cooldown_until, created_at = CURRENT_TIMESTAMP
+        ON CONFLICT (policy_id, alert_id) DO UPDATE SET cooldown_until = excluded.cooldown_until, created_at = datetime('now','localtime')
       `).run(policy.id, alert.id, cooldownUntil);
     }
   }
@@ -1308,6 +1392,27 @@ class RemediationService {
     }
 
     return audit;
+  }
+
+  /** 自愈成功后通知降噪系统 */
+  private notifySelfHeal(alertId: string | undefined, alertTitle: string | undefined): void {
+    if (!alertId) return;
+    try {
+      const alert = db.prepare('SELECT source, title FROM alerts WHERE id = ?').get(alertId) as { source: string; title: string } | undefined;
+      if (!alert) return;
+
+      // 标记该告警为「已自愈」，降噪系统据此降低同类告警优先级
+      db.prepare(`
+        INSERT OR REPLACE INTO settings (key, value)
+        VALUES (?, ?)
+      `).run(
+        `self_healed:${alert.source}:${alert.title}`,
+        new Date().toISOString()
+      );
+      logger.info(`🔄 [SelfHeal] Alert ${alertId} self-healed, noise reduction updated`);
+    } catch (e) {
+      logger.warn('Failed to update noise reduction after self-heal:', e);
+    }
   }
 }
 

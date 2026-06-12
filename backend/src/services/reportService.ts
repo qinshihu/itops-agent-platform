@@ -1,6 +1,8 @@
+import path from 'path';
 import db from '../models/database';
 import { randomUUID } from 'crypto';
 import { logger } from '../utils/logger';
+import PDFDocument from 'pdfkit';
 
 export interface ReportTemplate {
   id: string;
@@ -194,7 +196,7 @@ class ReportService {
         for (const template of this.presetTemplates) {
           db.prepare(`
             INSERT INTO reports (id, name, type, content, variables, is_preset, created_at, updated_at)
-            VALUES (?, ?, 'template', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            VALUES (?, ?, 'template', ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
           `).run(
             randomUUID(),
             template.name,
@@ -432,22 +434,71 @@ class ReportService {
     return result.changes > 0;
   }
 
-  async exportReport(reportId: string, format: 'pdf' | 'word' | 'markdown' = 'markdown'): Promise<{ content: string, type: string }> {
+  async exportReport(reportId: string, format: 'pdf' | 'word' | 'markdown' = 'markdown'): Promise<{ content: string | Buffer, type: string }> {
     const report = this.getReport(reportId);
     if (!report) {
       throw new Error('报告不存在');
     }
 
     if (format === 'pdf') {
-      return {
-        content: `# PDF导出: ${report.name}\n\n${report.content}`,
-        type: 'text/plain'
-      };
+      const pdf = new PDFDocument({ margin: 50, info: { Title: report.name } });
+
+      // 注册中文字体
+      const fontPath = path.join(__dirname, '..', '..', 'src', 'assets', 'fonts', 'NotoSansSC-Regular.ttf');
+      pdf.registerFont('CJK', fontPath);
+
+      const chunks: Buffer[] = [];
+      pdf.on('data', (chunk: Buffer) => chunks.push(chunk));
+      pdf.on('end', () => {});
+
+      // 标题
+      pdf.fontSize(18).font('CJK').text(report.name, { align: 'center' });
+      pdf.moveDown(0.5);
+      pdf.fontSize(9).font('CJK').fillColor('#666666')
+        .text(`生成时间: ${report.created_at || new Date().toLocaleString('zh-CN')}`, { align: 'center' });
+      pdf.moveDown(0.3);
+      pdf.fillColor('#cccccc').moveTo(50, pdf.y).lineTo(545, pdf.y).stroke();
+      pdf.moveDown(0.5);
+
+      // 正文内容 — 分段处理
+      pdf.fillColor('#000000').fontSize(11).font('CJK');
+      const lines = report.content.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('# ')) {
+          pdf.fontSize(15).font('CJK');
+          pdf.text(line.replace(/^# \s*/, ''), { underline: false });
+          pdf.fontSize(11).font('CJK');
+        } else if (line.startsWith('## ')) {
+          pdf.fontSize(13).font('CJK');
+          pdf.text(line.replace(/^## \s*/, ''));
+          pdf.fontSize(11).font('CJK');
+        } else if (line.startsWith('- ') || line.startsWith('* ')) {
+          pdf.text(line.replace(/^[-*] /, '  • '));
+        } else if (line.trim() === '---') {
+          pdf.fillColor('#cccccc').moveTo(50, pdf.y).lineTo(545, pdf.y).stroke();
+          pdf.fillColor('#000000');
+        } else if (line.trim() === '') {
+          pdf.moveDown(0.3);
+        } else {
+          pdf.text(line);
+        }
+      }
+
+      // PDFDocument 是 Readable stream，需监听 'end' 事件
+      const buffer = await new Promise<Buffer>((resolve) => {
+        pdf.on('end', () => resolve(Buffer.concat(chunks)));
+        pdf.end();
+      });
+
+      return { content: buffer, type: 'application/pdf' };
     } else if (format === 'word') {
-      return {
-        content: `# Word导出: ${report.name}\n\n${report.content}`,
-        type: 'text/plain'
-      };
+      // Word 导出：构建 .doc 内容（Word 可打开 HTML 内容）
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${report.name}</title></head><body>
+<h1>${report.name}</h1>
+<hr>
+<pre style="font-family: sans-serif;">${report.content.replace(/\n/g, '<br>')}</pre>
+</body></html>`;
+      return { content: html, type: 'application/msword' };
     }
 
     return {

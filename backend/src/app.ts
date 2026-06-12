@@ -40,6 +40,8 @@ import databaseRoutes from './routes/databaseRoutes';
 import knowledgeQAnythingRoutes from './routes/knowledgeQAnythingRoutes';
 import vncRoutes from './routes/vncRoutes';
 import networkDeviceRoutes from './routes/networkDeviceRoutes';
+import networkAdvancedRoutes from './routes/networkAdvancedRoutes';
+import snmpRoutes from './routes/snmpRoutes';
 import sshKeyRoutes from './routes/sshKeyRoutes';
 import topologyRoutes from './routes/topologyRoutes';
 import changeRoutes from './routes/changeRoutes';
@@ -59,10 +61,20 @@ import { env } from './utils/env';
 import { logger } from './utils/logger';
 import { initTokenBlacklist } from './services/tokenBlacklist';
 import { startCircuitBreakerCleanup } from './services/llmService';
+import { credentialService } from './services/credentialService';
 import { healthService } from './services/healthService';
 import { backupService } from './services/backupService';
+import { selfMonitorService } from './services/selfMonitorService';
+import { snmpPollingService } from './services/snmpPollingService';
+import { alertAutoAnalyzer } from './services/alertAutoAnalyzer';
+import { alertCorrelationService } from './services/alertCorrelationService';
 import { setServerInstances } from './services/restartService';
+import { queueService } from './services/queueService';
 import importExportRouter from './routes/importExportRoutes';
+import alertAutoRouter from './routes/alertAutoRoutes';
+import linkageRouter from './routes/linkageRoutes';
+import networkDiscoveryRouter from './routes/networkDiscoveryRoutes';
+import alertCorrelationRouter from './routes/alertCorrelationRoutes';
 
 const app = express();
 const httpServer = createServer(app);
@@ -104,6 +116,36 @@ async function initializeApp() {
   notificationService.init();
   remediationService.init();
   backupService.init();
+  // Initialize credential service (encrypted storage for API keys)
+  credentialService.init();
+  
+  // Migrate existing plaintext API keys from settings table to encrypted credentials
+  try {
+    const migrationResult = credentialService.migrateFromSettings();
+    if (migrationResult.migrated > 0) {
+      logger.warn(`⚠️ Migrated ${migrationResult.migrated} API keys from plaintext settings to encrypted credentials`);
+      logger.warn('⚠️ Old plaintext keys remain in settings table for backwards compatibility');
+      logger.warn('⚠️ It is recommended to remove them via admin/cleanup-settings endpoint once migration is verified');
+    }
+  } catch (migrationError) {
+    logger.warn('Credential migration encountered errors (non-fatal)', migrationError as Error);
+  }
+
+  // Initialize queue service (async task execution)
+  queueService.init();
+  
+  // Initialize self-monitor service (periodic health checks)
+  selfMonitorService.init();
+  
+  // Initialize SNMP polling service (periodic device inspection)
+  snmpPollingService.start();
+  
+  // Initialize alert auto-analyzer (AI-powered alert diagnosis)
+  alertAutoAnalyzer.start();
+  
+  // Initialize alert correlation service
+  alertCorrelationService.start();
+  
   initTokenBlacklist();
   startCircuitBreakerCleanup();
   
@@ -144,8 +186,8 @@ app.get('/health/ready', async (_req, res) => {
 // 以下所有路由都需要认证
 app.use(authenticateToken);
 
-// Auth相关接口 - 允许未修改密码的用户访问
-app.use('/api/auth', rateLimiter, authRoutes);
+// 注意: /api/auth 路由已在公开路由中注册（line 118），此处不重复注册
+// 已认证的用户通过公开路由的 authRoutes 访问
 
 // 健康检查接口（已认证）- 无需强制改密码检查
 app.get('/api/health/summary', (_req, res) => {
@@ -155,6 +197,18 @@ app.get('/api/health/summary', (_req, res) => {
 app.get('/api/health/history', (_req, res) => {
   const history = healthService.getHealthHistory();
   res.json({ success: true, data: history });
+});
+app.get('/api/health/monitor', async (_req, res) => {
+  const report = selfMonitorService.getLastReport();
+  if (!report) {
+    res.json({ success: false, message: 'No monitor report yet, service still initializing' });
+    return;
+  }
+  res.json({ success: true, data: report });
+});
+app.get('/api/health/monitor/alerts', (_req, res) => {
+  const alerts = selfMonitorService.getAlertHistory();
+  res.json({ success: true, data: alerts });
 });
 
 // 以下所有路由需要检查是否已修改初始密码
@@ -193,10 +247,16 @@ app.use('/api/knowledge/qanything', rateLimiter, knowledgeQAnythingRoutes);
 app.use('/api/import-export', rateLimiter, importExportRouter);
 app.use('/api/vnc', rateLimiter, vncRoutes);
 app.use('/api/network-devices', rateLimiter, networkDeviceRoutes);
+app.use('/api/network-advanced', rateLimiter, networkAdvancedRoutes);
+app.use('/api/snmp', rateLimiter, snmpRoutes);
 app.use('/api/ssh-keys', rateLimiter, sshKeyRoutes);
 app.use('/api/topology', rateLimiter, topologyRoutes);
 app.use('/api/changes', rateLimiter, changeRoutes);
 app.use('/api/ai-models', rateLimiter, aiModelRoutes);
+app.use('/api', rateLimiter, alertAutoRouter);
+app.use('/api', rateLimiter, linkageRouter);
+app.use('/api', rateLimiter, networkDiscoveryRouter);
+app.use('/api', rateLimiter, alertCorrelationRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
@@ -245,6 +305,15 @@ const gracefulShutdown = async (signal: string) => {
 
     backupService.stopAutoBackup();
     logger.info('Backup service stopped');
+
+    await queueService.shutdown();
+    logger.info('Queue service stopped');
+
+    selfMonitorService.shutdown();
+    logger.info('Self-monitor service stopped');
+
+    alertCorrelationService.stop();
+    logger.info('Alert correlation service stopped');
 
     db.close();
     logger.info('Database connection closed');

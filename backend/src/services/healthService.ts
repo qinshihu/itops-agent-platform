@@ -342,6 +342,49 @@ export class HealthService {
       });
     }
 
+    // 自监控服务检查
+    try {
+      const { selfMonitorService } = await import('./selfMonitorService');
+      const monitorReport = selfMonitorService.getLastReport();
+      if (monitorReport) {
+        services.push({
+          name: 'self-monitor',
+          status: monitorReport.status === 'healthy' ? 'healthy' : 
+                  monitorReport.status === 'degraded' ? 'degraded' : 'unhealthy',
+          message: `Status: ${monitorReport.status}, ${monitorReport.alerts.length} active alerts`
+        });
+      } else {
+        services.push({
+          name: 'self-monitor',
+          status: 'degraded',
+          message: 'Self-monitor not yet collected first report'
+        });
+      }
+    } catch (error) {
+      services.push({
+        name: 'self-monitor',
+        status: 'healthy',
+        message: 'Self-monitor service not available'
+      });
+    }
+
+    // 队列服务检查
+    try {
+      const { queueService } = await import('./queueService');
+      const queueStats = await queueService.stats();
+      services.push({
+        name: 'queue',
+        status: queueStats.stalled > 0 ? 'degraded' : queueStats.failed24h > 50 ? 'degraded' : 'healthy',
+        message: `Pending: ${queueStats.pending}, Running: ${queueStats.running}, Failed(24h): ${queueStats.failed24h}`
+      });
+    } catch (error) {
+      services.push({
+        name: 'queue',
+        status: 'healthy',
+        message: 'Queue service not available'
+      });
+    }
+
     return services;
   }
 
