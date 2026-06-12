@@ -8,8 +8,7 @@
 - 2026年5月27日 16:00 之前提交的所有代码，仍遵循原 MIT 许可证
 - 任何基于本项目 2026-05-27 之后版本的衍生作品，必须遵守 MPL-2.0 许可证
 - 本项目不允许**闭源二次开发、打包销售、SaaS化运营**等商业用途，并承诺永久开源！
-👤 作者：谭策 | IT Online
-
+- 👤 作者：谭策 | IT Online
 
 
 
@@ -29,6 +28,8 @@
 <img alt="0cpuy-fbfi3" src="docs-assets/0-3.gif" style="max-width: 100%; height: auto;" />
 
 <img alt="0cpuy-fbfi3" src="docs-assets/screenshot-2026-05-25-143839.png" style="max-width: 100%; height: auto;" />
+
+<img alt="0cpuy-fbfi3" src="docs-assets/images/q (18).png" style="max-width: 100%; height: auto;" />
 
 ## 项目简介
 
@@ -216,7 +217,7 @@ npm run dev
 
 系统概览，展示服务器、告警、任务等核心指标。
 
-<img alt="屏幕截图 2026-05-18 144450" src="docs-assets/0-4.png" style="max-width: 100%; height: auto;" />
+<img alt="屏幕截图 2026-05-18 144450" src="docs-assets/images/q (1).png" style="max-width: 100%; height: auto;" />
 
 ### Web SSH 终端
 
@@ -227,6 +228,7 @@ npm run dev
 - 终端会话管理（30 分钟 TTL 自动清理）
 
 <img alt="image" src="docs-assets/fdsfz.png" style="max-width: 100%; height: auto;" />
+<img alt="image" src="docs-assets/images/w (2).png" style="max-width: 100%; height: auto;" />
 
 ### 主机管理
 
@@ -272,7 +274,7 @@ npm run dev
 - 支持暂停/继续/取消
 - 自动生成 Markdown 执行报告
 
-<img alt="image" src="docs-assets/yyy.png" style="max-width: 100%; height: auto;" />
+<img alt="image" src="docs-assets/images/q (2).jpg" style="max-width: 100%; height: auto;" />
 
 ### 告警中心
 
@@ -281,11 +283,18 @@ npm run dev
 - 告警→工作流自动映射触发
 - 状态管理：新建/已确认/已解决
 
+<img alt="image" src="docs-assets/images/q (8).png" style="max-width: 100%; height: auto;" />
+
+
 ### 通知系统
 
 - 支持 Webhook、邮件、企业微信、钉钉通知
 - 通知配置管理
 - 系统通知自动推送
+
+<img alt="image" src="docs-assets/images/q (17).png" style="max-width: 100%; height: auto;" />
+
+
 
 ### 数据导入导出
 
@@ -304,6 +313,8 @@ npm run dev
 - 备份历史管理和清理策略
 - 支持定时自动备份
 
+<img alt="image" src="docs-assets/images/q (9).png" style="max-width: 100%; height: auto;" />
+
 ### 知识库
 
 - 22 条预设知识条目
@@ -311,7 +322,7 @@ npm run dev
 - 自动注入 LLM 对话上下文
 - 批量导入/导出
 
-<img alt="image" src="docs-assets/ttt.png" style="max-width: 100%; height: auto;" />
+<img alt="image" src="docs-assets/images/q (11).png" style="max-width: 100%; height: auto;" />
 
 ### AI Copilot
 
@@ -319,7 +330,7 @@ npm run dev
 - 自动感知系统告警、服务器、任务状态
 - 基于规则的快速响应 + LLM 深度分析
 
-<img alt="image" src="docs-assets/iii.png" style="max-width: 100%; height: auto;" />
+<img alt="image" src="docs-assets/images/q (13).png" style="max-width: 100%; height: auto;" />
 
 ### 定时任务
 
@@ -478,6 +489,38 @@ npm run dev
 <p align="left">
   <img src="./frontend/public/wechaterweima.png" width="200" alt="IT Online 微信公众号">
 </p>
+
+## 🙏 特别鸣谢
+
+感谢以下所有为本项目做出贡献的人！
+
+| 头像 | 姓名 / 用户名 | 角色 | 主要贡献 |
+|:---:|:---:|:---:|:---|
+| <img src="./docs-assets/contributors/1.jpg" width="60" height="60" style="border-radius:50%;" /> | **谭策** ([@qinshihu](https://github.com/qinshihu)) | 项目作者 | 项目架构设计、核心功能开发、文档编写 |
+| <img src="./docs-assets/contributors/微信图片_2026-06-12_143259_183.jpg" width="60" height="60" style="border-radius:50%;" /> | **热心市民高先生** | 微信贡献者 | 项目测试开发反馈 |
+| <img src="./docs-assets/contributors/微信图片_2026-06-12_143226_852.jpg" width="60" height="60" style="border-radius:50%;" /> | **@林** | 微信贡献者 | 项目测试开发反馈 |
+| <img src="./docs-assets/contributors/11.jpg" width="60" height="60" style="border-radius:50%;" /> | **尔东辰** | 微信贡献者 | 项目测试 |
+
+> 💡 **如何添加贡献者**：
+> 1. 将头像图片放入 [`./docs-assets/contributors/`](./docs-assets/contributors/) 文件夹
+> 2. 命名格式：`用户名.png`（如 `qinshihu.png`）或 `wechat-昵称.png`（微信贡献者）
+> 3. 在上方表格中替换 `placeholder-X.svg` 为实际图片文件名
+> 4. 修改姓名、链接和贡献描述
+> 5. 详见 [贡献者头像文件夹说明](./docs-assets/contributors/README.md)
+>
+> **支持的贡献者类型**：
+> - ✅ GitHub 开发者（自动获取头像或手动上传）
+> - ✅ 微信好友/群友（保存微信头像图片上传）
+> - ✅ 社区成员、测试人员、文档贡献者
+> - ✅ 组织/公司（Logo 图片）
+
+### 社区贡献者
+
+<a href="https://github.com/qinshihu/itops-agent-platform/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=qinshihu/itops-agent-platform" />
+</a>
+
+> 自动生成的所有代码贡献者头像墙，由 [contributors-img](https://contrib.rocks) 提供
 
 ## 🤝 参与贡献
 

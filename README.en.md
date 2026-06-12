@@ -30,6 +30,8 @@ Enterprise-grade IT Operations Multi-Agent Automation Platform — A fully open-
 
 <img alt="0cpuy-fbfi3" src="docs-assets/screenshot-2026-05-25-143839.png" style="max-width: 100%; height: auto;" />
 
+<img alt="0cpuy-fbfi3" src="docs-assets/images/q (18).png" style="max-width: 100%; height: auto;" />
+
 ## Overview
 
 ITOps Agent Platform is an enterprise-grade full-stack IT operations automation platform. Through visual workflow orchestration, multiple AI Agents collaborate to automate server inspection, alert handling, fault diagnosis, compliance checks, and other IT operations tasks.
@@ -205,11 +207,15 @@ npm run dev
 
 > ⚠️ First login will force password change
 
+<img alt="image" src="docs-assets/a0f8974f7fd227711675a3075121fd5a.png" style="max-width: 100%; height: auto;" />
+
 ## Feature Modules
 
 ### Dashboard
 
 System overview displaying servers, alerts, tasks, and other core metrics.
+
+<img alt="Screenshot 2026-05-18 144450" src="docs-assets/images/q (1).png" style="max-width: 100%; height: auto;" />
 
 ### Web SSH Terminal
 
@@ -219,6 +225,9 @@ System overview displaying servers, alerts, tasks, and other core metrics.
 - Connection status visualization
 - Terminal session management (30 min TTL auto-cleanup)
 
+<img alt="image" src="docs-assets/fdsfz.png" style="max-width: 100%; height: auto;" />
+<img alt="image" src="docs-assets/images/w (2).png" style="max-width: 100%; height: auto;" />
+
 ### Host Management
 
 - Multi-level group tree structure with filtering
@@ -226,6 +235,8 @@ System overview displaying servers, alerts, tasks, and other core metrics.
 - One-click host information collection (OS/CPU/Memory/Disk/IP)
 - Server cards with group tags and hardware info
 - CSV/JSON export support
+
+<img alt="image" src="docs-assets/0-3.png" style="max-width: 100%; height: auto;" />
 
 ### Server Management
 
@@ -235,11 +246,15 @@ System overview displaying servers, alerts, tasks, and other core metrics.
 - 14 system compliance checks (CPU/Memory/Disk/Network/Service/Security)
 - Command and compliance history JSON export
 
+<img alt="Screenshot 2026-05-18 144417" src="docs-assets/0-1.gif" style="max-width: 100%; height: auto;" />
+
 ### Agent Management
 
 - 9 preset Agents: Alert Handling, Fault Diagnosis, Log Analysis, System Inspection, Change Execution, Document Generation, Compliance Check, Server Command Execution, Auto Inspection
 - Custom Agent creation with system prompts, models, and temperature parameters
 - Agent testing and execution history tracking
+
+<img alt="image" src="docs-assets/0-2.png" style="max-width: 100%; height: auto;" />
 
 ### Workflow Orchestration
 
@@ -248,12 +263,16 @@ System overview displaying servers, alerts, tasks, and other core metrics.
 - Context passing and server selection support
 - Execution order topological sorting with visual position priority
 
+<img alt="Screenshot 2026-05-18 144326" src="docs-assets/0-7.png" style="max-width: 100%; height: auto;" />
+
 ### Task Execution
 
 - Real-time WebSocket progress pushing
 - Node highlighting and thinking process display
 - Pause/Resume/Cancel support
 - Automatic Markdown execution report generation
+
+<img alt="image" src="docs-assets/images/q (2).jpg" style="max-width: 100%; height: auto;" />
 
 ### Alert Center
 
@@ -262,11 +281,15 @@ System overview displaying servers, alerts, tasks, and other core metrics.
 - Alert→Workflow automatic mapping and triggering
 - Status management: New/Confirmed/Resolved
 
+<img alt="image" src="docs-assets/images/q (8).png" style="max-width: 100%; height: auto;" />
+
 ### Notification System
 
 - Webhook, email, WeCom, and DingTalk notifications
 - Notification configuration management
 - Automatic system notification pushing
+
+<img alt="image" src="docs-assets/images/q (17).png" style="max-width: 100%; height: auto;" />
 
 ### Data Import/Export
 
@@ -285,6 +308,8 @@ System overview displaying servers, alerts, tasks, and other core metrics.
 - Backup history management and cleanup policies
 - Scheduled automatic backup support
 
+<img alt="image" src="docs-assets/images/q (9).png" style="max-width: 100%; height: auto;" />
+
 ### Knowledge Base
 
 - 22 preset knowledge entries
@@ -292,11 +317,15 @@ System overview displaying servers, alerts, tasks, and other core metrics.
 - Automatic injection into LLM conversation context
 - Bulk import/export
 
+<img alt="image" src="docs-assets/images/q (11).png" style="max-width: 100%; height: auto;" />
+
 ### AI Copilot
 
 - Natural language conversational IT operations assistant
 - Automatic awareness of system alerts, servers, and task status
 - Rule-based quick response + LLM deep analysis
+
+<img alt="image" src="docs-assets/images/q (13).png" style="max-width: 100%; height: auto;" />
 
 ### Scheduled Tasks
 
@@ -455,6 +484,38 @@ Complete GitHub Actions CI/CD pipeline configuration:
 <p align="left">
   <img src="./frontend/public/wechaterweima.png" width="200" alt="IT Online WeChat Official Account">
 </p>
+
+## 🙏 Special Thanks
+
+A heartfelt thank you to all contributors of this project!
+
+| Avatar | Name / Username | Role | Main Contributions |
+|:---:|:---:|:---:|:---|
+| <img src="./docs-assets/contributors/1.jpg" width="60" height="60" style="border-radius:50%;" /> | **Tan Ce** ([@qinshihu](https://github.com/qinshihu)) | Project Author | Architecture design, core feature development, documentation |
+| <img src="./docs-assets/contributors/微信图片_2026-06-12_143259_183.jpg" width="60" height="60" style="border-radius:50%;" /> | **热心市民高先生** | WeChat Contributor | Project testing and feedback |
+| <img src="./docs-assets/contributors/微信图片_2026-06-12_143226_852.jpg" width="60" height="60" style="border-radius:50%;" /> | **@林** | WeChat Contributor | Project testing and feedback |
+| <img src="./docs-assets/contributors/11.jpg" width="60" height="60" style="border-radius:50%;" /> | **尔东辰** | WeChat Contributor | Project testing |
+
+> 💡 **How to add contributors**:
+> 1. Place avatar images in [`./docs-assets/contributors/`](./docs-assets/contributors/) folder
+> 2. Naming format: `username.png` (e.g. `qinshihu.png`) or `wechat-nickname.png` (WeChat contributors)
+> 3. Replace `placeholder-X.svg` in the table above with the actual image filename
+> 4. Update names, links, and contribution descriptions
+> 5. See [contributor avatars folder guide](./docs-assets/contributors/README.md) for details
+>
+> **Supported contributor types**:
+> - ✅ GitHub developers (auto-fetch or manual upload)
+> - ✅ WeChat friends/group members (save WeChat avatar and upload)
+> - ✅ Community members, testers, documentation contributors
+> - ✅ Organizations/companies (Logo images)
+
+### Community Contributors
+
+<a href="https://github.com/qinshihu/itops-agent-platform/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=qinshihu/itops-agent-platform" />
+</a>
+
+> Auto-generated contributor avatars wall, powered by [contributors-img](https://contrib.rocks)
 
 ## 🤝 Contributing
 
