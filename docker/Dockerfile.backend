@@ -82,7 +82,7 @@ COPY backend/package.json ./
 
 # Copy entrypoint script
 COPY docker/docker-entrypoint-backend.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Create data directory for SQLite database
 RUN mkdir -p /app/data

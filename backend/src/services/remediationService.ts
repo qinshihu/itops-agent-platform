@@ -318,7 +318,9 @@ class RemediationService {
             return true;
           }
           const alertTags = alert.tags || [];
-          if (!tags.some(t => alertTags.includes(t))) {
+          // 部分外部告警源（例如 Zabbix Webhook）不会天然携带 tags。
+          // 这类场景下保留 source/severity/keyword 过滤，避免 tags 成为硬阻断条件。
+          if (alertTags.length > 0 && !tags.some(t => alertTags.includes(t))) {
             return false;
           }
         } catch {

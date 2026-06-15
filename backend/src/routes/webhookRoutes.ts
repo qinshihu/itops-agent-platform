@@ -19,6 +19,7 @@ import {
 } from '../services/alertSourceAdapters';
 import { alertDeviceResolver } from '../services/alertDeviceResolver';
 import { alertAutoAnalyzer } from '../services/alertAutoAnalyzer';
+import { triggerAlertWorkflowMapping } from '../services/alertWorkflowMappingService';
 import { emitToAlerts } from '../websocket/handler';
 import { validateBody } from '../middleware/validation';
 import { z } from 'zod';
@@ -119,66 +120,6 @@ function verifyWebhookSignature(req: Request, source: string): boolean {
   );
 }
 
-function findAndTriggerWorkflow(alertId: string, source: string, severity: string, title: string): string | null {
-  try {
-    const mappings = db.prepare(`
-      SELECT * FROM alert_workflow_mappings
-      WHERE enabled = 1
-      AND (alert_source = ? OR alert_source IS NULL)
-      AND (alert_severity = ? OR alert_severity IS NULL)
-    `).all(source, severity);
-
-    const matchingMappings = (mappings as Array<{ alert_title_pattern?: string; workflow_id: string }>).filter(mapping => {
-      if (!mapping.alert_title_pattern) return true;
-      try {
-        return title.includes(mapping.alert_title_pattern);
-      } catch {
-        return false;
-      }
-    });
-
-    if (matchingMappings.length > 0) {
-      const mapping = matchingMappings[0];
-      const taskId = randomUUID();
-      const now = new Date().toISOString();
-
-      db.prepare(`
-        INSERT INTO tasks (id, workflow_id, name, status, created_at, initial_input, related_alert_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        taskId,
-        mapping.workflow_id,
-        `自动处理告警: ${title.substring(0, 50)}`,
-        'pending',
-        now,
-        JSON.stringify({ alertId, source, severity, title }),
-        alertId
-      );
-
-      db.prepare('UPDATE alerts SET related_task_id = ? WHERE id = ?').run(taskId, alertId);
-
-      createAuditLog({
-        action: 'auto_trigger_workflow',
-        resource_type: 'task',
-        resource_id: taskId,
-        details: { alertId, workflowId: mapping.workflow_id },
-      });
-
-      const io = getIOInstance();
-      if (io) {
-        io.emit('task:created', { id: taskId, name: `自动处理告警: ${title}`, workflowId: mapping.workflow_id });
-      }
-
-      return taskId;
-    }
-
-    return null;
-  } catch (error) {
-    logger.error('Error triggering workflow:', error);
-    return null;
-  }
-}
-
 function processNormalizedAlert(
   alert: NormalizedAlert,
   sourceLabel: string
@@ -236,6 +177,13 @@ function processNormalizedAlert(
     'new'
   );
 
+  const workflowTaskId = triggerAlertWorkflowMapping({
+    alertId: id,
+    source: alert.source,
+    severity,
+    title,
+  });
+
   // ============================================================
   //  统一修复流水线: 修复策略匹配 + 设备关联 + RCA + WebSocket
   // ============================================================
@@ -277,7 +225,7 @@ function processNormalizedAlert(
       }
 
       // ── AI 自动分析（高优告警即时触发） ──
-      if (severity === 'critical' || severity === 'high') {
+      if (severity === 'critical' || severity === 'high' || severity === 'disaster') {
         alertAutoAnalyzer.analyzeAlert(id).catch((err: Error) => {
           logger.error(`[Webhook] AI 自动分析失败: ${err.message}`);
         });
@@ -337,14 +285,28 @@ function processNormalizedAlert(
     action: 'alert_received',
     resource_type: 'alert',
     resource_id: id,
-    details: { source: alert.source, severity, title, executionIds },
+    details: { source: alert.source, severity, title, executionIds, workflowTaskId },
   });
 
   if (io) {
-    io.emit('alert:new', { id, source: alert.source, severity, title, content, executionIds, host: alert.host });
+    io.emit('alert:new', {
+      id,
+      source: alert.source,
+      severity,
+      title,
+      content,
+      executionIds,
+      related_task_id: workflowTaskId,
+      host: alert.host,
+    });
   }
 
-  return { alertId: id, taskId: executionIds[0] || null, executionIds, status: 'created' };
+  return {
+    alertId: id,
+    taskId: workflowTaskId || executionIds[0] || null,
+    executionIds,
+    status: 'created',
+  };
 }
 
 router.post('/prometheus', (req: Request, res: Response) => {

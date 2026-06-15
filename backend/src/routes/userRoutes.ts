@@ -44,7 +44,7 @@ router.get('/:id', (req: Request, res: Response) => {
 
 router.post('/', requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const { username, password, email, role = 'viewer' } = req.body;
+    const { username, password, email, role = 'viewer', enabled = true } = req.body;
     
     if (!username || !password) {
       return res.status(400).json({ success: false, error: 'Username and password are required' });
@@ -60,17 +60,30 @@ router.post('/', requireRole('admin'), async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Username already exists' });
     }
     
-    const id = randomUUID();
     const now = new Date().toISOString();
     
     // 使用bcrypt进行密码哈希
     const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
     
-    db.prepare(`
-      INSERT INTO users (id, username, password, email, role, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, username, hashedPassword, email || null, role, now, now);
+    const columns = db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string; type?: string }>;
+    const idColumn = columns.find((column) => column.name === 'id');
+    const useNumericId = (idColumn?.type || '').toUpperCase().includes('INT');
+
+    let id: string;
+    if (useNumericId) {
+      const result = db.prepare(`
+        INSERT INTO users (username, password, email, role, enabled, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(username, hashedPassword, email || null, role, enabled ? 1 : 0, now, now);
+      id = String(result.lastInsertRowid);
+    } else {
+      id = randomUUID();
+      db.prepare(`
+        INSERT INTO users (id, username, password, email, role, enabled, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, username, hashedPassword, email || null, role, enabled ? 1 : 0, now, now);
+    }
     
     const reqUser = (req as { user?: { id: string } }).user;
     createAuditLog({
@@ -78,10 +91,10 @@ router.post('/', requireRole('admin'), async (req: Request, res: Response) => {
       action: 'create_user',
       resource_type: 'user',
       resource_id: id,
-      details: { username, email, role }
+      details: { username, email, role, enabled }
     });
     
-    res.status(201).json({ success: true, data: { id, username, email, role } });
+    res.status(201).json({ success: true, data: { id, username, email, role, enabled: enabled ? 1 : 0 } });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }

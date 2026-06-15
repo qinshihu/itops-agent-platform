@@ -45,6 +45,32 @@ function normalizeSeverity(level: string | number): string {
   return map[level.toLowerCase()] || 'medium';
 }
 
+function normalizeZabbixSeverity(level: string | number): string {
+  if (typeof level === 'number') {
+    if (level >= 5) return 'disaster';
+    if (level >= 4) return 'high';
+    if (level >= 3) return 'medium';
+    if (level >= 2) return 'warning';
+    return 'info';
+  }
+
+  const normalized = String(level).trim().toLowerCase();
+  const map: Record<string, string> = {
+    disaster: 'disaster',
+    critical: 'critical',
+    high: 'high',
+    average: 'medium',
+    medium: 'medium',
+    warning: 'warning',
+    information: 'info',
+    info: 'info',
+    low: 'low',
+    not_classified: 'info',
+  };
+
+  return map[normalized] || normalizeSeverity(normalized);
+}
+
 export function adaptPrometheus(payload: unknown): AlertAdapterResult {
   const errors: string[] = [];
   const alerts: NormalizedAlert[] = [];
@@ -121,7 +147,7 @@ export function adaptZabbix(payload: unknown): AlertAdapterResult {
     const host = (hostObj?.NAME as string) || (body.host as string) || ((eventObj?.host as Record<string, unknown>)?.name as string) || 'Unknown';
     const hostIp = (hostObj?.IP as string) || (body.host_ip as string) || '';
     const rawSeverity = (triggerObj?.SEVERITY as string) || (triggerObj?.PRIORITY as string | number) || (body.severity as string | number) || ((eventObj?.severity as string));
-    const severity = normalizeSeverity(rawSeverity);
+    const severity = normalizeZabbixSeverity(rawSeverity);
     const eventId = (body.EVENT as Record<string, unknown>)?.ID || (eventObj?.id as string) || (body.eventid as string);
     const triggerId = (triggerObj?.ID as string) || (body.triggerid as string);
     const item = (itemObj?.NAME as string) || (body.item as string) || '';

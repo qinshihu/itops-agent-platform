@@ -7,6 +7,7 @@ import { remediationService } from '../services/remediationService';
 import { rootCauseAnalysisService } from '../services/rootCauseAnalysisService';
 import { alertService } from '../services/alertService';
 import { alertAutoAnalyzer } from '../services/alertAutoAnalyzer';
+import { triggerAlertWorkflowMapping } from '../services/alertWorkflowMappingService';
 import { emitToAlerts } from '../websocket/handler';
 import { logger } from '../utils/logger';
 import { requireRole } from '../middleware/auth';
@@ -288,6 +289,13 @@ async function runAlertProcessingPipeline(ctx: AlertProcessingContext): Promise<
   try {
     const { id, source, severity, title, content, tags } = ctx;
 
+    const workflowTaskId = triggerAlertWorkflowMapping({
+      alertId: id,
+      source,
+      severity,
+      title,
+    });
+
     emitToAlerts(io!, 'remediation:started', {
       alertId: id,
       title,
@@ -304,7 +312,7 @@ async function runAlertProcessingPipeline(ctx: AlertProcessingContext): Promise<
     }
 
     // ── AI 自动分析 ──
-    if (severity === 'critical' || severity === 'high') {
+    if (severity === 'critical' || severity === 'high' || severity === 'disaster') {
       alertAutoAnalyzer.analyzeAlert(id).catch((err: Error) => {
         logger.error(`Failed to auto-analyze alert ${id}:`, err);
       });
@@ -330,6 +338,7 @@ async function runAlertProcessingPipeline(ctx: AlertProcessingContext): Promise<
 
     emitToAlerts(io!, 'remediation:completed', {
       alertId: id,
+      relatedTaskId: workflowTaskId,
       totalPolicies: policies.length,
       timestamp: new Date().toISOString()
     });
@@ -373,8 +382,16 @@ router.post('/:id/process', async (req: Request, res: Response) => {
     let matchedPolicies: Array<{ id: string; name: string; execution_mode: string }> = [];
     let executionIds: string[] = [];
     let errorMsg: string | null = null;
+    let workflowTaskId: string | null = null;
 
     try {
+      workflowTaskId = triggerAlertWorkflowMapping({
+        alertId: id,
+        source,
+        severity,
+        title,
+      });
+
       // 先跑 alertService 的数据库处理
       alertService.processDatabaseAlert(id);
 
@@ -398,7 +415,7 @@ router.post('/:id/process', async (req: Request, res: Response) => {
     // AI 自动分析 + RCA 放在后台不阻塞
     setImmediate(() => {
       // ── AI 自动分析 ──
-      if (severity === 'critical' || severity === 'high') {
+      if (severity === 'critical' || severity === 'high' || severity === 'disaster') {
         alertAutoAnalyzer.analyzeAlert(id).catch((err: Error) => {
           logger.error(`Failed to auto-analyze alert ${id}:`, err);
         });
@@ -416,6 +433,7 @@ router.post('/:id/process', async (req: Request, res: Response) => {
       if (io) {
         emitToAlerts(io, 'remediation:completed', {
           alertId: id,
+          relatedTaskId: workflowTaskId,
           totalPolicies: matchedPolicies.length,
           timestamp: new Date().toISOString()
         });
@@ -429,6 +447,7 @@ router.post('/:id/process', async (req: Request, res: Response) => {
         : `成功匹配 ${matchedPolicies.length} 条修复策略${executionIds.length ? '，执行已触发' : ''}`,
       data: {
         alertId: id,
+        workflowTaskId,
         matchedPolicies,
         executionIds,
         error: errorMsg
