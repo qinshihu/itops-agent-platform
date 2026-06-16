@@ -16,7 +16,7 @@
 
 企业级 IT 运维多 Agent 自动化平台 — 基于大语言模型的全开源多Agent智能运维解决方案。
 
-📝[项目愿景与社区共建](项目愿景与社区共建.md) 📝[项目文档网站](https://aiopsdoc-0mwug01t6.maozi.io/)
+📝[项目愿景与社区共建](项目愿景与社区共建.md)  📝[项目AI编程Skill](SKILL.md)  📝[项目文档网站](https://aiopsdoc-0mwug01t6.maozi.io/)
 
 [![CI](https://github.com/qinshihu/itops-agent-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/qinshihu/itops-agent-platform/actions/workflows/ci.yml)
 [![Release](https://github.com/qinshihu/itops-agent-platform/actions/workflows/release.yml/badge.svg)](https://github.com/qinshihu/itops-agent-platform/actions/workflows/release.yml)
@@ -482,6 +482,52 @@ npm run dev
 ├── stop.ps1 / stop.sh              # 一键停止脚本
 └── .env.example                    # 环境变量示例
 ```
+
+## AI 编程助手 Skill
+
+本项目提供了专用的 AI 编程助手 Skill，帮助开发者通过 AI 工具更高效地理解和贡献代码。
+
+### 什么是 Skill？
+
+Skill 是 AI 编程工具（如 Trae IDE）的扩展配置文件，包含项目的架构说明、开发规范、常用命令等信息。当 AI 工具加载此 Skill 后，能够：
+
+- 快速理解项目结构和代码组织
+- 提供符合项目规范的代码建议
+- 指导新功能开发的标准流程
+- 协助调试和问题排查
+
+### 如何使用？
+
+#### 方式一：Trae IDE（推荐）
+
+1. 使用 Trae IDE 打开本项目
+2. Skill 会自动加载，AI 助手将具备项目上下文
+3. 直接开始开发，AI 会基于 Skill 提供精准建议
+
+#### 方式二：其他 AI 工具
+
+将 `SKILL.md` 文件的内容复制到你的 AI 工具配置中：
+
+```bash
+# 复制 Skill 内容到剪贴板（Windows PowerShell）
+Get-Content SKILL.md | Set-Clipboard
+
+# 或 Linux/Mac
+cat SKILL.md | pbcopy  # macOS
+cat SKILL.md | xclip -selection clipboard  # Linux
+```
+
+然后将内容粘贴到 AI 工具的系统提示或上下文中。
+
+### Skill 包含内容
+
+- **项目架构**：前后端技术栈、目录结构、核心模块说明
+- **开发指南**：环境搭建、常用命令、代码规范
+- **新功能开发**：添加 API、页面、数据库迁移的标准流程
+- **部署说明**：Docker 部署、CI/CD 配置
+- **安全设计**：认证、加密、权限控制等安全机制
+
+详细的 Skill 内容请查看 [SKILL.md](./SKILL.md)。
 
 ## 文档导航
 
