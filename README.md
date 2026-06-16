@@ -1,26 +1,25 @@
 [English](README.en.md) | [中文](README.md)
 
----
+***
 
-**重要许可证⚠️变更通知（2026-05-27）** 
+**重要许可证⚠️变更通知（2026-05-27）**
 
 本项目自今日起，所有新提交的代码将采用 **Mozilla Public License 2.0 (MPL-2.0)** 许可证开源。
+
 - 2026年5月27日 16:00 之前提交的所有代码，仍遵循原 MIT 许可证
 - 任何基于本项目 2026-05-27 之后版本的衍生作品，必须遵守 MPL-2.0 许可证
 - 本项目不允许**闭源二次开发、打包销售、SaaS化运营**等商业用途，并承诺永久开源！
 - 👤 作者：谭策 | IT Online
 
-
-
 # ITOps Agent Platform
 
 企业级 IT 运维多 Agent 自动化平台 — 基于大语言模型的全开源多Agent智能运维解决方案。
 
-📝[项目愿景与社区共建](项目愿景与社区共建.md)  📝[项目AI编程Skill](SKILL.md)  📝[项目文档网站](https://aiopsdoc-0mwug01t6.maozi.io/)
+📝[项目愿景与社区共建](项目愿景与社区共建.md)  📝[项目AI编程Skill](SKILL.md)  📝[项目文档网站](https://aiopsdoc-0mwug01t6.maozi.io/) 📝[演示环境](https://agentdemo-0mwug01t6.maozi.io/)
 
 [![CI](https://github.com/qinshihu/itops-agent-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/qinshihu/itops-agent-platform/actions/workflows/ci.yml)
 [![Release](https://github.com/qinshihu/itops-agent-platform/actions/workflows/release.yml/badge.svg)](https://github.com/qinshihu/itops-agent-platform/actions/workflows/release.yml)
-[![GitHub release](https://img.shields.io/github/v/release/qinshihu/itops-agent-platform?include_prereleases&sort=semver)](https://github.com/qinshihu/itops-agent-platform/releases/latest)
+[![GitHub release](https://img.shields.io/github/v/release/qinshihu/itops-agent-platform?include_prereleases\&sort=semver)](https://github.com/qinshihu/itops-agent-platform/releases/latest)
 [![License](https://img.shields.io/badge/license-MPL--2.0-blue.svg)](LICENSE)
 
 🌐 **项目官网**: <https://www.zjzwfw.cloud/ITOpsAgentinfo>
@@ -47,7 +46,6 @@ graph TB
     Express --> Webhook["🚨 告警 Webhook<br/>Prometheus | Zabbix"]
     Express --> Notify["📬 通知渠道<br/>邮件 | 企业微信 | 钉钉"]
 ```
-
 
 > 📐 [查看完整架构图 →](./docs/ARCHITECTURE_DIAGRAM.md)
 
@@ -77,21 +75,21 @@ graph TB
 
 项目采用多层安全设计，保障您的服务器和数据安全：
 
-| 安全措施 | 说明 |
-|---------|------|
-| **🔐 AES-256-GCM 加密** | 服务器密码和 SSH 密钥采用银行级加密存储，密钥自动生成 |
-| **🎫 JWT 双令牌认证** | Access Token + Refresh Token 机制，自动刷新，黑名单登出 |
-| **🔒 登录失败锁定** | 连续 5 次登录失败自动锁定账户 30 分钟，防止暴力破解 |
-| **💪 密码复杂度校验** | 强制要求密码包含大小写字母、数字和特殊字符（8 位以上） |
-| **📜 完整操作审计** | 所有登录、命令执行、配置变更均有详细审计日志，可追溯 |
-| **🚫 敏感信息脱敏** | 密码、API 密钥等敏感信息在日志和输出中自动脱敏 |
-| **🛡️ 非 root 运行** | Docker 容器以非 root 用户运行，遵循最小权限原则 |
-| **🧱 Nginx 安全头** | HSTS、CSP、X-Frame-Options、XSS 防护等安全配置 |
-| **⚡ API 速率限制** | 防止恶意请求和暴力破解，保护接口安全 |
-| **🌐 Webhook IP 白名单** | 支持配置告警 Webhook 来源 IP 白名单，防止伪造告警 |
-| **✍️ Webhook 签名验证** | HMAC-SHA256 签名验证，确保告警来源可信 |
-| **🏠 本地 AI 支持** | 支持 Ollama、LM Studio、vLLM 等本地部署模型，数据 100% 不出域 |
-| **🔑 强制密码修改** | 首次登录系统强制要求修改默认密码，杜绝弱口令风险 |
+| 安全措施                  | 说明                                           |
+| --------------------- | -------------------------------------------- |
+| **🔐 AES-256-GCM 加密** | 服务器密码和 SSH 密钥采用银行级加密存储，密钥自动生成                |
+| **🎫 JWT 双令牌认证**      | Access Token + Refresh Token 机制，自动刷新，黑名单登出   |
+| **🔒 登录失败锁定**         | 连续 5 次登录失败自动锁定账户 30 分钟，防止暴力破解                |
+| **💪 密码复杂度校验**        | 强制要求密码包含大小写字母、数字和特殊字符（8 位以上）                 |
+| **📜 完整操作审计**         | 所有登录、命令执行、配置变更均有详细审计日志，可追溯                   |
+| **🚫 敏感信息脱敏**         | 密码、API 密钥等敏感信息在日志和输出中自动脱敏                    |
+| **🛡️ 非 root 运行**     | Docker 容器以非 root 用户运行，遵循最小权限原则               |
+| **🧱 Nginx 安全头**      | HSTS、CSP、X-Frame-Options、XSS 防护等安全配置         |
+| **⚡ API 速率限制**        | 防止恶意请求和暴力破解，保护接口安全                           |
+| **🌐 Webhook IP 白名单** | 支持配置告警 Webhook 来源 IP 白名单，防止伪造告警              |
+| **✍️ Webhook 签名验证**   | HMAC-SHA256 签名验证，确保告警来源可信                    |
+| **🏠 本地 AI 支持**       | 支持 Ollama、LM Studio、vLLM 等本地部署模型，数据 100% 不出域 |
+| **🔑 强制密码修改**         | 首次登录系统强制要求修改默认密码，杜绝弱口令风险                     |
 
 > **数据安全目标**：所有服务器凭证只在本地加密存储，不会发送给任何第三方 AI。Agent 执行的命令和输出也只在您的服务器内部流转。
 
@@ -99,30 +97,31 @@ graph TB
 
 项目支持国内外绝大多数主流大模型，通过 AI 模型池统一管理，支持主备降级链。
 
-| 类型 | 提供商/模型 | 接入方式 | 推荐场景 |
-|------|------------|---------|---------|
-| **国内云 API** | 火山引擎 · 豆包 (Doubao) | 原生 API | 国内用户推荐，稳定快速 |
-| **国内云 API** | 阿里云 · 通义千问 (Qwen) | OpenAI 兼容 | 国内企业级应用 |
-| **国内云 API** | DeepSeek (深度求索) | OpenAI 兼容 | 代码生成、推理能力强 |
-| **国内云 API** | 智谱 AI (GLM-4) | OpenAI 兼容 | 中文理解优秀 |
-| **国内云 API** | Moonshot · Kimi | OpenAI 兼容 | 长文本处理 |
-| **国内云 API** | 百度 · 文心一言 | OpenAI 兼容 | 国内企业应用 |
-| **国内云 API** | 零一万物 (Yi) | OpenAI 兼容 | 开源模型 |
-| **国内云 API** | 百川智能 (Baichuan) | OpenAI 兼容 | 开源模型 |
-| **国际云 API** | OpenAI (GPT-4o, o1, o3) | 原生 API | 有外网环境用户 |
-| **国际云 API** | Anthropic Claude | OpenAI 兼容层 | 复杂推理任务 |
-| **国际云 API** | Meta Llama | Ollama/vLLM | 开源模型 |
-| **国际云 API** | Mistral | OpenAI 兼容 | 开源模型 |
-| **本地部署** | Ollama | OpenAI 兼容 | 数据安全要求高，内网部署 |
-| **本地部署** | LM Studio | OpenAI 兼容 | 桌面端本地模型 |
-| **本地部署** | vLLM | OpenAI 兼容 | 高性能推理服务 |
-| **本地部署** | 其他 OpenAI 兼容接口 | OpenAI 兼容 | 任意兼容服务 |
+| 类型          | 提供商/模型                  | 接入方式        | 推荐场景         |
+| ----------- | ----------------------- | ----------- | ------------ |
+| **国内云 API** | 火山引擎 · 豆包 (Doubao)      | 原生 API      | 国内用户推荐，稳定快速  |
+| **国内云 API** | 阿里云 · 通义千问 (Qwen)       | OpenAI 兼容   | 国内企业级应用      |
+| **国内云 API** | DeepSeek (深度求索)         | OpenAI 兼容   | 代码生成、推理能力强   |
+| **国内云 API** | 智谱 AI (GLM-4)           | OpenAI 兼容   | 中文理解优秀       |
+| **国内云 API** | Moonshot · Kimi         | OpenAI 兼容   | 长文本处理        |
+| **国内云 API** | 百度 · 文心一言               | OpenAI 兼容   | 国内企业应用       |
+| **国内云 API** | 零一万物 (Yi)               | OpenAI 兼容   | 开源模型         |
+| **国内云 API** | 百川智能 (Baichuan)         | OpenAI 兼容   | 开源模型         |
+| **国际云 API** | OpenAI (GPT-4o, o1, o3) | 原生 API      | 有外网环境用户      |
+| **国际云 API** | Anthropic Claude        | OpenAI 兼容层  | 复杂推理任务       |
+| **国际云 API** | Meta Llama              | Ollama/vLLM | 开源模型         |
+| **国际云 API** | Mistral                 | OpenAI 兼容   | 开源模型         |
+| **本地部署**    | Ollama                  | OpenAI 兼容   | 数据安全要求高，内网部署 |
+| **本地部署**    | LM Studio               | OpenAI 兼容   | 桌面端本地模型      |
+| **本地部署**    | vLLM                    | OpenAI 兼容   | 高性能推理服务      |
+| **本地部署**    | 其他 OpenAI 兼容接口          | OpenAI 兼容   | 任意兼容服务       |
 
 **本地模型推荐**：Qwen2.5、Llama3、DeepSeek-Coder、Yi、ChatGLM、Phi-3、Mistral 等开源大模型。
 
 **特性**：
+
 - ✅ AI 模型池统一管理，支持添加任意数量模型
-- ✅ 主备模型降级链（primary_model_id + fallback_model_id）
+- ✅ 主备模型降级链（primary\_model\_id + fallback\_model\_id）
 - ✅ 每个提供商独立熔断器，防止单点故障
 - ✅ 拖拽排序定义优先级
 - ✅ 模型连通性测试验证
@@ -214,8 +213,9 @@ cd local-dev
 ```
 
 **特点：**
-- 前端：Vite 热重载，修改代码即时刷新 http://localhost:5173
-- 后端：tsx watch 热重载，修改代码自动重启 http://localhost:3001
+
+- 前端：Vite 热重载，修改代码即时刷新 <http://localhost:5173>
+- 后端：tsx watch 热重载，修改代码自动重启 <http://localhost:3001>
 - 数据库：Docker volume 持久化，停止容器不丢失数据
 - 调试支持：Node.js 调试端口（localhost:9229）
 
@@ -226,8 +226,8 @@ cd local-dev
 npm run dev
 ```
 
-- 前端：Vite 热重载，修改代码即时刷新 http://localhost:3000
-- 后端：tsx watch 热重载，修改代码自动重启 http://localhost:3001
+- 前端：Vite 热重载，修改代码即时刷新 <http://localhost:3000>
+- 后端：tsx watch 热重载，修改代码自动重启 <http://localhost:3001>
 - 数据库：SQLite 文件持久化，数据保存在 `backend/data/app.db`
 
 **默认管理员**: `admin` / `admin`
@@ -310,7 +310,6 @@ npm run dev
 
 <img alt="image" src="docs-assets/images/q (8).png" style="max-width: 100%; height: auto;" />
 
-
 ### 通知系统
 
 - 支持 Webhook、邮件、企业微信、钉钉通知
@@ -318,8 +317,6 @@ npm run dev
 - 系统通知自动推送
 
 <img alt="image" src="docs-assets/images/q (17).png" style="max-width: 100%; height: auto;" />
-
-
 
 ### 数据导入导出
 
@@ -388,7 +385,7 @@ npm run dev
 ### AI 修复记录
 
 - AI 分析告警后自动生成结构化修复命令（JSON 格式）
-- 自动创建修复工作流：[审批节点] → [执行修复 Agent 节点]
+- 自动创建修复工作流：\[审批节点] → \[执行修复 Agent 节点]
 - 根据风险等级自动设置审批超时时间（low: 30分钟, medium: 1小时, high: 2小时）
 - 展示完整修复流程：诊断报告、修复命令、风险等级、执行状态
 - 支持查看执行结果和错误信息
@@ -531,46 +528,46 @@ cat SKILL.md | xclip -selection clipboard  # Linux
 
 ## 文档导航
 
-| 文档                                   | 说明             |
-| ------------------------------------ | -------------- |
-| [部署手册](./docs/DEPLOYMENT.md)              | 详细部署操作说明       |
-| [技术规范](./docs/SPEC.md)                    | 功能规范和接口定义      |
-| [API 文档](./docs/API.md)              | 完整 API 接口文档    |
-| [架构设计](./docs/ARCHITECTURE.md)       | 系统架构说明         |
-| [开发指南](./docs/DEVELOPMENT.md)        | 本地开发环境搭建       |
-| [生产环境](./docs/PRODUCTION.md)         | 生产部署最佳实践       |
-| [Web 终端](./docs/WEB_TERMINAL.md)          | Web SSH 终端技术文档 |
-| [主机管理](./docs/SERVER_MANAGEMENT.md)       | 主机管理增强功能文档     |
-| [网络设备巡检](./docs/NETWORK_DEVICE_INSPECTION.md) | 网络设备巡检功能     |
-| [变更日志](./docs/CHANGELOG.md)               | 版本更新记录         |
-| [测试指南](./docs/TEST_GUIDE.md)              | 功能测试说明         |
+| 文档                                              | 说明              |
+| ----------------------------------------------- | --------------- |
+| [部署手册](./docs/DEPLOYMENT.md)                    | 详细部署操作说明        |
+| [技术规范](./docs/SPEC.md)                          | 功能规范和接口定义       |
+| [API 文档](./docs/API.md)                         | 完整 API 接口文档     |
+| [架构设计](./docs/ARCHITECTURE.md)                  | 系统架构说明          |
+| [开发指南](./docs/DEVELOPMENT.md)                   | 本地开发环境搭建        |
+| [生产环境](./docs/PRODUCTION.md)                    | 生产部署最佳实践        |
+| [Web 终端](./docs/WEB_TERMINAL.md)                | Web SSH 终端技术文档  |
+| [主机管理](./docs/SERVER_MANAGEMENT.md)             | 主机管理增强功能文档      |
+| [网络设备巡检](./docs/NETWORK_DEVICE_INSPECTION.md)   | 网络设备巡检功能        |
+| [变更日志](./docs/CHANGELOG.md)                     | 版本更新记录          |
+| [测试指南](./docs/TEST_GUIDE.md)                    | 功能测试说明          |
 | [QAnything 集成](./docs/QANYTHING_INTEGRATION.md) | QAnything 知识库集成 |
-| [工作流指南](./docs/WORKFLOW_GUIDE.md)              | 工作流编排使用指南     |
-| [自动修复设计](./docs/AUTO_REMEDIATION_DESIGN.md)   | 告警自动修复功能设计   |
+| [工作流指南](./docs/WORKFLOW_GUIDE.md)               | 工作流编排使用指南       |
+| [自动修复设计](./docs/AUTO_REMEDIATION_DESIGN.md)     | 告警自动修复功能设计      |
 
 ## 环境变量
 
-| 变量                     | 说明                                      | 默认值                                        |
-| ------------------------ | ---------------------------------------- | ------------------------------------------ |
-| `NODE_ENV`               | 运行环境                                  | production |
-| `PORT`                   | 后端端口                                  | 3001                                       |
-| `DATABASE_PATH`          | 数据库路径                                 | ./data/app.db                              |
-| `JWT_SECRET`             | JWT 签名密钥（生产环境必须修改）            | 开发环境自动生成                                   |
-| `JWT_EXPIRES_IN`         | Access Token 有效期                      | 24h                                        |
-| `ADMIN_INITIAL_PASSWORD` | 管理员初始密码（可选）                       | admin（默认）                               |
-| `ALLOWED_ORIGINS`        | CORS 允许源列表（逗号分隔）                   | http://localhost:3000,http://localhost:80,http://localhost:8080 |
-| `DOUBAO_API_KEY`         | 豆包 API 密钥（也可在网页设置）               | -                                          |
-| `DOUBAO_API_BASE`        | 豆包 API 地址                             | https://ark.cn-beijing.volces.com/api/v3 |
-| `DOUBAO_MODEL`           | 豆包模型名称                               | doubao-4o                                  |
-| `OPENAI_API_KEY`         | OpenAI API 密钥（也可在网页设置）          | -                                          |
-| `OPENAI_API_BASE`        | OpenAI API 地址                            | https://api.openai.com/v1                |
-| `OPENAI_MODEL`           | OpenAI 模型名称                           | gpt-4o                                     |
-| `LOCAL_AI_API_BASE`      | 本地 AI API 地址（Ollama 等）              | -                                          |
-| `LOCAL_AI_MODEL`         | 本地 AI 模型名称                            | -                                          |
-| `WEBHOOK_VERIFY_ENABLED` | 是否启用 Webhook 签名验证（生产环境建议开启） | false                                      |
-| `WEBHOOK_SECRET`         | Webhook 签名密钥（启用签名验证时必须）       | -                                          |
-| `WEBHOOK_IP_WHITELIST`   | Webhook IP 白名单（逗号分隔，空为允许所有）    | -                                          |
-| `LOG_LEVEL`              | 日志级别                                   | info                                       |
+| 变量                       | 说明                          | 默认值                                                               |
+| ------------------------ | --------------------------- | ----------------------------------------------------------------- |
+| `NODE_ENV`               | 运行环境                        | production                                                        |
+| `PORT`                   | 后端端口                        | 3001                                                              |
+| `DATABASE_PATH`          | 数据库路径                       | ./data/app.db                                                     |
+| `JWT_SECRET`             | JWT 签名密钥（生产环境必须修改）          | 开发环境自动生成                                                          |
+| `JWT_EXPIRES_IN`         | Access Token 有效期            | 24h                                                               |
+| `ADMIN_INITIAL_PASSWORD` | 管理员初始密码（可选）                 | admin（默认）                                                         |
+| `ALLOWED_ORIGINS`        | CORS 允许源列表（逗号分隔）            | <http://localhost:3000,http://localhost:80,http://localhost:8080> |
+| `DOUBAO_API_KEY`         | 豆包 API 密钥（也可在网页设置）          | -                                                                 |
+| `DOUBAO_API_BASE`        | 豆包 API 地址                   | <https://ark.cn-beijing.volces.com/api/v3>                        |
+| `DOUBAO_MODEL`           | 豆包模型名称                      | doubao-4o                                                         |
+| `OPENAI_API_KEY`         | OpenAI API 密钥（也可在网页设置）      | -                                                                 |
+| `OPENAI_API_BASE`        | OpenAI API 地址               | <https://api.openai.com/v1>                                       |
+| `OPENAI_MODEL`           | OpenAI 模型名称                 | gpt-4o                                                            |
+| `LOCAL_AI_API_BASE`      | 本地 AI API 地址（Ollama 等）      | -                                                                 |
+| `LOCAL_AI_MODEL`         | 本地 AI 模型名称                  | -                                                                 |
+| `WEBHOOK_VERIFY_ENABLED` | 是否启用 Webhook 签名验证（生产环境建议开启） | false                                                             |
+| `WEBHOOK_SECRET`         | Webhook 签名密钥（启用签名验证时必须）     | -                                                                 |
+| `WEBHOOK_IP_WHITELIST`   | Webhook IP 白名单（逗号分隔，空为允许所有） | -                                                                 |
+| `LOG_LEVEL`              | 日志级别                        | info                                                              |
 
 ## 安全特性详解
 
@@ -616,13 +613,13 @@ cat SKILL.md | xclip -selection clipboard  # Linux
 
 本项目配置了完整的 GitHub Actions CI/CD 流水线：
 
-| 流水线 | 触发条件 | 功能 |
-|--------|---------|------|
-| [CI](.github/workflows/ci.yml) | Push/PR 到 main | Lint + TypeScript 检查 + 测试 + Docker 构建验证 |
+| 流水线                                      | 触发条件              | 功能                                         |
+| ---------------------------------------- | ----------------- | ------------------------------------------ |
+| [CI](.github/workflows/ci.yml)           | Push/PR 到 main    | Lint + TypeScript 检查 + 测试 + Docker 构建验证    |
 | [Release](.github/workflows/release.yml) | 推送 tag (`v*`) 或手动 | 构建 Docker 镜像 → 推送阿里云 → 自动创建 GitHub Release |
-| [Mirror](.github/workflows/mirror.yml) | Push 到 main 或手动 | 自动同步代码到 Gitee/Gitcode |
+| [Mirror](.github/workflows/mirror.yml)   | Push 到 main 或手动   | 自动同步代码到 Gitee/Gitcode                      |
 
-> 📖 详细配置指南：[docs/CICD_SETUP.md](docs/CICD_SETUP.md)
+> 📖 详细配置指南：[docs/CICD\_SETUP.md](docs/CICD_SETUP.md)
 
 ## 作者
 
@@ -641,15 +638,16 @@ cat SKILL.md | xclip -selection clipboard  # Linux
 
 感谢以下所有为本项目做出贡献的人！
 
-| 头像 | 姓名 / 用户名 | 角色 | 主要贡献 |
-|:---:|:---:|:---:|:---|
-| <img src="./docs-assets/contributors/1.jpg" width="60" height="60" style="border-radius:50%;" /> | **谭策** ([@qinshihu](https://github.com/qinshihu)) | 项目作者 | 项目架构设计、核心功能开发、文档编写 |
-| <img src="./docs-assets/contributors/微信图片_2026-06-12_143226_852.jpg" width="60" height="60" style="border-radius:50%;" /> | **@林** | 微信贡献者 | 项目测试开发反馈 |
-| <img src="./docs-assets/contributors/微信图片_2026-06-12_143259_183.jpg" width="60" height="60" style="border-radius:50%;" /> | **热心市民高先生** | 微信贡献者 | 项目测试开发反馈 |
-| <img src="./docs-assets/contributors/11.jpg" width="60" height="60" style="border-radius:50%;" /> | **尔东辰** | 微信贡献者 | 项目测试 |
-| <img src="https://avatars.githubusercontent.com/u/68582645?v=4" width="60" height="60" style="border-radius:50%;" /> | **xiezhiliang89** | Github贡献者 | 项目测试 |
+|                                                             头像                                                            |                      姓名 / 用户名                     |     角色    | 主要贡献               |
+| :-----------------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------: | :-------: | :----------------- |
+|              <img src="./docs-assets/contributors/1.jpg" width="60" height="60" style="border-radius:50%;" />             | **谭策** ([@qinshihu](https://github.com/qinshihu)) |    项目作者   | 项目架构设计、核心功能开发、文档编写 |
+| <img src="./docs-assets/contributors/微信图片_2026-06-12_143226_852.jpg" width="60" height="60" style="border-radius:50%;" /> |                       **@林**                      |   微信贡献者   | 项目测试开发反馈           |
+| <img src="./docs-assets/contributors/微信图片_2026-06-12_143259_183.jpg" width="60" height="60" style="border-radius:50%;" /> |                    **热心市民高先生**                    |   微信贡献者   | 项目测试开发反馈           |
+|             <img src="./docs-assets/contributors/11.jpg" width="60" height="60" style="border-radius:50%;" />             |                      **尔东辰**                      |   微信贡献者   | 项目测试               |
+|    <img src="https://avatars.githubusercontent.com/u/68582645?v=4" width="60" height="60" style="border-radius:50%;" />   |                 **xiezhiliang89**                 | Github贡献者 | 项目测试               |
 
 > 💡 **如何添加贡献者**：
+>
 > 1. 将头像图片放入 [`./docs-assets/contributors/`](./docs-assets/contributors/) 文件夹
 > 2. 命名格式：`用户名.png`（如 `qinshihu.png`）或 `wechat-昵称.png`（微信贡献者）
 > 3. 在上方表格中替换 `placeholder-X.svg` 为实际图片文件名
@@ -657,6 +655,7 @@ cat SKILL.md | xclip -selection clipboard  # Linux
 > 5. 详见 [贡献者头像文件夹说明](./docs-assets/contributors/README.md)
 >
 > **支持的贡献者类型**：
+>
 > - ✅ GitHub 开发者（自动获取头像或手动上传）
 > - ✅ 微信好友/群友（保存微信头像图片上传）
 > - ✅ 社区成员、测试人员、文档贡献者
