@@ -1,11 +1,11 @@
-import { MigrationManager, Migration } from './migrationFramework';
+﻿import { MigrationManager, Migration } from './migrationFramework';
 import v001InitialSchema from './v001_initial_schema';
 import v002AddApiProvider from './v002_add_api_provider';
 import v003AddAIModelsTable from './v003_add_ai_models';
 import v004AddAgentModelFields from './v004_add_agent_model_fields';
 import v005SSHKeyPasswordSupport from './v005_ssh_key_password_support';
 import v006NetworkDeviceCredentials from './v006_network_device_credentials';
-import v007CredentialsTable from './v007_credentials_table';
+import v007FixUsersIdType from './v007_fix_users_id_type';
 import { up as v009Up, down as v009Down } from './v009_network_complete_coverage';
 import { up as v010Up, down as v010Down } from './v010_snmp_channel';
 import v012TimezoneMigration from './v012_timezone_migration';
@@ -15,7 +15,7 @@ import v015NotificationColumns from './v015_notification_columns';
 import v016DatabasesTable from './v016_databases_table';
 import v017ApprovalRequests from './v017_approval_requests';
 
-// v009 / v010 导出的不是 Migration 对象，手动包装
+// v009 / v010 导出的不是 Migration 对象，手动包裹
 const v009NetworkCompleteCoverage: Migration = {
   id: '20240101000009',
   version: 9,
@@ -41,7 +41,7 @@ export const ALL_MIGRATIONS: Migration[] = [
   v004AddAgentModelFields,
   v005SSHKeyPasswordSupport,
   v006NetworkDeviceCredentials,
-  v007CredentialsTable,
+  v007FixUsersIdType,
   v009NetworkCompleteCoverage,
   v010SnmpChannel,
   v012TimezoneMigration,

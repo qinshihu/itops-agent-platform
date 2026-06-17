@@ -16,7 +16,6 @@ interface User {
 }
 
 export default function Users() {
-  const toast = useToast();
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
@@ -27,6 +26,7 @@ export default function Users() {
     enabled: true,
   });
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const { data: usersData, isLoading: usersLoading } = useQuery({
     queryKey: ['users'],
@@ -47,8 +47,8 @@ export default function Users() {
       resetForm();
       toast.success('用户创建成功');
     },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.error || '创建用户失败');
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || err.response?.data?.message || '用户创建失败');
     },
   });
 
@@ -63,8 +63,8 @@ export default function Users() {
       resetForm();
       toast.success('用户更新成功');
     },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.error || '更新用户失败');
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || err.response?.data?.message || '用户更新失败');
     },
   });
 
@@ -77,8 +77,8 @@ export default function Users() {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       toast.success('用户删除成功');
     },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.error || '删除用户失败');
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || err.response?.data?.message || '用户删除失败');
     },
   });
 
@@ -272,11 +272,6 @@ export default function Users() {
                   className="w-full px-3 py-2 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:border-primary"
                   placeholder="输入密码"
                 />
-                {!editingUser && (
-                  <p className="mt-1 text-xs text-text-secondary">
-                    至少 8 位，且包含大写字母、小写字母、数字和特殊字符。
-                  </p>
-                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1">邮箱</label>

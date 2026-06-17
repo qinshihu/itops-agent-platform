@@ -509,12 +509,20 @@ function generateStrongPassword(length: number = 16): string {
 }
 
 function initializeDefaultUsers() {
+  // 幂等性检查：如果 admin 用户已存在则跳过
+  const existingAdmin = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
+  if (existingAdmin) {
+    logger.info('✅ Default admin user already exists, skipping initialization');
+    return;
+  }
+
   const initialPassword = process.env.ADMIN_INITIAL_PASSWORD || 'admin';
   const hashedPassword = bcrypt.hashSync(initialPassword, 12);
+  const id = randomUUID();
   db.prepare(`
-    INSERT INTO users (username, password, email, role, enabled, password_must_change)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run('admin', hashedPassword, 'admin@example.com', 'admin', 1, 1);
+    INSERT INTO users (id, username, password, email, role, enabled, password_must_change)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, 'admin', hashedPassword, 'admin@example.com', 'admin', 1, 1);
 
   if (process.env.ADMIN_INITIAL_PASSWORD) {
     logger.info('✅ Default admin user created with custom password');

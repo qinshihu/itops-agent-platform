@@ -60,30 +60,17 @@ router.post('/', requireRole('admin'), async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Username already exists' });
     }
     
+    const id = randomUUID();
     const now = new Date().toISOString();
     
     // 使用bcrypt进行密码哈希
     const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
     
-    const columns = db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string; type?: string }>;
-    const idColumn = columns.find((column) => column.name === 'id');
-    const useNumericId = (idColumn?.type || '').toUpperCase().includes('INT');
-
-    let id: string;
-    if (useNumericId) {
-      const result = db.prepare(`
-        INSERT INTO users (username, password, email, role, enabled, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(username, hashedPassword, email || null, role, enabled ? 1 : 0, now, now);
-      id = String(result.lastInsertRowid);
-    } else {
-      id = randomUUID();
-      db.prepare(`
-        INSERT INTO users (id, username, password, email, role, enabled, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, username, hashedPassword, email || null, role, enabled ? 1 : 0, now, now);
-    }
+    db.prepare(`
+      INSERT INTO users (id, username, password, email, role, enabled, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, username, hashedPassword, email || null, role, enabled ? 1 : 0, now, now);
     
     const reqUser = (req as { user?: { id: string } }).user;
     createAuditLog({
