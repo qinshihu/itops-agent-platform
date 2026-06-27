@@ -135,21 +135,27 @@ export default function DataCenterManage() {
   }, []);
 
   // ===== Lifecycle =====
+  const [lifecyclesLoading, setLifecyclesLoading] = useState(false);
   const loadLifecycles = async () => {
+    setLifecyclesLoading(true);
     try {
       const params: any = { limit: 500 };
       if (lifecycleFilter) params.action = lifecycleFilter;
       const res = await api.get('/api/dc/lifecycle', { params });
       setLifecycles(res.data.data || []);
     } catch { message.error('加载生命周期记录失败'); }
+    finally { setLifecyclesLoading(false); }
   };
 
   // ===== PDUs =====
+  const [pdusLoading, setPdusLoading] = useState(false);
   const loadPdus = async () => {
+    setPdusLoading(true);
     try {
       const res = await api.get('/api/dc/pdus');
       setPdus(res.data.data || []);
     } catch { message.error('加载PDU/UPS数据失败'); }
+    finally { setPdusLoading(false); }
   };
 
   // ===== Export =====
@@ -884,14 +890,14 @@ export default function DataCenterManage() {
             <Button icon={<Search size={14} />} onClick={loadLifecycles}>刷新</Button>
           </Space>
           <Table columns={lifecycleColumns} dataSource={lifecycles.map((l: any) => ({ ...l, key: l.id }))}
-            pagination={{ pageSize: 50 }} scroll={{ x: 800 }} loading={lifecycles.length === 0} />
+            pagination={{ pageSize: 50 }} scroll={{ x: 800 }} loading={lifecyclesLoading} />
         </div>
       )}
 
       {/* ===== PDUs Tab ===== */}
       {activeTab === 'pdus' && (
         <Table columns={pduColumns} dataSource={pdus.map((p: any) => ({ ...p, key: p.id }))}
-          pagination={false} scroll={{ x: 1000 }} loading={pdus.length === 0} />
+          pagination={false} scroll={{ x: 1000 }} loading={pdusLoading} />
       )}
 
       {/* ===== Export Tab ===== */}

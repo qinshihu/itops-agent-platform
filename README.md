@@ -32,7 +32,7 @@
   <a href="https://gitcode.com/gcw_IM7aAihp/itops-agent-platform"><img src="https://img.shields.io/badge/GitCode-仓库-FF6600?logo=git" alt="GitCode"></a>
   <br/>
   <img src="https://img.shields.io/badge/Agents-12-blueviolet" alt="12 Agents">
-  <img src="https://img.shields.io/badge/API_Routes-67-success" alt="67 API Routes">
+  <img src="https://img.shields.io/badge/API_Routes-68-success" alt="68 API Routes">
   <img src="https://img.shields.io/badge/Services-72-blue" alt="72 Services">
   <img src="https://img.shields.io/badge/Frontend_Pages-63-orange" alt="63 Pages">
   <img src="https://img.shields.io/badge/Workflows-10-teal" alt="10 Workflows">
@@ -146,12 +146,22 @@ Prometheus / Zabbix 告警 → Webhook 接收
 ### 路径3️⃣   容器与虚拟化统一管理
 
 ```
-一键添加 Docker 主机 / VMware vCenter / KVM 节点
+一键添加 Docker 主机 / VMware vCenter / Proxmox VE / KVM 节点
   → 自动发现所有容器和虚拟机
     → 实时监控 CPU / 内存 / 网络（WebSocket 推送）
       → 容器日志流式查看
         → Docker Compose 可视化编排
-          → 镜像仓库集成（Harbor / ACR / Docker Hub）
+          → K8s 集群导入与管理（kubeconfig 导入 + 集群状态监控）
+            → 镜像仓库集成（Harbor / ACR / Docker Hub）
+```
+
+### 路径4️⃣   数据中心与网络设施管理
+
+```
+网段规划 → IP 子网与 VLAN 管理 → IP 地址自动分配 / 预留 / 回收
+  → 数据中心机房建模（机柜 / PDU / 设备生命周期 / 供电管理）
+    → 机房 3D 数字孪生监控（WebGL 实时渲染）
+      → 网络拓扑自动发现（SNMP / LLDP / ARP）
 ```
 
 ***
@@ -166,6 +176,9 @@ Prometheus / Zabbix 告警 → Webhook 接收
 | **人工审批（HITL）**    |    **✅**    |       ❌       |     ❌     |      ❌     |    ❌    |    ❌    |
 | Docker/VM 可视化管理   |      ✅      |       ❌       |     ✅     |      ❌     |    ❌    |    ✅    |
 | K8s 集群管理          |      ✅      |       ❌       |     ✅     |      ❌     |    ❌    |    ❌    |
+| IP 子网 / VLAN 管理    |      ✅      |       ❌       |     ❌     |      ❌     |    ❌    |    ❌    |
+| 数据中心机房建模         |      ✅      |       ❌       |     ❌     |      ❌     |    ❌    |    ❌    |
+| 机房 3D 数字孪生        |      ✅      |       ❌       |     ❌     |      ❌     |    ❌    |    ❌    |
 | 工作流拖拽编排           |      ✅      |       ✅       |     ❌     |      ❌     |    ✅    |    ❌    |
 | Web SSH 终端        |      ✅      |       ❌       |     ✅     |      ❌     |    ❌    |    ❌    |
 | 知识库 + RAG         |      ✅      |       ❌       |     ❌     |      ❌     |    ❌    |    ❌    |
@@ -184,7 +197,7 @@ Prometheus / Zabbix 告警 → Webhook 接收
 graph TB
     Browser["🌐 浏览器"] --> Nginx["Nginx 反向代理"]
     Nginx --> React["React 前端<br/>63 个页面 | @xyflow/react 工作流编辑器"]
-    Nginx --> Express["Express 后端<br/>67 个路由 | 72 个服务 | JWT 认证"]
+    Nginx --> Express["Express 后端<br/>68 个路由 | 72 个服务 | JWT 认证"]
     React <-->|"WebSocket 实时通信"| Express
     Express --> SQLite[("SQLite 数据库<br/>WAL 模式 | AES-256 加密")]
     Express --> LLM["🤖 LLM 模型池<br/>豆包 | DeepSeek | 通义千问<br/>OpenAI | 智谱 | 本地模型"]
@@ -214,9 +227,12 @@ graph TB
 
 - **工作流编辑器**：拖拽编排，串行/并行/条件分支，10 个预设模板
 - **Web SSH 终端**：xterm.js 交互式终端，窗口自适应，会话管理
-- **容器管理**：Docker 可视化（启停/日志/监控/Compose 编排）
-- **虚拟机管理**：VMware vSphere / KVM 支持，快照管理，实时迁移
-- **K8s 管理**：Pod / Deployment / Service / Node 全生命周期管理
+- **容器管理**：多主机 Docker 可视化（启停/日志/监控/Compose 编排）
+- **虚拟机管理**：VMware vSphere / Proxmox VE / KVM 多平台，快照管理，实时迁移
+- **K8s 管理**：kubeconfig 导入集群，Pod / Deployment / Service / Node 全生命周期
+- **网段管理**：IP 子网 / VLAN 规划，自动生成 IP 地址池，分配 / 预留 / 回收，批量操作
+- **数据中心管理**：机房机柜建模，设备生命周期追踪，PDU/UPS 供电管理
+- **机房 3D 监控**：Three.js WebGL 数字孪生，实时设备状态可视化
 - **大屏仪表盘**：全屏 NOC 监控中心
 
 ### 🏢 企业级能力
@@ -320,15 +336,16 @@ npm run dev
 ```
 ├── backend/src/
 │   ├── app.ts                    # Express 入口
-│   ├── routes/                   # 67 个 API 路由模块
+│   ├── routes/                   # 68 个 API 路由模块
 │   ├── services/                 # 72 个业务服务
 │   ├── models/                   # 数据库 + 迁移（32 版本）
+│   ├── presets/                  # 预设数据（Agent / 工作流 / 知识库等）
 │   ├── middleware/               # 6 个中间件（auth / rateLimiter / validation 等）
 │   ├── websocket/                # Socket.io 实时通信
 │   └── utils/                    # 工具函数
 ├── frontend/src/
 │   ├── pages/                    # 63 个页面组件
-│   ├── components/               # 通用组件
+│   ├── components/               # 通用组件（DataRoom3D / WorkflowEditor 等）
 │   ├── contexts/                 # React Context (Auth / Theme / Toast)
 │   └── lib/                      # Axios 封装 / 工具库
 ├── docker/                       # 生产 Docker 配置 + Nginx

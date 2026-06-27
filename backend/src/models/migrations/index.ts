@@ -32,6 +32,7 @@ import v026AiRemediations from './v026_ai_remediations';
 import v027DcInfrastructure from './v027_dc_infrastructure';
 import v028DcLifecycle from './v028_dc_lifecycle';
 import v029DcRoomMonitor from './v029_dc_room_monitor';
+import v030NetworkSubnets from './v030_network_subnets';
 
 // Helper: wrap sync up/down into async
 function wrapAsync(fn: (db: any) => void): (db: any) => Promise<void> {
@@ -203,6 +204,15 @@ const v029DcRoomMonitorMigration: Migration = {
   down: wrapAsync(v029DcRoomMonitor.down),
 };
 
+const v030NetworkSubnetsMigration: Migration = {
+  id: '20250101000040',
+  version: 40,
+  name: 'network_subnets',
+  description: 'Network subnet management tables (subnets + IP addresses)',
+  up: wrapAsync(v030NetworkSubnets.up),
+  down: wrapAsync(v030NetworkSubnets.down),
+};
+
 export const ALL_MIGRATIONS: Migration[] = [
   v001InitialSchema,
   v002AddApiProvider,
@@ -231,6 +241,7 @@ export const ALL_MIGRATIONS: Migration[] = [
   v027DcInfrastructureMigration,
   v028DcLifecycleMigration,
   v029DcRoomMonitorMigration,
+  v030NetworkSubnetsMigration,
   // 重新编号的迁移（版本号冲突已解决）
   v031CredentialsTable,
   v032ToolLinks,

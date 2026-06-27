@@ -5,7 +5,9 @@ FROM node:20-slim
 WORKDIR /app
 
 # Install build dependencies for native modules (better-sqlite3)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Use Aliyun mirror for faster downloads in China
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \

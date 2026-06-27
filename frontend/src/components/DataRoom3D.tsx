@@ -118,8 +118,8 @@ export default function DataRoom3D() {
     const w = canvas.clientWidth, h = canvas.clientHeight;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0f1a);
-    scene.fog = new THREE.FogExp2(0x0a0f1a, 0.006);
+    scene.background = new THREE.Color(0x141e2d);
+    scene.fog = new THREE.FogExp2(0x141e2d, 0.003);
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(45, w/h, 0.1, 200);
@@ -127,14 +127,14 @@ export default function DataRoom3D() {
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
-    renderer.setClearColor(0x0a0f1a, 1);
+    renderer.setClearColor(0x141e2d, 1);
     renderer.setSize(w, h);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.8;
+    renderer.toneMappingExposure = 1.3;
     rendererRef.current = renderer;
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -145,8 +145,8 @@ export default function DataRoom3D() {
     controlsRef.current = controls;
 
     // ===== 灯光系统（对齐监控大屏） =====
-    scene.add(new THREE.AmbientLight(0x667788, 0.5));
-    const mainLight = new THREE.DirectionalLight(0xddeeff, 1.0);
+    scene.add(new THREE.AmbientLight(0x8899aa, 0.9));
+    const mainLight = new THREE.DirectionalLight(0xddeeff, 1.4);
     mainLight.position.set(20,40,20); mainLight.castShadow = true;
     mainLight.shadow.mapSize.width = 2048; mainLight.shadow.mapSize.height = 2048;
     mainLight.shadow.camera.left = -50; mainLight.shadow.camera.right = 50;
@@ -154,44 +154,44 @@ export default function DataRoom3D() {
     mainLight.shadow.camera.near = 1; mainLight.shadow.camera.far = 100;
     mainLight.shadow.bias = -0.001;
     scene.add(mainLight);
-    const dl1 = new THREE.DirectionalLight(0x6688aa, 0.3); dl1.position.set(-25,20,0); scene.add(dl1);
-    const dl2 = new THREE.DirectionalLight(0x7799bb, 0.2); dl2.position.set(25,20,0); scene.add(dl2);
-    const dl3 = new THREE.DirectionalLight(0xffffff, 0.4); dl3.position.set(0,50,0); scene.add(dl3);
-    const dl4 = new THREE.DirectionalLight(0x445566, 0.2); dl4.position.set(0,15,-30); scene.add(dl4);
-    const dl5 = new THREE.DirectionalLight(0x556677, 0.15); dl5.position.set(0,10,30); scene.add(dl5);
+    const dl1 = new THREE.DirectionalLight(0x6688aa, 0.5); dl1.position.set(-25,20,0); scene.add(dl1);
+    const dl2 = new THREE.DirectionalLight(0x7799bb, 0.4); dl2.position.set(25,20,0); scene.add(dl2);
+    const dl3 = new THREE.DirectionalLight(0xffffff, 0.6); dl3.position.set(0,50,0); scene.add(dl3);
+    const dl4 = new THREE.DirectionalLight(0x445566, 0.3); dl4.position.set(0,15,-30); scene.add(dl4);
+    const dl5 = new THREE.DirectionalLight(0x556677, 0.25); dl5.position.set(0,10,30); scene.add(dl5);
 
     // 彩色氛围光
     const addPoint = (color:number,intensity:number,distance:number,x:number,y:number,z:number) => {
       const pl = new THREE.PointLight(color, intensity, distance);
       pl.position.set(x,y,z); scene.add(pl);
     };
-    addPoint(0x00d4ff, 1.2, 60, -12, 10, 0);
-    addPoint(0x00d4ff, 1.2, 60, 12, 10, 0);
-    addPoint(0x4488ff, 0.8, 50, 0, 12, 0);
-    addPoint(0x00ff88, 0.4, 40, 0, 8, -20);
-    addPoint(0x6644ff, 0.3, 50, 0, 15, -15);
-    addPoint(0xff8844, 0.3, 40, 0, 6, 15);
-    addPoint(0x00d4ff, 0.6, 30, 0, 6, -15);
-    addPoint(0x00d4ff, 0.6, 30, 0, 6, 15);
-    scene.add(new THREE.HemisphereLight(0x556677, 0x0a1018, 0.3));
+    addPoint(0x00d4ff, 1.5, 60, -12, 10, 0);
+    addPoint(0x00d4ff, 1.5, 60, 12, 10, 0);
+    addPoint(0x4488ff, 1.0, 50, 0, 12, 0);
+    addPoint(0x00ff88, 0.5, 40, 0, 8, -20);
+    addPoint(0x6644ff, 0.4, 50, 0, 15, -15);
+    addPoint(0xff8844, 0.4, 40, 0, 6, 15);
+    addPoint(0x00d4ff, 0.8, 30, 0, 6, -15);
+    addPoint(0x00d4ff, 0.8, 30, 0, 6, 15);
+    scene.add(new THREE.HemisphereLight(0x667788, 0x1a2535, 0.6));
 
     // ===== 防静电架空地板 =====
     const tileCount = 40;
     const tileCanvas = document.createElement('canvas');
     tileCanvas.width = 256; tileCanvas.height = 256;
     const tctx = tileCanvas.getContext('2d')!;
-    tctx.fillStyle = '#2e3a4d';
+    tctx.fillStyle = '#4a5a6a';
     tctx.fillRect(0, 0, 256, 256);
     for (let tx = 0; tx < 256; tx += 2) {
       for (let ty = 0; ty < 256; ty += 2) {
         const noise = Math.random() * 6 - 3;
-        tctx.fillStyle = `rgb(${Math.max(0,Math.min(255,46+noise))},${Math.max(0,Math.min(255,58+noise))},${Math.max(0,Math.min(255,77+noise))})`;
+        tctx.fillStyle = `rgb(${Math.max(0,Math.min(255,74+noise))},${Math.max(0,Math.min(255,90+noise))},${Math.max(0,Math.min(255,106+noise))})`;
         tctx.fillRect(tx, ty, 2, 2);
       }
     }
-    tctx.strokeStyle = '#1a1f2e'; tctx.lineWidth = 2;
+    tctx.strokeStyle = '#3a4a5a'; tctx.lineWidth = 2;
     tctx.strokeRect(1, 1, 254, 254);
-    tctx.strokeStyle = 'rgba(80,110,140,0.4)'; tctx.lineWidth = 1;
+    tctx.strokeStyle = 'rgba(100,140,170,0.5)'; tctx.lineWidth = 1;
     [64,128,192].forEach(pos => {
       tctx.beginPath(); tctx.moveTo(pos,4); tctx.lineTo(pos,252); tctx.stroke();
       tctx.beginPath(); tctx.moveTo(4,pos); tctx.lineTo(252,pos); tctx.stroke();
@@ -201,18 +201,18 @@ export default function DataRoom3D() {
     tileTex.repeat.set(tileCount, tileCount);
     tileTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
     const floorMat = new THREE.MeshPhysicalMaterial({
-      map: tileTex, color: 0x1e2530,
-      metalness: 0.1, roughness: 0.75,
-      clearcoat: 0.05, clearcoatRoughness: 0.9,
+      map: tileTex, color: 0x9eada8,
+      metalness: 0.05, roughness: 0.6,
+      clearcoat: 0.1, clearcoatRoughness: 0.8,
     });
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
-    // 底部暗色遮罩
+    // 底部浅色基底
     const baseFloor = new THREE.Mesh(
       new THREE.PlaneGeometry(90, 90),
-      new THREE.MeshStandardMaterial({ color: 0x050a10, roughness: 1 })
+      new THREE.MeshStandardMaterial({ color: 0x6b7b76, roughness: 1 })
     );
     baseFloor.rotation.x = -Math.PI / 2;
     baseFloor.position.y = -0.01;

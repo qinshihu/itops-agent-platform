@@ -58,3 +58,9 @@ backend-logs.txt
 
 # TypeScript build info
 *.tsbuildinfo
+
+# Runtime backups
+backend/backups/
+
+# Lint output dumps
+eslint.txt

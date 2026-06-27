@@ -111,6 +111,8 @@ import autoScaleRoutes from './routes/autoScaleRoutes';
 import costAnalysisRoutes from './routes/costAnalysisRoutes';
 import vmMigrationRoutes from './routes/vmMigrationRoutes';
 
+import networkSubnetRoutes from './routes/networkSubnetRoutes';
+
 const app = express();
 const httpServer = createServer(app);
 
@@ -338,6 +340,7 @@ app.use('/api/snapshot-policies', rateLimiter, snapshotPolicyRoutes);
 app.use('/api/registries', rateLimiter, registryRoutes);
 app.use('/api/kubernetes', rateLimiter, kubernetesRoutes);
 app.use('/api/auto-scale', rateLimiter, autoScaleRoutes);
+app.use('/api/network-subnets', rateLimiter, networkSubnetRoutes);
 app.use('/api/cost-analysis', rateLimiter, costAnalysisRoutes);
 app.use('/api/vm-migrations', rateLimiter, vmMigrationRoutes);
 

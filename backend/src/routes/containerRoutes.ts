@@ -373,12 +373,35 @@ router.delete('/volumes/:id', requireRole('admin', 'operator'), async (req: Requ
 // Docker 网络管理
 // ═══════════════════════════════════════════════════
 
+/** 将 Docker API 返回的 PascalCase 字段转为 camelCase，确保前端兼容 */
+function normalizeNetwork(raw: any): any {
+  return {
+    id: raw.Id || raw.id,
+    name: raw.Name || raw.name,
+    driver: raw.Driver || raw.driver,
+    scope: raw.Scope || raw.scope,
+    internal: raw.Internal ?? raw.internal ?? false,
+    attachable: raw.Attachable ?? raw.attachable ?? false,
+    ipam: raw.IPAM ? {
+      driver: raw.IPAM.Driver || raw.IPAM.driver,
+      config: (raw.IPAM.Config || raw.IPAM.config || []).map((c: any) => ({
+        subnet: c.Subnet || c.subnet,
+        gateway: c.Gateway || c.gateway,
+      })),
+    } : raw.ipam || { driver: '', config: [] },
+    containers: raw.Containers || raw.containers || {},
+    options: raw.Options || raw.options || {},
+    labels: raw.Labels || raw.labels || {},
+    created: raw.Created || raw.created,
+  };
+}
+
 router.get('/networks/list', async (req: Request, res: Response) => {
   if (!checkDockerAvailable(res, req)) return;
   try {
     const d = getDocker(req);
     const networks = await d.listNetworks();
-    res.json({ success: true, data: networks });
+    res.json({ success: true, data: networks.map(normalizeNetwork) });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
@@ -388,7 +411,7 @@ router.get('/networks/:id', async (req: Request, res: Response) => {
     const d = getDocker(req);
     const net = d.getNetwork(req.params.id);
     const data = await net.inspect();
-    res.json({ success: true, data });
+    res.json({ success: true, data: normalizeNetwork(data) });
   } catch (err: any) { res.status(err.statusCode || 404).json({ success: false, message: err.message }); }
 });
 
