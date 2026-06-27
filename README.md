@@ -4,7 +4,7 @@
 
 **重要许可证变更通知（2026-05-27）**
 
-本项目自 2026年5月27日 起，所有新提交的代码采用 **Mozilla Public License 2.0 (MPL-2.0)** 许可证开源。2026年5月27日 16:00 之前提交的代码仍遵循原 MIT 许可证。本项目禁止闭源二次开发、打包销售、SaaS化运营等商业用途，永久开源。
+本项目自 2026年5月27日 起，所有新提交的代码采用 **Mozilla Public License 2.0 (MPL-2.0)** 许可证开源。本项目禁止闭源二次开发、打包销售、SaaS化运营等商业用途，永久开源。
 
 👤 作者：谭策 | IT Online
 
@@ -28,6 +28,9 @@
   <a href="https://github.com/qinshihu/itops-agent-platform"><img src="https://img.shields.io/github/stars/qinshihu/itops-agent-platform?style=social" alt="Stars"></a>
   <a href="https://github.com/qinshihu/itops-agent-platform/issues"><img src="https://img.shields.io/github/issues/qinshihu/itops-agent-platform" alt="Issues"></a>
   <br/>
+  <a href="https://gitee.com/IT_Oline/itops-agent-platform"><img src="https://img.shields.io/badge/Gitee-仓库-C71D23?logo=gitee" alt="Gitee"></a>
+  <a href="https://gitcode.com/gcw_IM7aAihp/itops-agent-platform"><img src="https://img.shields.io/badge/GitCode-仓库-FF6600?logo=git" alt="GitCode"></a>
+  <br/>
   <img src="https://img.shields.io/badge/Agents-12-blueviolet" alt="12 Agents">
   <img src="https://img.shields.io/badge/API_Routes-67-success" alt="67 API Routes">
   <img src="https://img.shields.io/badge/Services-72-blue" alt="72 Services">
@@ -44,9 +47,11 @@
   </a>
 </p>
 
-📝 [项目愿景与社区共建](项目愿景与社区共建.md) &nbsp;|&nbsp; 📝 [项目AI编程Skill](SKILL.md) &nbsp;|&nbsp; 📖 [项目文档](https://aiopsdoc-0mwug01t6.maozi.io/) &nbsp;|&nbsp; 🎮 [在线演示](https://agentdemo-0mwug01t6.maozi.io/)
+📝 [项目愿景与社区共建](项目愿景与社区共建.md) &nbsp;|&nbsp; 📝 [项目AI编程Skill](SKILL.md) &nbsp;|&nbsp; 📝 [教学书籍](https://aiopsdoc-0mwug01t6.maozi.io/book/) &nbsp;|&nbsp; 📖 [项目文档](https://aiopsdoc-0mwug01t6.maozi.io/) &nbsp;|&nbsp; 🎮 [在线演示](https://agentdemo-0mwug01t6.maozi.io/)
 
 🌐 项目官网：<https://www.zjzwfw.cloud/ITOpsAgentinfo>
+
+📦 镜像仓库：[GitHub](https://github.com/qinshihu/itops-agent-platform) &nbsp;|&nbsp; [Gitee](https://gitee.com/IT_Oline/itops-agent-platform) &nbsp;|&nbsp; [GitCode](https://gitcode.com/gcw_IM7aAihp/itops-agent-platform)
 
 ---
 
@@ -83,6 +88,8 @@ ITOps Agent Platform 把这个流程变成：
 ---
 
 <img alt="platform-screenshot" src="docs-assets/0-3.gif" style="max-width: 100%;" />
+
+<img alt="platform-screenshot" src="docs-assets/22.png" style="max-width: 100%;" />
 
 ---
 

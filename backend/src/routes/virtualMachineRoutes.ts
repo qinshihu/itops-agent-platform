@@ -227,6 +227,7 @@ router.post('/', requireRole('admin', 'operator'), async (req: Request, res: Res
     // 尝试通过 Hypervisor API 创建
     try {
       const vm = await vmManagementService.createVM(platformId, {
+        platformId,
         name: name || '',
         config: {
           name: name || 'unnamed-vm',

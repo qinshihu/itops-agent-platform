@@ -28,6 +28,9 @@ Effective May 27, 2026, all new code submissions are open-sourced under the **Mo
   <a href="https://github.com/qinshihu/itops-agent-platform"><img src="https://img.shields.io/github/stars/qinshihu/itops-agent-platform?style=social" alt="Stars"></a>
   <a href="https://github.com/qinshihu/itops-agent-platform/issues"><img src="https://img.shields.io/github/issues/qinshihu/itops-agent-platform" alt="Issues"></a>
   <br/>
+  <a href="https://gitee.com/IT_Oline/itops-agent-platform"><img src="https://img.shields.io/badge/Gitee-Repo-C71D23?logo=gitee" alt="Gitee"></a>
+  <a href="https://gitcode.com/gcw_IM7aAihp/itops-agent-platform"><img src="https://img.shields.io/badge/GitCode-Repo-FF6600?logo=git" alt="GitCode"></a>
+  <br/>
   <img src="https://img.shields.io/badge/Agents-12-blueviolet" alt="12 Agents">
   <img src="https://img.shields.io/badge/API_Routes-67-success" alt="67 API Routes">
   <img src="https://img.shields.io/badge/Services-72-blue" alt="72 Services">
@@ -47,6 +50,8 @@ Effective May 27, 2026, all new code submissions are open-sourced under the **Mo
 📝 [Project Vision](项目愿景与社区共建.md) &nbsp;|&nbsp; 📖 [Documentation](https://aiopsdoc-0mwug01t6.maozi.io/) &nbsp;|&nbsp; 🎮 [Live Demo](https://agentdemo-0mwug01t6.maozi.io/)
 
 🌐 Website: <https://www.zjzwfw.cloud/ITOpsAgentinfo>
+
+📦 Repositories: [GitHub](https://github.com/qinshihu/itops-agent-platform) &nbsp;|&nbsp; [Gitee](https://gitee.com/IT_Oline/itops-agent-platform) &nbsp;|&nbsp; [GitCode](https://gitcode.com/gcw_IM7aAihp/itops-agent-platform)
 
 ---
 
@@ -90,7 +95,7 @@ Alert triggers → AI auto-diagnoses root cause → Generates remediation comman
 
 ```bash
 # 1. Deploy with one command (Docker required)
-curl -sL https://gitee.com/IT_Online/itops-agent-platform/raw/main/deploy.sh -o deploy.sh && chmod +x deploy.sh && ./deploy.sh
+curl -sL https://gitee.com/IT_Oline/itops-agent-platform/raw/main/deploy.sh -o deploy.sh && chmod +x deploy.sh && ./deploy.sh
 
 # 2. Open http://localhost:8080, login with admin/admin
 # 3. Add a server → auto-discovers containers and resources on the host
