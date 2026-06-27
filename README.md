@@ -86,6 +86,8 @@ ITOps Agent Platform 把这个流程变成：
 
 ***
 
+<img alt="platform-screenshot" src="docs-assets/01.png" style="max-width: 100%;" />
+
 <img alt="platform-screenshot" src="docs-assets/0-3.gif" style="max-width: 100%;" />
 
 <img alt="platform-screenshot" src="docs-assets/22.png" style="max-width: 100%;" />
