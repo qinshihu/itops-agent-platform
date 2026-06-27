@@ -18,6 +18,7 @@ interface Container {
   id: string;
   name: string;
   image: string;
+  state: string;
   status: string;
   host?: string;
   container_id?: string;
@@ -149,11 +150,11 @@ export default function ContainerMonitor() {
     },
     {
       title: '状态',
-      dataIndex: 'status',
-      key: 'status',
+      dataIndex: 'state',
+      key: 'state',
       width: 100,
-      render: (status: string) => (
-        <Tag color={statusColors[status] || 'default'}>{status}</Tag>
+      render: (state: string, record: Container) => (
+        <Tag color={statusColors[state] || 'default'}>{record.status || state}</Tag>
       ),
     },
     {
@@ -235,7 +236,7 @@ export default function ContainerMonitor() {
                 ghost
                 icon={<Play className="w-3 h-3" />}
                 onClick={() => toggleMonitor(record.id, true)}
-                disabled={record.status !== 'running'}
+                disabled={record.state !== 'running'}
               >
                 开始监控
               </Button>
@@ -352,7 +353,7 @@ export default function ContainerMonitor() {
             <Descriptions title="基本信息" column={2} bordered size="small">
               <Descriptions.Item label="容器名">{detailItem.name}</Descriptions.Item>
               <Descriptions.Item label="状态">
-                <Tag color={statusColors[detailItem.status] || 'default'}>{detailItem.status}</Tag>
+                <Tag color={statusColors[detailItem.state] || 'default'}>{detailItem.status || detailItem.state}</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="镜像" span={2}>{detailItem.image}</Descriptions.Item>
               <Descriptions.Item label="容器ID" span={2}>

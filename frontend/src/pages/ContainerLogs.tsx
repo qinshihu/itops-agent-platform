@@ -7,6 +7,7 @@ import io, { Socket } from 'socket.io-client';
 interface Container {
   id: string;
   name: string;
+  state: string;
   status: string;
 }
 
@@ -36,7 +37,7 @@ export default function ContainerLogs() {
     const socket = io('/', { auth: { token }, transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
-    socket.on('container:log:entry', (entry: LogEntry) => {
+    socket.on('container:log', (entry: LogEntry) => {
       setLogs(prev => {
         const updated = [...prev, entry];
         if (updated.length > tailLines) {
@@ -46,7 +47,18 @@ export default function ContainerLogs() {
       });
     });
 
-    return () => { socket.disconnect(); };
+    socket.on('container:log:error', (data: { containerId: string; error: string }) => {
+      message.error(`日志流错误: ${data.error}`);
+      setIsStreaming(false);
+    });
+
+    return () => {
+      // 组件卸载时停止日志流并断开连接
+      if (roomIdRef.current) {
+        socket.emit('container:log:unsubscribe', { roomId: roomIdRef.current });
+      }
+      socket.disconnect();
+    };
   }, [tailLines]);
 
   // Fetch containers list
@@ -77,15 +89,20 @@ export default function ContainerLogs() {
       message.warning('请先选择容器');
       return;
     }
-    const roomId = `container-logs-${selectedContainer}-${Date.now()}`;
-    roomIdRef.current = roomId;
     socketRef.current?.emit('container:log:subscribe', {
       containerId: selectedContainer,
       tail: tailLines,
-      roomId,
+      timestamps: true,
+    }, (result: { roomId: string }) => {
+      if (!result?.roomId) {
+        message.error('无法启动日志流，请确认容器正在运行');
+        return;
+      }
+      // 使用后端返回的真实 roomId，确保停止时能正确取消订阅
+      roomIdRef.current = result.roomId;
+      setIsStreaming(true);
+      setLogs([]);
     });
-    setIsStreaming(true);
-    setLogs([]);
   };
 
   // Stop streaming logs
@@ -148,7 +165,7 @@ export default function ContainerLogs() {
   };
 
   const containerOptions = containers
-    .filter(c => c.status === 'running')
+    .filter(c => c.state === 'running')
     .map(c => ({ label: c.name, value: c.id }));
 
   return (

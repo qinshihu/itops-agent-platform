@@ -132,6 +132,23 @@ router.post('/endpoints/:id/refresh', requireRole('admin', 'operator'), async (r
 // 容器管理
 // ═══════════════════════════════════════════════════
 
+/** 将 Docker API 返回的容器数据统一为 camelCase 格式，确保前端字段一致 */
+function normalizeContainer(c: any): any {
+  return {
+    id: c.id || c.Id,
+    name: c.name || c.Names?.[0]?.replace(/^\//, '') || 'unnamed',
+    image: c.image || c.Image,
+    imageId: c.imageId || c.ImageID,
+    state: (c.state || c.State || '').toLowerCase(),
+    status: c.status || c.Status || '',
+    ports: c.ports || c.Ports || [],
+    created: c.created || c.Created,
+    labels: c.labels || c.Labels || {},
+    container_id: c.id || c.Id,
+    host: c.host || undefined,
+  };
+}
+
 // GET / — 容器列表
 router.get('/', async (req: Request, res: Response) => {
   if (!checkDockerAvailable(res, req)) return;
@@ -145,20 +162,20 @@ router.get('/', async (req: Request, res: Response) => {
     let allContainers: any[];
     if (endpointId && endpointId !== 'local') {
       const d = getDocker(req);
-      allContainers = await d.listContainers({ all: true });
+      allContainers = (await d.listContainers({ all: true })).map(normalizeContainer);
     } else {
-      allContainers = await dockerService.listContainers(true);
+      allContainers = (await dockerService.listContainers(true)).map(normalizeContainer);
     }
 
     let filtered = allContainers;
     if (search) {
       filtered = filtered.filter((c: any) =>
-        (c.name || c.Names?.[0] || '').toLowerCase().includes(search) ||
-        (c.image || c.Image || '').toLowerCase().includes(search)
+        (c.name || '').toLowerCase().includes(search) ||
+        (c.image || '').toLowerCase().includes(search)
       );
     }
     if (status) {
-      filtered = filtered.filter((c: any) => (c.state || c.State || '').toLowerCase() === status);
+      filtered = filtered.filter((c: any) => c.state === status);
     }
     const total = filtered.length;
     const data = filtered.slice((page - 1) * pageSize, page * pageSize);

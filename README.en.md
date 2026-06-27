@@ -308,8 +308,6 @@ graph TB
 
 ---
 
-## 🔬 Technical Moat
-
 | Moat | Description |
 |------|-------------|
 | **12-Agent Collaborative Scheduling** | Not a single AI API call — a complex distributed system with Agent division of labor + collaboration + arbitration |
