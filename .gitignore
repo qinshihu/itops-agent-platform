@@ -62,5 +62,12 @@ backend-logs.txt
 # Runtime backups
 backend/backups/
 
+# Backup files
+*.bak
+
+# Internal audit reports (sensitive)
+docs/*蓝军安全审计报告*
+docs/*安全审计*
+
 # Lint output dumps
 eslint.txt

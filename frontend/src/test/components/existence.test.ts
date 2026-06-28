@@ -4,7 +4,7 @@ import React from 'react';
 
 describe('ErrorBoundary', () => {
   it('should render children when no error', async () => {
-    const { default: ErrorBoundary } = await import('../../components/ErrorBoundary');
+    const { default: ErrorBoundary } = await import('../../shared/components/ErrorBoundary');
 
     const tree = React.createElement(
       ErrorBoundary,
@@ -18,35 +18,35 @@ describe('ErrorBoundary', () => {
 
 describe('ProtectedRoute', () => {
   it('should be a valid component', async () => {
-    const { default: ProtectedRoute } = await import('../../components/ProtectedRoute');
+    const { default: ProtectedRoute } = await import('../../shared/components/ProtectedRoute');
     expect(ProtectedRoute).toBeDefined();
   });
 });
 
 describe('MarkdownOutput', () => {
   it('should be a valid component', async () => {
-    const { default: MarkdownOutput } = await import('../../components/MarkdownOutput');
+    const { default: MarkdownOutput } = await import('../../shared/components/MarkdownOutput');
     expect(MarkdownOutput).toBeDefined();
   });
 });
 
 describe('ChatWidget', () => {
   it('should be a valid component', async () => {
-    const { default: ChatWidget } = await import('../../components/ChatWidget');
+    const { default: ChatWidget } = await import('../../modules/ai/components/ChatWidget');
     expect(ChatWidget).toBeDefined();
   });
 });
 
 describe('WebTerminal', () => {
   it('should be a valid component', async () => {
-    const { default: WebTerminal } = await import('../../components/WebTerminal');
+    const { default: WebTerminal } = await import('../../modules/servers/components/WebTerminal');
     expect(WebTerminal).toBeDefined();
   });
 });
 
 describe('TopologyGraph', () => {
   it('should be a valid component', async () => {
-    const { default: TopologyGraph } = await import('../../components/TopologyGraph');
+    const { default: TopologyGraph } = await import('../../modules/network/components/TopologyGraph');
     expect(TopologyGraph).toBeDefined();
   });
 });
