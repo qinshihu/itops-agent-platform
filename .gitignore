@@ -66,8 +66,7 @@ backend/backups/
 *.bak
 
 # Internal audit reports (sensitive)
-docs/*蓝军安全审计报告*
-docs/*安全审计*
+docs/
 
 # Lint output dumps
 eslint.txt
