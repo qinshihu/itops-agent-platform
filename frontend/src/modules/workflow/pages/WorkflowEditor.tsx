@@ -1058,11 +1058,11 @@ function WorkflowEditorContent() {
                           ))}
                         </select>
                       </div>
-                      {selectedNode.data?.configSchema?.properties && (
+                      {(selectedNode.data as any)?.configSchema?.properties && (
                         <div>
                           <label className="block text-sm text-text-secondary mb-2">配置参数</label>
                           <div className="space-y-2">
-                            {Object.entries(selectedNode.data.configSchema.properties as Record<string, any>).map(([key, schema]: [string, any]) => (
+                            {Object.entries((selectedNode.data as any).configSchema.properties as Record<string, any>).map(([key, schema]: [string, any]) => (
                               <div key={key}>
                                 <label className="block text-xs text-text-secondary mb-1">
                                   {schema.title || key}

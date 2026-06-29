@@ -7,7 +7,7 @@ import clsx from 'clsx';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import { useToast } from '../../../contexts/ToastContext';
-import type { VM } from '../VirtualMachines';
+import type { VM } from './VirtualMachines';
 
 interface Snapshot {
   id: string;
@@ -192,7 +192,7 @@ export default function VmDetailPanel({ open, onClose, vm }: VmDetailPanelProps)
                   <div className="flex justify-between">
                     <span className="text-text-secondary">磁盘</span>
                     <span className="text-text-primary">
-                      {vm.disks?.length ? `${vm.disks.reduce((s, d) => s + (d.sizeGB || 0), 0)} GB` : '-'}
+                      {vm.disks?.length ? `${vm.disks.reduce((s: number, d: { sizeGB?: number }) => s + (d.sizeGB || 0), 0)} GB` : '-'}
                     </span>
                   </div>
                   <div className="flex justify-between">

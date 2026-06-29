@@ -48,7 +48,7 @@ export default function DashboardOverlay({
   const alertItems = alerts.length > 0
     ? alerts.slice(0, 10).map(a => ({
         time: a.time || '',
-        msg: a.message || a.name || '',
+        msg: a.title || '',
         level: (a.severity === 'critical' ? 'critical' : a.severity === 'warning' ? 'warning' : 'info') as 'critical' | 'warning' | 'info',
       }))
     : [];

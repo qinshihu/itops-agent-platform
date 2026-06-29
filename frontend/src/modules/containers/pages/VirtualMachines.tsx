@@ -22,7 +22,7 @@ interface Platform {
   tags: string[];
 }
 
-interface VM {
+export interface VM {
   id: string;
   name: string;
   powerState: 'poweredOn' | 'poweredOff' | 'suspended';

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { RefreshCw, Plus } from 'lucide-react';
-import type { VM } from '../VirtualMachines';
+import type { VM } from './VirtualMachines';
 
 interface VmFormData {
   name: string;

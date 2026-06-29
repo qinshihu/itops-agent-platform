@@ -56,7 +56,7 @@ export default function SlotsPanel({ rack, slots, onSelectSlot, onAddDevice }: P
             <div className={`w-2 h-2 rounded-full ${slot.server_status === 'online' ? 'bg-green-500' : 'bg-red-500'}`} />
             <span className="text-xs font-medium text-text-primary">{slot.device_name || '(未命名)'}</span>
             <Tag className="text-[10px] leading-none m-0" color="blue">
-              {typeLabelMap[slot.device_type] || slot.device_type}
+              {typeLabelMap[slot.device_type as string] || slot.device_type}
             </Tag>
             {slot.ip_address && (
               <span className="text-[10px] text-text-tertiary ml-1">{slot.ip_address}</span>
@@ -64,7 +64,7 @@ export default function SlotsPanel({ rack, slots, onSelectSlot, onAddDevice }: P
             {slot.cpu_usage !== undefined && (
               <span className="text-[10px] text-text-tertiary ml-auto flex items-center gap-2">
                 <span className={slot.cpu_usage > 80 ? 'text-red-400' : ''}>CPU {slot.cpu_usage}%</span>
-                <span className={slot.memory_usage > 80 ? 'text-red-400' : ''}>MEM {slot.memory_usage}%</span>
+                <span className={(slot.memory_usage ?? 0) > 80 ? 'text-red-400' : ''}>MEM {slot.memory_usage}%</span>
               </span>
             )}
           </div>
