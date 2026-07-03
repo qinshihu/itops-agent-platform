@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { Router } from 'express';
-import { backupService } from '../services/backupService';
+import { backupService } from '../services';
 import { logger } from '../../../utils/logger';
 import { requireRole } from '../../../middleware/auth';
 import multer from 'multer';

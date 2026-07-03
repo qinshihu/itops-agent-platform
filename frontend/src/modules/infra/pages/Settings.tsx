@@ -7,8 +7,8 @@ import clsx from 'clsx';
 import { useTranslation } from 'react-i18next';
 import api from '../../../lib/api';
 import ModelSettings from './settings/ModelSettings';
-import NotificationSettings from './settings/NotificationSettings';
-import BackupSettings from './settings/BackupSettings';
+import NotificationSettings from '../../notification/pages/NotificationSettings';
+import BackupSettings from '../../backup/pages/BackupSettings';
 import SecuritySettings from './settings/SecuritySettings';
 import GeneralSettings from './settings/GeneralSettings';
 

@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { configBackupService } from '../../infra/services/configBackupService';
+import { configBackupService } from '../../config-management/services/configBackupService';
 import { lldpDiscoveryService } from '../services/lldpDiscoveryService';
 import { getErrorMessage } from '../../../utils/errorHelpers';
 

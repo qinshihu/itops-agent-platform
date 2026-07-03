@@ -3,13 +3,13 @@ import { Router, json as expressJson } from 'express';
 import { getIOInstance } from '../../../shared/websocket/io';
 import { logger } from '../../../utils/logger';
 import { randomUUID } from 'crypto';
-import { createAuditLog } from '../services/auditService';
-import { createNotification } from './notificationRoutes';
-import { alertService } from '../../alerts/services/alertService';
+import { createAuditLog } from '../../infra/services/auditService';
+import { createNotification } from '../../notification/routes/notificationRoutes';
+import { alertService } from '../services/alertService';
 import { env } from '../../../utils/env';
 import crypto from 'crypto';
 import type {
-  NormalizedAlert} from '../../alerts/services/alertSourceAdapters';
+  NormalizedAlert} from '../services/alertSourceAdapters';
 import {
   adaptPrometheus,
   adaptZabbix,
@@ -17,9 +17,9 @@ import {
   adaptAliyun,
   adaptTencentCloud,
   detectSourceType
-} from '../../alerts/services/alertSourceAdapters';
-import { alertDeviceResolver } from '../../alerts/services/alertDeviceResolver';
-import { alertProcessor } from '../../alerts/services/AlertProcessor';
+} from '../services/alertSourceAdapters';
+import { alertDeviceResolver } from '../services/alertDeviceResolver';
+import { alertProcessor } from '../services/AlertProcessor';
 import { emitToAlerts } from '../../../shared/websocket/handler';
 import { validateBody } from '../../../middleware/validation';
 import { z } from 'zod';

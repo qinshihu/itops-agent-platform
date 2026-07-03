@@ -157,7 +157,7 @@ export async function sendTelegram(botToken: string, chatId: string, message: No
 
 // ================ 通用渠道发送器 ================
 
-interface ChannelConfig {
+export interface ChannelConfig {
   type: 'feishu' | 'wecom' | 'dingtalk' | 'telegram' | 'webhook';
   webhookUrl?: string;
   botToken?: string;

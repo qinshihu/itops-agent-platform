@@ -3,7 +3,7 @@ import { getIOInstance } from '../../../../shared/websocket/io';
 import { logger } from '../../../../utils/logger';
 import { approvalsRepo, tasksRepo } from '../../../../repositories';
 import { executeAgentNode, getThinkingSteps } from '../../../ai/services/agents/agentExecutor';
-import { notificationService } from '../../../infra/services/notificationService';
+import { notificationService } from '../../../notification/services/notificationService';
 import { addTaskLog, delay } from './helpers';
 import type { NodeHandlerCtx, NodeHandlerResult, PersistedExecutionState } from './types';
 

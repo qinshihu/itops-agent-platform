@@ -2,12 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import { createHash } from 'crypto';
 import Database from 'better-sqlite3';
-import { settingsRepository } from '../../../../repositories/settingsRepository';
-import { logger } from '../../../../utils/logger';
+import { settingsRepository } from '../../../repositories/settingsRepository';
+import { logger } from '../../../utils/logger';
 import type { BackupInfo, BackupConfig} from './backupTypes';
 import { DEFAULT_CONFIG } from './backupTypes';
 import { isEncryptedBackup, decryptBackupFile, runGunzip } from './backupCrypto';
-import { gracefulRestart } from '../restartService';
+import { gracefulRestart } from '../../infra/services/restartService';
 
 export function loadBackupConfig(): BackupConfig {
   try {

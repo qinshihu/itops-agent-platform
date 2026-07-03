@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { vmSnapshotSchedulerService } from '../../containers/services/vmSnapshotSchedulerService';
+import { vmSnapshotSchedulerService } from '../services/vmSnapshotSchedulerService';
 import { requireRole } from '../../../middleware/auth';
 import { getErrorMessage } from '../../../utils/errorHelpers';
 

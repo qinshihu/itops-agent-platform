@@ -451,6 +451,8 @@ export default function NetworkDevices() {
                       )}
 
                 </div>
+              )}
+              </div>
               ))}
             </div>
           </div>

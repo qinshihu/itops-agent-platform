@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bell, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import api from '../../../../lib/api';
+import api from '../../../lib/api';
 
 export default function NotificationSettings() {
   const { t } = useTranslation();

@@ -2,7 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Database, Loader2, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import api from '../../../../lib/api';
+import api from '../../../lib/api';
 
 interface Backup {
   id: string;

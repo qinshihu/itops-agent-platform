@@ -4,7 +4,7 @@ import { generateCompletion } from '../../llm/llmService';
 import { localRuleEngine } from '../localRuleEngine';
 import { logger } from '../../../../../utils/logger';
 import { topologyService } from '../../../../network/services/topologyService';
-import { changeService } from '../../../../infra/services/changeService';
+import { changeService } from '../../../../change-management/services/changeService';
 import EnhancedRAGService from '../../remediation/enhancedRAGService';
 import { RCA_PROMPT } from '../../../prompts/rcaPrompt';
 import type { RootCauseAnalysis, UpdateRCAInput } from './rcaTypes';

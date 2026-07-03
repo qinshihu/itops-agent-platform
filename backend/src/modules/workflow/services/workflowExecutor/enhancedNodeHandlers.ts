@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { getIOInstance } from '../../../../shared/websocket/io';
 import { logger } from '../../../../utils/logger';
 import { approvalsRepo, tasksRepo } from '../../../../repositories';
-import { notificationService } from '../../../infra/services/notificationService';
+import { notificationService } from '../../../notification/services/notificationService';
 import {
   executeVerificationNode,
   executeRiskAssessNode,

@@ -2,7 +2,6 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { auditLogRepository } from '../../../repositories';
 import type { AuditLogListFilters } from '../../../repositories';
-export { createAuditLog } from '../services/auditService';
 
 const router = Router();
 

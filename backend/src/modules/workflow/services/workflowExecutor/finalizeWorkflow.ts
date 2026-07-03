@@ -5,7 +5,7 @@ import { logger } from '../../../../utils/logger';
 import { knowledgeRepository, tasksRepo } from '../../../../repositories';
 import { executeAgentNode } from '../../../ai/services/agents/agentExecutor';
 import { reportService } from '../../../infra/services/reportService';
-import { notificationService } from '../../../infra/services/notificationService';
+import { notificationService } from '../../../notification/services/notificationService';
 import { createAuditLog } from '../../../infra/services/auditService';
 import type {
   WorkflowNode,

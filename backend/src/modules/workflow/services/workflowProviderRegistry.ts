@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
 import { executeCommand } from '../../servers/services/sshService';
 import { alertRepository } from '../../../repositories';
-import { notificationService } from '../../infra/services/notificationService';
+import { notificationService } from '../../notification/services/notificationService';
 
 /**
  * 工作流 Provider 接口

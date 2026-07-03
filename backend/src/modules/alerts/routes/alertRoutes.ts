@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { randomUUID, createHash } from 'crypto';
 import { getIOInstance } from '../../../shared/websocket/io';
-import { notificationService } from '../../infra/services/notificationService';
+import { notificationService } from '../../notification/services/notificationService';
 import { alertNoiseReductionService } from '../services/alertNoiseReductionService';
 import { rootCauseAnalysisService } from '../../ai/services/rca/rootCauseAnalysisService';
 import { emitToAlerts } from '../../../shared/websocket/handler';

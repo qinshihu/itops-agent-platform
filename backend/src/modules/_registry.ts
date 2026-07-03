@@ -14,17 +14,22 @@ import { errorHandler, notFoundHandler } from '../middleware/errorHandler';
 
 // === 模块路由导入（仅从各模块的 routes.ts 导入）===
 import aiRoutes from './ai/routes';
-import alertRoutes, { alertAutoRouter, alertCorrelationRouter } from './alerts/routes';
+import alertRoutes, { alertAutoRouter, alertCorrelationRouter, webhookRouter } from './alerts/routes';
 import autoRoutes from './auto/routes';
+import backupRoutes from './backup/routes';
+import changeManagementRoutes from './change-management/routes';
+import configManagementRoutes from './config-management/routes';
 import containerRoutes from './containers/routes';
 import databaseRoutes from './database/routes';
 import dcRoutes from './dc/routes';
-import infraRoutes, { linkageRouter, webhookRouter } from './infra/routes';
+import infraRoutes, { linkageRouter } from './infra/routes';
 import kubernetesRoutes from './kubernetes/routes';
 import monitorRoutes from './monitor/routes';
 import networkRoutes, { networkDiscoveryRouter } from './network/routes';
 import serverRoutes from './servers/routes';
 import workflowRoutes from './workflow/routes';
+import mcpRoutes from './mcp/routes';
+import notificationRoutes from './notification/routes';
 
 // === Auth 模块：auth 路由公开，user 路由受保护 ===
 import { authOnlyRouter, userRouter } from './auth/routes';
@@ -47,6 +52,7 @@ const modules: ModuleConfig[] = [
   { path: '/api', router: aiRoutes },
   { path: '/api', router: alertRoutes },
   { path: '/api', router: autoRoutes },
+  { path: '/api', router: backupRoutes },
   { path: '/api', router: containerRoutes },
   { path: '/api', router: databaseRoutes },
   { path: '/api', router: dcRoutes },
@@ -54,8 +60,10 @@ const modules: ModuleConfig[] = [
   { path: '/api', router: kubernetesRoutes },
   { path: '/api', router: monitorRoutes },
   { path: '/api', router: networkRoutes },
+  { path: '/api', router: notificationRoutes },
   { path: '/api', router: serverRoutes },
   { path: '/api', router: workflowRoutes },
+  { path: '/api/mcp', router: mcpRoutes },
   { path: '/api/users', router: userRouter },
 
   // === 受保护特殊路由 ===

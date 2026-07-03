@@ -2,7 +2,7 @@ import fs from 'fs';
 import { createHash, createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
 import { createGzip, createGunzip } from 'zlib';
 import { pipeline } from 'stream/promises';
-import { env } from '../../../../utils/env';
+import { env } from '../../../utils/env';
 
 // AES-256-GCM 加密配置（用于备份文件加密，带认证标签）
 const BACKUP_ENC_MAGIC = Buffer.from('ITP_ENC_V2');  // 文件头标记

@@ -10,7 +10,7 @@
  * =============================================================================
  */
 
-import { notificationService } from '../../../../infra/services/notificationService';
+import { notificationService } from '../../../../notification/services/notificationService';
 import { logger } from '../../../../../utils/logger';
 import type { DeviceRuntimeProfile } from '../types';
 import { getErrorMessage } from '../../../../../utils/errorHelpers';

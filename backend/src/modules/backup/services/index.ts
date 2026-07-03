@@ -3,9 +3,9 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { scheduleJob, type Job } from 'node-schedule';
 import Database from 'better-sqlite3';
-import { logger } from '../../../../utils/logger';
-import { env } from '../../../../utils/env';
-import { gracefulRestart } from '../restartService';
+import { logger } from '../../../utils/logger';
+import { env } from '../../../utils/env';
+import { gracefulRestart, registerShutdownHook } from '../../infra/services/restartService';
 import type { BackupInfo, BackupConfig} from './backupTypes';
 import { DEFAULT_CONFIG } from './backupTypes';
 import {
@@ -504,3 +504,6 @@ export class BackupService {
 }
 
 export const backupService = new BackupService();
+
+// 注册优雅关闭钩子（避免 restartService ↔ backupService 循环依赖）
+registerShutdownHook(() => backupService.stopAutoBackup());

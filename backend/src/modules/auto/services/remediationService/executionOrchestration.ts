@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import db from '../../../../models/database';
 import { executeWorkflow as runWorkflowExecutor } from '../../../workflow/services/workflowExecutor';
-import { notificationService } from '../../../infra/services/notificationService';
+import { notificationService } from '../../../notification/services/notificationService';
 import { logger } from '../../../../utils/logger';
 import type {
   RemediationPolicy,
