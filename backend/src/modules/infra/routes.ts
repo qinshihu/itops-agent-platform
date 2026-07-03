@@ -13,6 +13,8 @@ import configTemplateRoutes from './routes/configTemplateRoutes';
 import toolLinkRoutes from './routes/toolLinkRoutes';
 import composeRoutes from './routes/composeRoutes';
 import snapshotPolicyRoutes from './routes/snapshotPolicyRoutes';
+import linkageRoutes from './routes/linkageRoutes';
+import webhookRoutes from './routes/webhookRoutes';
 
 const router = Router();
 
@@ -32,3 +34,5 @@ router.use('/compose', composeRoutes);
 router.use('/snapshot-policies', snapshotPolicyRoutes);
 
 export default router;
+export const linkageRouter = linkageRoutes;
+export const webhookRouter = webhookRoutes;

@@ -8,3 +8,5 @@ router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 
 export default router;
+export const authOnlyRouter = authRoutes;
+export const userRouter = userRoutes;

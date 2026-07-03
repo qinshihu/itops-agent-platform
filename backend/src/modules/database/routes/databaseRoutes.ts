@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { getDatabaseStats, getTableIndexes, getQuerySuggestions, performMaintenance } from '../../../models/database';
+import { getDatabaseHealthStatus, getTableIndexes, getQuerySuggestions, performMaintenance } from '../../../models/database';
 import { logger } from '../../../utils/logger';
 import { requireRole } from '../../../middleware/auth';
 
@@ -9,7 +9,7 @@ const router = Router();
 // 获取数据库统计信息
 router.get('/stats', requireRole('admin'), (_req: Request, res: Response) => {
   try {
-    const stats = getDatabaseStats();
+    const stats = getDatabaseHealthStatus();
     res.json({ success: true, data: stats });
   } catch (error) {
     logger.error('Failed to get database stats', error as Error);

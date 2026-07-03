@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { dockerService } from '../services/dockerService';
 import { requireRole } from '../../../middleware/auth';
 import Docker from 'dockerode';
+import { getErrorMessage, getErrorStatusCode } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -41,8 +42,8 @@ router.get('/', async (req: Request, res: Response) => {
     const data = filtered.slice(offset, offset + pageSize);
 
     res.json({ success: true, data, total });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -58,9 +59,9 @@ router.post('/pull', requireRole('admin', 'operator'), async (req: Request, res:
 
     await dockerService.pullImage(imageName);
     res.json({ success: true, message: `镜像 ${imageName} 拉取成功` });
-  } catch (error: any) {
-    const status = error.statusCode || 500;
-    res.status(status).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    const status = getErrorStatusCode(error) || 500;
+    res.status(status).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -71,8 +72,8 @@ router.post('/sync', requireRole('admin', 'operator'), async (req: Request, res:
   try {
     const allImages = await dockerService.listImages();
     res.json({ success: true, message: '镜像数据同步完成', data: allImages });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -89,9 +90,9 @@ router.post('/prune', requireRole('admin', 'operator'), async (_req: Request, re
         spaceReclaimed: result.SpaceReclaimed || 0,
       },
     });
-  } catch (error: any) {
-    const status = error.statusCode || 500;
-    res.status(status).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    const status = getErrorStatusCode(error) || 500;
+    res.status(status).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -102,9 +103,9 @@ router.get('/:id', async (req: Request, res: Response) => {
   try {
     const image = await dockerService.getImageInfo(req.params.id);
     res.json({ success: true, data: image });
-  } catch (error: any) {
-    const status = error.statusCode || 404;
-    res.status(status).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    const status = getErrorStatusCode(error) || 404;
+    res.status(status).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -115,9 +116,9 @@ router.delete('/:id', requireRole('admin', 'operator'), async (req: Request, res
   try {
     await dockerService.removeImage(req.params.id);
     res.json({ success: true });
-  } catch (error: any) {
-    const status = error.statusCode || 500;
-    res.status(status).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    const status = getErrorStatusCode(error) || 500;
+    res.status(status).json({ success: false, message: getErrorMessage(error) });
   }
 });
 

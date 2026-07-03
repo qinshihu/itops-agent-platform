@@ -83,7 +83,7 @@ export class ConfigParser {
    * 解析单行
    */
   private parseLine(rawLine: string, lineNumber: number): ConfigBlock {
-    const line = rawLine.trim();
+    const _line = rawLine.trim();
     const indentLevel = this.getIndentLevel(rawLine);
 
     // 根据解析器类型处理

@@ -17,21 +17,10 @@ import { initRemediationPolicies } from './presets/initRemediationPolicies';
 import { linkRemediationWorkflows } from './presets/linkRemediationWorkflows';
 import { initConfigTemplates } from './presets/initConfigTemplates';
 import { initializeEnhancedWorkflows } from './presets/initEnhancedWorkflows';
-import { initializeVMManagementTables } from './presets/initVMManagement';
-import type { Server as SocketIOServer } from 'socket.io';
-
-let ioInstance: SocketIOServer | null = null;
-
 let maintenanceTimer: NodeJS.Timeout | null = null;
 let isMaintenanceRunning = false;
 
-export function setIOInstance(io: SocketIOServer) {
-  ioInstance = io;
-}
-
-export function getIOInstance() {
-  return ioInstance;
-}
+export { setIOInstance, getIOInstance } from '../shared/websocket/io';
 
 let dbInstance: Database.Database | null = null;
 let isInitialized = false;
@@ -103,15 +92,6 @@ export function getDbInstance(): Database.Database {
   return dbInstance;
 }
 
-const dbProxy = new Proxy({}, {
-  get(target, prop) {
-    if (!dbInstance) {
-      throw new Error('Database not initialized. Call initializeDatabase() first.');
-    }
-    return (dbInstance as any)[prop];
-  }
-}) as Database.Database;
-
 // Database singleton - single centralized export
 // All modules should import via:
 //   import { db } from '../models/database';
@@ -134,83 +114,19 @@ export { db };
 /**
  * 执行数据库维护操作
  * @param operation - 维护操作类型：vacuum（释放空间）、analyze（更新统计信息）、integrity_check（完整性检查）
+ * 委托给 performVacuum / performAnalyze / performIntegrityCheck 实现，避免逻辑重复
  */
 export function performMaintenance(operation: 'vacuum' | 'analyze' | 'integrity_check'): void {
-  const timer = logger.startTimer(`Database maintenance: ${operation}`);
-  
-  try {
-    switch (operation) {
-      case 'vacuum':
-        // 重建数据库文件，释放未使用空间
-        db.exec('VACUUM');
-        logger.info('✅ VACUUM completed - reclaimed unused space');
-        break;
-      
-      case 'analyze':
-        // 更新查询优化器统计信息
-        db.exec('ANALYZE');
-        logger.info('✅ ANALYZE completed - updated query statistics');
-        break;
-      
-      case 'integrity_check': {
-        // 检查数据库完整性
-        const result = db.pragma('integrity_check') as Array<{ integrity_check: string }>;
-        if (result[0]?.integrity_check === 'ok') {
-          logger.info('✅ Integrity check passed - database is healthy');
-        } else {
-          logger.error('❌ Integrity check failed', undefined, { result });
-        }
-        break;
-      }
-    }
-    
-    timer.end(true);
-  } catch (error) {
-    logger.error(`Database maintenance failed: ${operation}`, error as Error);
-    timer.end(false);
-    throw error;
-  }
-}
-
-/**
- * 获取数据库统计信息
- */
-export function getDatabaseStats(): {
-  size: string;
-  pageCount: number;
-  pageSize: number;
-  cacheSize: number;
-  walSize: number;
-  tableCount: number;
-  indexCount: number;
-} {
-  try {
-    const pageCount = (db.pragma('page_count') as Array<{ page_count: number }>)[0]?.page_count || 0;
-    const pageSize = (db.pragma('page_size') as Array<{ page_size: number }>)[0]?.page_size || 0;
-    const cacheSize = (db.pragma('cache_size') as Array<{ cache_size: number }>)[0]?.cache_size || 0;
-    const tableCount = (db.prepare("SELECT COUNT(*) as count FROM sqlite_master WHERE type='table'").get() as { count: number }).count;
-    const indexCount = (db.prepare("SELECT COUNT(*) as count FROM sqlite_master WHERE type='index'").get() as { count: number }).count;
-    
-    return {
-      size: formatSize(pageCount * pageSize),
-      pageCount,
-      pageSize,
-      cacheSize,
-      walSize: getWalFileSize(),
-      tableCount,
-      indexCount
-    };
-  } catch (error) {
-    logger.warn('Failed to get database stats', { error: (error as Error).message });
-    return {
-      size: '0 B',
-      pageCount: 0,
-      pageSize: 0,
-      cacheSize: 0,
-      walSize: 0,
-      tableCount: 0,
-      indexCount: 0
-    };
+  switch (operation) {
+    case 'vacuum':
+      performVacuum();
+      break;
+    case 'analyze':
+      performAnalyze();
+      break;
+    case 'integrity_check':
+      performIntegrityCheck();
+      break;
   }
 }
 
@@ -487,40 +403,12 @@ function initializeDefaultData(): void {
 
   // 增强工作流
   initializeEnhancedWorkflows();
-
-  // 虚拟机管理预设
-  initializeVMManagementTables();
 }
 
-/**
- * 生成随机强密码
- * @param length - 密码长度，默认16位
- * @returns 包含大小写字母、数字和特殊字符的强密码
- */
-function generateStrongPassword(length = 16): string {
-  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
-  const digits = '0123456789';
-  const special = '!@#$%^&*()-_=+[]{}|;:,.<>?';
-  const allChars = uppercase + lowercase + digits + special;
-
-  // 确保每种类型至少有一个字符
-  let password = '';
-  password += uppercase[randomBytes(1).readUInt8(0) % uppercase.length];
-  password += lowercase[randomBytes(1).readUInt8(0) % lowercase.length];
-  password += digits[randomBytes(1).readUInt8(0) % digits.length];
-  password += special[randomBytes(1).readUInt8(0) % special.length];
-
-  // 剩余位随机填充
-  for (let i = password.length; i < length; i++) {
-    password += allChars[randomBytes(1).readUInt8(0) % allChars.length];
-  }
-
-  // 打乱字符顺序
-  return password
-    .split('')
-    .sort(() => (randomBytes(1).readUInt8(0) % allChars.length) - (allChars.length / 2))
-    .join('');
+function generateRandomPassword(length = 16): string {
+  const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*';
+  const bytes = randomBytes(length);
+  return Array.from(bytes, b => charset[b % charset.length]).join('');
 }
 
 function initializeDefaultUsers() {
@@ -531,7 +419,8 @@ function initializeDefaultUsers() {
     return;
   }
 
-  const initialPassword = process.env.ADMIN_INITIAL_PASSWORD || 'admin';
+  const customPassword = process.env.ADMIN_INITIAL_PASSWORD;
+  const initialPassword = customPassword || generateRandomPassword();
   const hashedPassword = bcrypt.hashSync(initialPassword, 12);
   const id = randomUUID();
   db.prepare(`
@@ -539,11 +428,15 @@ function initializeDefaultUsers() {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(id, 'admin', hashedPassword, 'admin@example.com', 'admin', 1, 1);
 
-  if (process.env.ADMIN_INITIAL_PASSWORD) {
-    logger.info('✅ Default admin user created with custom password');
+  if (customPassword) {
+    logger.info('✅ Default admin user created with password from ADMIN_INITIAL_PASSWORD env var');
+    logger.warn('⚠️ Please change the password after first login.');
   } else {
-    logger.warn('⚠️ Default admin user created with password "admin" - CHANGE IT IMMEDIATELY');
-    logger.warn('⚠️ Set ADMIN_INITIAL_PASSWORD env var for custom initial password');
+    logger.warn('========================================================');
+    logger.warn('🔐 AUTO-GENERATED ADMIN PASSWORD (save & change after login):');
+    logger.warn(`   ${initialPassword}`);
+    logger.warn('⚠️ This password is shown only once. Set ADMIN_INITIAL_PASSWORD env var to customize.');
+    logger.warn('========================================================');
   }
 }
 
@@ -726,9 +619,9 @@ export function performFullMaintenance(options: { vacuum: boolean } = { vacuum: 
 /**
  * 启动数据库定期维护任务
  * 执行频率：
- * - 每日：WAL 检查点（凌晨 3 点）
- * - 每周：ANALYZE（周日凌晨 3 点）
- * - 每月：VACUUM + 完整维护（每月 1 号凌晨 3 点）
+ * - 每日：WAL 检查点（凌晨 4 点）
+ * - 每周：ANALYZE（周日凌晨 4 点）
+ * - 每月：VACUUM + 完整维护（每月 1 号凌晨 4 点）
  */
 export function startDatabaseMaintenance(): void {
   if (maintenanceTimer) {
@@ -743,8 +636,8 @@ export function startDatabaseMaintenance(): void {
     const dayOfWeek = now.getDay(); // 0 = 周日
     const dayOfMonth = now.getDate();
 
-    // 凌晨 3 点执行维护任务（低峰期）
-    if (hour === 3) {
+    // 凌晨 4 点执行维护任务（低峰期，避开凌晨 3 点的应用定期重启）
+    if (hour === 4) {
       // 每日：WAL 检查点
       try {
         performCheckpoint();

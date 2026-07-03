@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
 import { executeCommand } from '../../servers/services/sshService';
-import db from '../../../models/database';
+import { alertRepository } from '../../../repositories';
 import { notificationService } from '../../infra/services/notificationService';
 
 /**
@@ -217,10 +217,14 @@ export const workflowProviderRegistry = new WorkflowProviderRegistry();
         try {
           // 插入告警到数据库
           const id = randomUUID();
-          db.prepare(`
-            INSERT INTO alerts (id, title, severity, content, source, status, created_at)
-            VALUES (?, ?, ?, ?, ?, 'open', datetime('now', 'localtime'))
-          `).run(id, config.title, config.severity, config.content, config.source || 'workflow');
+          alertRepository.createSimple({
+            id,
+            title: config.title,
+            severity: config.severity,
+            content: config.content,
+            source: config.source || 'workflow',
+            status: 'open',
+          });
           
           return { success: true, alertId: id };
         } catch (error) {

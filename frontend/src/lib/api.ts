@@ -53,6 +53,10 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => {
+    // 统一提取 response.data.data（后端返回 { success, data, message } 结构）
+    if (response.data && typeof response.data.success === 'boolean') {
+      response.data = response.data.data;
+    }
     return response;
   },
   async (error) => {
@@ -119,7 +123,8 @@ api.interceptors.response.use(
       }
     }
 
-    return Promise.reject(error);
+    const message = error.response?.data?.message || error.response?.data?.error || '网络错误';
+    return Promise.reject(new Error(message));
   }
 );
 

@@ -158,7 +158,7 @@ class ExternalServerManager extends EventEmitter {
    * 停止所有服务器
    */
   stopAll(): void {
-    for (const [id, entry] of this.servers) {
+    for (const [_id, entry] of this.servers) {
       entry.client.disconnect();
     }
     logger.info(`[MCP Manager] All external servers stopped`);

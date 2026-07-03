@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import db from '../../../models/database';
 import { reportService } from '../../infra/services/reportService';
 import { requireRole } from '../../../middleware/auth';
+import { analyticsRepository } from '../../../repositories';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -86,44 +87,16 @@ router.get('/', (req: Request, res: Response) => {
 
 router.get('/analytics', (_req: Request, res: Response) => {
   try {
-    const alertTrends = db.prepare(`
-      SELECT DATE(created_at) as date, severity, COUNT(*) as count
-      FROM alerts
-      WHERE created_at >= DATE('now', '-7 days', 'localtime')
-      GROUP BY DATE(created_at), severity
-      ORDER BY date
-    `).all();
-
-    const analysisStats = db.prepare(`
-      SELECT
-        COUNT(*) as total,
-        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
-      FROM alert_auto_analysis
-    `).get() || { total: 0, completed: 0, failed: 0 };
-
-    const remediationStats = db.prepare(`
-      SELECT
-        COUNT(*) as total,
-        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count,
-        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_count,
-        SUM(CASE WHEN status = 'rolled_back' THEN 1 ELSE 0 END) as rolled_back
-      FROM remediation_executions
-      WHERE created_at >= DATE('now', '-30 days', 'localtime')
-    `).get() || { total: 0, success_count: 0, failed_count: 0, rolled_back: 0 };
-
-    const topDiagnoses = db.prepare(`
-      SELECT summary, COUNT(*) as count
-      FROM alert_auto_analysis
-      WHERE summary IS NOT NULL AND summary != ''
-      GROUP BY summary
-      ORDER BY count DESC
-      LIMIT 10
-    `).all();
+    const data = analyticsRepository.getReportAnalytics();
 
     res.json({
       success: true,
-      data: { alertTrends, analysisStats, remediationStats, topDiagnoses }
+      data: {
+        alertTrends: data.alertTrends,
+        analysisStats: data.analysisStats,
+        remediationStats: data.remediationStats,
+        topDiagnoses: data.topDiagnoses
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, message: (error as Error).message });
@@ -148,9 +121,9 @@ router.get('/:id/export', async (req: Request, res: Response) => {
     }
     res.setHeader('Content-Disposition', `attachment; filename="${safeName}.${fileExtension}"`);
     res.send(exported.content);
-  } catch (error: any) {
+  } catch (error: unknown) {
     const errMsg = typeof error === 'object' && error !== null
-      ? (error.message || String(error))
+      ? (getErrorMessage(error) || String(error))
       : String(error);
     res.status(500).json({ success: false, error: errMsg });
   }

@@ -4,6 +4,7 @@ import { containerMonitorService } from '../../containers/services/containerMoni
 import { containerLogService } from '../../containers/services/containerLogService';
 import { dockerService } from '../../containers/services/dockerService';
 import { requireRole } from '../../../middleware/auth';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -15,8 +16,8 @@ router.get('/cluster-snapshot', async (_req: Request, res: Response) => {
     }
     const snapshot = await containerMonitorService.getClusterSnapshot();
     res.json({ success: true, data: snapshot });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -32,8 +33,8 @@ router.post('/start/:containerId', requireRole('admin', 'operator'), (req: Reque
     const intervalMs = parseInt(req.body.intervalMs as string) || 5000;
     containerMonitorService.startMonitoring(containerId, intervalMs);
     res.json({ success: true, message: `已开始监控容器 ${containerId}` });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -42,8 +43,8 @@ router.post('/stop/:containerId', requireRole('admin', 'operator'), (req: Reques
   try {
     containerMonitorService.stopMonitoring(req.params.containerId);
     res.json({ success: true, message: '已停止监控' });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 

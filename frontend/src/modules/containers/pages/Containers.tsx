@@ -434,7 +434,7 @@ export default function Containers() {
                   <tbody className="divide-y divide-border">
                     {containersLoading ? (
                       <tr><td colSpan={6} className="px-4 py-12 text-center text-text-tertiary">加载中...</td></tr>
-                    ) : containerData && containerData.data.length === 0 ? (
+                    ) : containerData?.data.length === 0 ? (
                       <tr><td colSpan={6} className="px-4 py-12 text-center text-text-tertiary">暂无容器</td></tr>
                     ) : (
                       (containerData?.data || []).map((c) => {

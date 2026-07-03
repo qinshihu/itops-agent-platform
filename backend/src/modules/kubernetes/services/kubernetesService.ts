@@ -1,9 +1,11 @@
 import { logger } from '../../../utils/logger';
-import { db } from '../../../models/database';
+import { k8sContextRepository } from '../../../repositories/k8sContextRepository';
 import { randomUUID } from 'crypto';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 let k8s: any = null;
 try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   k8s = require('@kubernetes/client-node');
 } catch {
   logger.warn('⚠️ @kubernetes/client-node not installed, K8s management disabled. Install with: npm install @kubernetes/client-node');
@@ -34,37 +36,20 @@ class KubernetesService {
       return;
     }
     this.available = true;
-    // Tables and contexts initialized via ensureTables() called from app.ts
+    // 表结构由 migration v047 维护；本服务的运行时上下文加载由 initialize() 负责。
   }
 
-  ensureTables() {
-    this.initTables();
+  /**
+   * 启动时加载已激活的 K8s 集群上下文
+   * （原 ensureTables() 的运行时部分，schema 已下沉到 migration v047）
+   */
+  initialize() {
     this.loadContexts();
-  }
-
-  private initTables() {
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS k8s_contexts (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          cluster_url TEXT,
-          namespace TEXT DEFAULT 'default',
-          auth_type TEXT DEFAULT 'kubeconfig',
-          config TEXT,
-          status TEXT DEFAULT 'inactive',
-          node_count INTEGER DEFAULT 0,
-          pod_count INTEGER DEFAULT 0,
-          created_at TEXT DEFAULT (datetime('now','localtime')),
-          updated_at TEXT DEFAULT (datetime('now','localtime'))
-        )
-      `);
-    } catch {}
   }
 
   private loadContexts() {
     try {
-      const rows = db.prepare('SELECT * FROM k8s_contexts WHERE status = ?').all('active') as any[];
+      const rows = k8sContextRepository.listActive();
       for (const row of rows) {
         try {
           const kc = new k8s.KubeConfig();
@@ -75,13 +60,13 @@ class KubernetesService {
             appsApi: kc.makeApiClient(k8s.AppsV1Api),
           });
           this.contexts.set(row.id, this.rowToContext(row));
-        } catch (err: any) {
-          logger.error(`Failed to load K8s context ${row.name}:`, err.message);
+        } catch (err: unknown) {
+          logger.error(`Failed to load K8s context ${row.name}:`, getErrorMessage(err));
         }
       }
       logger.info(`📋 Loaded ${this.clients.size} K8s cluster(s)`);
-    } catch (err: any) {
-      logger.error('Failed to load K8s contexts:', err.message);
+    } catch (err: unknown) {
+      logger.error('Failed to load K8s contexts:', getErrorMessage(err));
     }
   }
 
@@ -118,17 +103,17 @@ class KubernetesService {
 
     const contextName = kc.getCurrentContext();
     const cluster = kc.getCurrentCluster();
-    const user = kc.getCurrentUser();
+    const _user = kc.getCurrentUser();
 
     const id = randomUUID();
     const now = new Date().toISOString();
     const name = contextName || `k8s-${id.substring(0, 8)}`;
     const clusterUrl = cluster?.server || '';
 
-    db.prepare(`
-      INSERT INTO k8s_contexts (id, name, cluster_url, namespace, auth_type, config, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
-    `).run(id, name, clusterUrl, 'default', 'kubeconfig', configContent, now, now);
+    k8sContextRepository.insert({
+      id, name, cluster_url: clusterUrl, namespace: 'default',
+      auth_type: 'kubeconfig', config: configContent, created_at: now, updated_at: now,
+    });
 
     // 立即加载客户端
     try {
@@ -141,8 +126,7 @@ class KubernetesService {
       // 更新集群信息
       const nodes = await kc.makeApiClient(k8s.CoreV1Api).listNode().catch(() => ({ body: { items: [] } }));
       const pods = await kc.makeApiClient(k8s.CoreV1Api).listPodForAllNamespaces().catch(() => ({ body: { items: [] } }));
-      db.prepare('UPDATE k8s_contexts SET node_count=?, pod_count=?, updated_at=? WHERE id=?')
-        .run(nodes.body.items.length, pods.body.items.length, now, id);
+      k8sContextRepository.updateCounts(id, nodes.body.items.length, pods.body.items.length);
 
       const ctx: K8sContext = {
         id, name, clusterUrl, namespace: 'default', authType: 'kubeconfig',
@@ -153,16 +137,16 @@ class KubernetesService {
       this.contexts.set(id, ctx);
       logger.info(`✅ K8s cluster connected: ${name} (${clusterUrl})`);
       return ctx;
-    } catch (err: any) {
-      db.prepare('UPDATE k8s_contexts SET status=?, updated_at=? WHERE id=?').run('error', now, id);
-      throw new Error(`连接集群失败: ${err.message}`);
+    } catch (err: unknown) {
+      k8sContextRepository.updateStatus(id, 'error');
+      throw new Error(`连接集群失败: ${getErrorMessage(err)}`);
     }
   }
 
   async deleteContext(contextId: string): Promise<void> {
     this.clients.delete(contextId);
     this.contexts.delete(contextId);
-    db.prepare('DELETE FROM k8s_contexts WHERE id = ?').run(contextId);
+    k8sContextRepository.deleteById(contextId);
   }
 
   async testContext(configContent: string): Promise<{ success: boolean; message: string }> {
@@ -174,8 +158,8 @@ class KubernetesService {
       const res = await api.listNode();
       const cluster = kc.getCurrentCluster();
       return { success: true, message: `${cluster?.server || 'Unknown'}, ${res.body.items.length} nodes` };
-    } catch (err: any) {
-      return { success: false, message: err.message };
+    } catch (err: unknown) {
+      return { success: false, message: getErrorMessage(err) };
     }
   }
 

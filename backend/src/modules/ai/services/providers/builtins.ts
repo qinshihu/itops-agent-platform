@@ -1,5 +1,8 @@
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { logger } from '../../../../utils/logger';
 import type { Provider, ProviderResult } from './types';
+import { getErrorMessage } from '../../../../utils/errorHelpers';
 
 /**
  * HTTP Provider
@@ -177,8 +180,6 @@ export const scriptProvider: Provider = {
 // 脚本方法实现
 export const scriptMethods = {
   async exec(params: any): Promise<ProviderResult> {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
     const execPromise = promisify(exec);
 
     try {
@@ -194,14 +195,15 @@ export const scriptMethods = {
         success: true,
         data: { stdout, stderr, code: 0 }
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const execError = error as { stdout?: string; stderr?: string; code?: number };
       return {
         success: false,
-        error: error.message,
+        error: getErrorMessage(error),
         data: {
-          stdout: error.stdout,
-          stderr: error.stderr,
-          code: error.code
+          stdout: execError.stdout,
+          stderr: execError.stderr,
+          code: execError.code
         }
       };
     }
@@ -235,7 +237,7 @@ export const databaseProvider: Provider = {
 
 // 数据库方法实现
 export const databaseMethods = {
-  async query(params: any): Promise<ProviderResult> {
+  async query(_params: any): Promise<ProviderResult> {
     // 简化实现
     return {
       success: true,

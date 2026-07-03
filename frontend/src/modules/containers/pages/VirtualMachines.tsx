@@ -1220,7 +1220,7 @@ export default function VirtualMachines() {
                     CPU 使用率
                   </div>
                   <span className="text-lg font-bold text-text-primary">
-                    {vmStatsData?.cpuUsage != null ? `${vmStatsData.cpuUsage.toFixed(1)}%` : '--'}
+                    {vmStatsData?.cpuUsage !== null && vmStatsData?.cpuUsage !== undefined ? `${vmStatsData.cpuUsage.toFixed(1)}%` : '--'}
                   </span>
                 </div>
                 <div className="w-full bg-border rounded-full h-2.5 overflow-hidden">
@@ -1239,7 +1239,7 @@ export default function VirtualMachines() {
                     内存使用率
                   </div>
                   <span className="text-lg font-bold text-text-primary">
-                    {vmStatsData?.memoryUsage != null ? `${vmStatsData.memoryUsage.toFixed(1)}%` : '--'}
+                    {vmStatsData?.memoryUsage !== null && vmStatsData?.memoryUsage !== undefined ? `${vmStatsData.memoryUsage.toFixed(1)}%` : '--'}
                   </span>
                 </div>
                 <div className="w-full bg-border rounded-full h-2.5 overflow-hidden">

@@ -17,6 +17,8 @@ export interface Server {
   disk_gb?: number;
   ip_address?: string;
   private_ip?: string;
+  ssh_key_id?: string;
+  vnc_port?: number;
   groups?: Array<{ id: string; name: string }>;
 }
 

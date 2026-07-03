@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import db from '../../../../models/database';
 import { logger } from '../../../../utils/logger';
-import { getApiKey, getModelId, getApiBase, buildApiEndpoint } from '../../../../utils/apiConfig';
+import { getApiBase, buildApiEndpoint } from '../../../../utils/apiConfig';
 import axios from 'axios';
 
 export interface AIModel {
@@ -88,7 +88,7 @@ export function getEffectiveApiBase(model: AIModel): string {
   };
   
   const config = providerBaseMap[model.provider_type];
-  return getApiBase(db, config.setting, config.env, config.default);
+  return getApiBase(config.setting, config.env, config.default);
 }
 
 interface RawAIModel {
@@ -344,7 +344,7 @@ export async function testModelConnectivity(modelId: string): Promise<{
       finalApiBase = finalApiBase.replace('/chat/completions', '');
     }
     
-    const response = await axios.post(
+    const _response = await axios.post(
       buildApiEndpoint(finalApiBase, 'chat/completions'),
       {
         model: model.model_id,

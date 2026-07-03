@@ -156,7 +156,7 @@ ${ragContext ? `知识库参考文档：\n${ragContext}\n` : ''}
     return [];
   }
 
-  private getFallbackCommands(vendor: VendorType, description: string): GeneratedCommand[] {
+  private getFallbackCommands(vendor: VendorType, _description: string): GeneratedCommand[] {
     const adapter = createVendorAdapter(vendor);
     const allCommands = adapter.getCommands();
     

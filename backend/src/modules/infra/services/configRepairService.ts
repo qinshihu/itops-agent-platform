@@ -15,7 +15,6 @@ import type {
   ConfigChange,
 } from '../../../types/configRepair';
 import { ConfigParser } from './configParser';
-import { configBackupService } from './configBackupService';
 import db from '../../../models/database';
 
 export class ConfigRepairService {
@@ -246,7 +245,7 @@ export class ConfigRepairService {
     deviceIp: string,
     configPath: string,
     issues: ConfigIssue[],
-    content: string
+    _content: string
   ): Promise<RepairPlan> {
     const id = randomUUID();
     

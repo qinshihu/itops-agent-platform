@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { logger } from '../../../utils/logger';
 import { requireRole } from '../../../middleware/auth';
 import { alertAutoAnalyzer } from '../services/alertAutoAnalyzer';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -12,9 +13,9 @@ router.get('/alert-auto-analysis', (_req: Request, res: Response) => {
     const limit = parseInt(_req.query.limit as string, 10) || 50;
     const history = alertAutoAnalyzer.getAnalysisHistory(limit);
     res.json({ success: true, data: history });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Failed to get auto-analysis history:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: getErrorMessage(error) });
   }
 });
 
@@ -26,9 +27,9 @@ router.get('/alert-auto-analysis/:alertId', (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'No analysis found for this alert' });
     }
     res.json({ success: true, data: result });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Failed to get auto-analysis by alert:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: getErrorMessage(error) });
   }
 });
 
@@ -40,9 +41,9 @@ router.post('/alert-auto-analysis/:alertId/analyze', requireRole('admin'), async
       return res.status(409).json({ success: false, error: '该告警正在分析中' });
     }
     res.json({ success: true, data: result });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Failed to trigger auto-analysis:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: getErrorMessage(error) });
   }
 });
 

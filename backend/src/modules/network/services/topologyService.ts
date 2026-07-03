@@ -1,7 +1,8 @@
-import db from '../../../models/database';
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
 import { executeCommand } from '../../servers/services/sshService';
+import { serversRepo, topologyRepo } from '../../../repositories/serverRepository';
+import { alertRepository } from '../../../repositories';
 
 export interface DependencyInput {
   source_server_id: string;
@@ -50,12 +51,6 @@ export interface AffectedService {
   path: string[];
 }
 
-interface ServerDB {
-  id: string;
-  name: string;
-  hostname: string;
-}
-
 interface DependencyDB {
   id: string;
   source_server_id: string;
@@ -72,7 +67,7 @@ interface DependencyDB {
 
 class TopologyService {
   async discoverDependencies(serverId: string): Promise<DependencyInput[]> {
-    const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(serverId) as ServerDB | undefined;
+    const server = serversRepo.getById(serverId);
     if (!server) {
       throw new Error(`Server ${serverId} not found`);
     }
@@ -84,7 +79,7 @@ class TopologyService {
     ];
 
     const discovered: DependencyInput[] = [];
-    const allServers = db.prepare('SELECT id, hostname FROM servers').all() as ServerDB[];
+    const allServers = serversRepo.listSummary();
 
     for (const cmd of commands) {
       try {
@@ -117,26 +112,23 @@ class TopologyService {
     const id = randomUUID();
     const now = new Date().toISOString();
 
-    db.prepare(`
-      INSERT INTO service_topologies (id, source_server_id, target_server_id, dependency_type, protocol, port, status, metadata, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
-    `).run(
+    topologyRepo.insertDependency({
       id,
-      input.source_server_id,
-      input.target_server_id,
-      input.dependency_type,
-      input.protocol || null,
-      input.port || null,
-      input.metadata ? JSON.stringify(input.metadata) : null,
-      now,
-      now
-    );
+      source_server_id: input.source_server_id,
+      target_server_id: input.target_server_id,
+      dependency_type: input.dependency_type,
+      protocol: input.protocol || null,
+      port: input.port || null,
+      metadata: input.metadata ? JSON.stringify(input.metadata) : null,
+      created_at: now,
+      updated_at: now,
+    });
 
     return this.edgeToTopologyEdge(this.getDependencyById(id)!);
   }
 
   getServerTopology(serverId: string): TopologyGraph {
-    const server = db.prepare('SELECT id, name, hostname FROM servers WHERE id = ?').get(serverId) as ServerDB | undefined;
+    const server = serversRepo.getById(serverId);
     if (!server) {
       throw new Error(`Server ${serverId} not found`);
     }
@@ -155,15 +147,7 @@ class TopologyService {
       type: 'server',
     });
 
-    const deps = db.prepare(`
-      SELECT st.*, 
-        s1.name as source_name, s1.hostname as source_ip,
-        s2.name as target_name, s2.hostname as target_ip
-      FROM service_topologies st
-      LEFT JOIN servers s1 ON st.source_server_id = s1.id
-      LEFT JOIN servers s2 ON st.target_server_id = s2.id
-      WHERE st.source_server_id = ? OR st.target_server_id = ?
-    `).all(serverId, serverId) as (DependencyDB & { source_name: string | null; source_ip: string | null; target_name: string | null; target_ip: string | null })[];
+    const deps = topologyRepo.getDependencies(serverId) as unknown as (DependencyDB & { source_name: string | null; source_ip: string | null; target_name: string | null; target_ip: string | null })[];
 
     const serverIds = new Set<string>([serverId]);
 
@@ -203,15 +187,8 @@ class TopologyService {
   }
 
   getGlobalTopology(): TopologyGraph {
-    const servers = db.prepare('SELECT id, name, hostname FROM servers').all() as ServerDB[];
-    const deps = db.prepare(`
-      SELECT st.*, 
-        s1.name as source_name, s1.hostname as source_ip,
-        s2.name as target_name, s2.hostname as target_ip
-      FROM service_topologies st
-      LEFT JOIN servers s1 ON st.source_server_id = s1.id
-      LEFT JOIN servers s2 ON st.target_server_id = s2.id
-    `).all() as (DependencyDB & { source_name: string | null; source_ip: string | null; target_name: string | null; target_ip: string | null })[];
+    const servers = serversRepo.listSummary();
+    const deps = topologyRepo.getAllDependencies() as unknown as (DependencyDB & { source_name: string | null; source_ip: string | null; target_name: string | null; target_ip: string | null })[];
 
     const nodes: TopologyNode[] = servers.map(s => ({
       id: s.id,
@@ -230,7 +207,7 @@ class TopologyService {
   }
 
   async verifyDependencies(): Promise<Array<{ id: string; source_server_id: string; target_server_id: string; status: string; verified_at: string }>> {
-    const deps = db.prepare('SELECT * FROM service_topologies WHERE status = \'active\'').all() as DependencyDB[];
+    const deps = topologyRepo.getActiveDependencies() as unknown as DependencyDB[];
     const results: Array<{ id: string; source_server_id: string; target_server_id: string; status: string; verified_at: string }> = [];
 
     for (const dep of deps) {
@@ -238,7 +215,7 @@ class TopologyService {
       const now = new Date().toISOString();
 
       try {
-        const target = db.prepare('SELECT hostname FROM servers WHERE id = ?').get(dep.target_server_id) as { hostname: string } | undefined;
+        const target = serversRepo.getById(dep.target_server_id);
         if (target) {
           const result = await executeCommand(dep.source_server_id, `ping -c 1 -W 2 ${target.hostname}`, { logHistory: false });
           status = result.success ? 'active' : 'inactive';
@@ -247,9 +224,7 @@ class TopologyService {
         status = 'unknown';
       }
 
-      db.prepare(`
-        UPDATE service_topologies SET status = ?, last_verified_at = ?, updated_at = ? WHERE id = ?
-      `).run(status, now, now, dep.id);
+      topologyRepo.updateDependencyVerification(dep.id, status, now, now);
 
       results.push({
         id: dep.id,
@@ -264,45 +239,29 @@ class TopologyService {
   }
 
   getAffectedServices(alertId: string): { upstream: AffectedService[]; downstream: AffectedService[] } {
-    const alert = db.prepare('SELECT server_id FROM alerts WHERE id = ?').get(alertId) as { server_id: string } | undefined;
+    const alert = alertRepository.getById(alertId);
     if (!alert) {
       throw new Error(`Alert ${alertId} not found`);
     }
 
-    const upstream = this.findUpstream(alert.server_id);
-    const downstream = this.findDownstream(alert.server_id);
+    const upstream = this.findUpstream(alert.server_id as string);
+    const downstream = this.findDownstream(alert.server_id as string);
 
     return { upstream, downstream };
   }
 
   deleteDependency(id: string): boolean {
-    const result = db.prepare('DELETE FROM service_topologies WHERE id = ?').run(id);
-    return result.changes > 0;
+    return topologyRepo.deleteDependency(id) > 0;
   }
 
   getDependenciesByServer(serverId: string): TopologyEdge[] {
-    const deps = db.prepare(`
-      SELECT st.*, 
-        s1.name as source_name, s1.hostname as source_ip,
-        s2.name as target_name, s2.hostname as target_ip
-      FROM service_topologies st
-      LEFT JOIN servers s1 ON st.source_server_id = s1.id
-      LEFT JOIN servers s2 ON st.target_server_id = s2.id
-      WHERE st.source_server_id = ? OR st.target_server_id = ?
-    `).all(serverId, serverId) as (DependencyDB & { source_name: string | null; source_ip: string | null; target_name: string | null; target_ip: string | null })[];
+    const deps = topologyRepo.getDependencies(serverId) as unknown as (DependencyDB & { source_name: string | null; source_ip: string | null; target_name: string | null; target_ip: string | null })[];
 
     return deps.map(dep => this.dependencyToEdge(dep));
   }
 
   getAllDependencies(): TopologyEdge[] {
-    const deps = db.prepare(`
-      SELECT st.*, 
-        s1.name as source_name, s1.hostname as source_ip,
-        s2.name as target_name, s2.hostname as target_ip
-      FROM service_topologies st
-      LEFT JOIN servers s1 ON st.source_server_id = s1.id
-      LEFT JOIN servers s2 ON st.target_server_id = s2.id
-    `).all() as (DependencyDB & { source_name: string | null; source_ip: string | null; target_name: string | null; target_ip: string | null })[];
+    const deps = topologyRepo.getAllDependencies() as unknown as (DependencyDB & { source_name: string | null; source_ip: string | null; target_name: string | null; target_ip: string | null })[];
 
     return deps.map(dep => this.dependencyToEdge(dep));
   }
@@ -311,15 +270,10 @@ class TopologyService {
     if (visited.has(serverId) || distance >= maxDepth) return [];
     visited.add(serverId);
 
-    const server = db.prepare('SELECT id, name, hostname FROM servers WHERE id = ?').get(serverId) as ServerDB | undefined;
+    const server = serversRepo.getById(serverId);
     if (!server) return [];
 
-    const deps = db.prepare(`
-      SELECT st.*, s.name as source_name, s.hostname as source_ip
-      FROM service_topologies st
-      LEFT JOIN servers s ON st.source_server_id = s.id
-      WHERE st.target_server_id = ? AND st.status = 'active'
-    `).all(serverId) as (DependencyDB & { source_name: string | null; source_ip: string | null })[];
+    const deps = topologyRepo.getUpstreamDependencies(serverId) as unknown as (DependencyDB & { source_name: string | null; source_ip: string | null })[];
 
     const results: AffectedService[] = [];
 
@@ -348,15 +302,10 @@ class TopologyService {
     if (visited.has(serverId) || distance >= maxDepth) return [];
     visited.add(serverId);
 
-    const server = db.prepare('SELECT id, name, hostname FROM servers WHERE id = ?').get(serverId) as ServerDB | undefined;
+    const server = serversRepo.getById(serverId);
     if (!server) return [];
 
-    const deps = db.prepare(`
-      SELECT st.*, s.name as target_name, s.hostname as target_ip
-      FROM service_topologies st
-      LEFT JOIN servers s ON st.target_server_id = s.id
-      WHERE st.source_server_id = ? AND st.status = 'active'
-    `).all(serverId) as (DependencyDB & { target_name: string | null; target_ip: string | null })[];
+    const deps = topologyRepo.getDownstreamDependencies(serverId) as unknown as (DependencyDB & { target_name: string | null; target_ip: string | null })[];
 
     const results: AffectedService[] = [];
 
@@ -382,7 +331,7 @@ class TopologyService {
   }
 
   private getDependencyById(id: string): DependencyDB | undefined {
-    return db.prepare('SELECT * FROM service_topologies WHERE id = ?').get(id) as DependencyDB | undefined;
+    return topologyRepo.getDependencyById(id) as unknown as DependencyDB | undefined;
   }
 
   private dependencyToEdge(dep: DependencyDB & { source_name?: string | null; source_ip?: string | null; target_name?: string | null; target_ip?: string | null }): TopologyEdge {

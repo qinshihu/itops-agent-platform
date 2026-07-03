@@ -86,6 +86,7 @@ export type JsonRpcResponse = z.infer<typeof JsonRpcResponseSchema>;
 // MCP 协议方法
 // ============================================================
 
+// eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace MCPMethod {
   export const INITIALIZE = 'initialize';
   export const TOOLS_LIST = 'tools/list';

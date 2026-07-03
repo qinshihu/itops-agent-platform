@@ -25,7 +25,7 @@ class DockerService {
       this.initialized = true;
       logger.info('✅ Docker service initialized');
       return true;
-    } catch (error) {
+    } catch (_error) {
       logger.warn('⚠️ Docker socket not available, container management disabled');
       this.initialized = false;
       return false;
@@ -59,14 +59,14 @@ class DockerService {
       created: c.Created,
       labels: c.Labels,
       networkSettings: c.NetworkSettings,
-      mountLabel: (c as any).MountLabel || '',
+      mountLabel: (c as Docker.ContainerInfo & { MountLabel?: string }).MountLabel || '',
     }));
   }
 
   /**
    * 获取容器详情
    */
-  async getContainer(id: string): Promise<any> {
+  async getContainer(id: string): Promise<Record<string, unknown>> {
     if (!this.initialized) throw new Error('Docker service not available');
     
     const container = this.docker.getContainer(id);
@@ -96,8 +96,8 @@ class DockerService {
         labels: info.Config.Labels,
       },
       networkSettings: {
-        ipAddress: (info.NetworkSettings as any).IPAddress || '',
-        gateway: (info.NetworkSettings as any).Gateway || '',
+        ipAddress: (info.NetworkSettings as Record<string, unknown>).IPAddress as string || '',
+        gateway: (info.NetworkSettings as Record<string, unknown>).Gateway as string || '',
         networks: info.NetworkSettings.Networks,
         ports: info.NetworkSettings.Ports,
       },
@@ -262,7 +262,7 @@ class DockerService {
           return;
         }
         
-        this.docker.modem.followProgress(stream, (err: Error | null, output: any[]) => {
+        this.docker.modem.followProgress(stream, (err: Error | null, _output: unknown[]) => {
           if (err) {
             reject(err);
             return;
@@ -329,7 +329,7 @@ class DockerService {
   /**
    * 创建卷
    */
-  async createVolume(name: string, driver = 'local', labels: Record<string, string> = {}): Promise<any> {
+  async createVolume(name: string, driver = 'local', labels: Record<string, string> = {}): Promise<Record<string, unknown>> {
     if (!this.initialized) throw new Error('Docker service not available');
     
     const volume = await this.docker.createVolume({
@@ -374,7 +374,7 @@ class DockerService {
       labels: info.Labels,
       options: info.Options,
       scope: info.Scope,
-      created: (info as any).CreatedAt || '',
+      created: (info as Record<string, unknown>).CreatedAt as string || '',
     };
   }
 
@@ -383,7 +383,7 @@ class DockerService {
   /**
    * 获取所有网络列表
    */
-  async listNetworks(): Promise<any[]> {
+  async listNetworks(): Promise<Record<string, unknown>[]> {
     if (!this.initialized) throw new Error('Docker service not available');
     
     const networks = await this.docker.listNetworks();
@@ -436,7 +436,7 @@ class DockerService {
   /**
    * 获取网络详情
    */
-  async getNetwork(id: string): Promise<any> {
+  async getNetwork(id: string): Promise<Record<string, unknown>> {
     if (!this.initialized) throw new Error('Docker service not available');
     
     const network = this.docker.getNetwork(id);

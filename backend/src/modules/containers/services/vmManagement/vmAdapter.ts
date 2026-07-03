@@ -19,9 +19,6 @@ import type {
   RestoreSnapshotRequest,
   MigrateVMRequest,
   ReconfigureVMRequest} from '../../../../types/vmManagement';
-import {
-  VMConfig
-} from '../../../../types/vmManagement';
 
 export interface VMAdapter {
   // 连接管理

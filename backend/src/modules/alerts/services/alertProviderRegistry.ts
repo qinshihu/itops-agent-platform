@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
-import db from '../../../models/database';
+import { alertRepository } from '../../../repositories';
 
 /**
  * 告警 Provider 接口
@@ -71,10 +71,14 @@ export const alertProviderRegistry = new AlertProviderRegistry();
 
         try {
           // 存入数据库
-          db.prepare(`
-            INSERT INTO alerts (id, title, severity, content, source, status, fingerprint, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(alertData.id, alertData.title, alertData.severity, alertData.content, alertData.source, alertData.status, alertData.fingerprint, alertData.created_at);
+          alertRepository.create({
+            id: alertData.id,
+            source: alertData.source,
+            severity: alertData.severity,
+            title: alertData.title,
+            content: alertData.content,
+            alert_fingerprint: alertData.fingerprint,
+          });
           
           logger.info(`✅ 告警已存入数据库: ${alertData.id}`);
         } catch (error) {

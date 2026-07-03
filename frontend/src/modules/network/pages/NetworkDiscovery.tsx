@@ -368,8 +368,8 @@ export default function NetworkDiscovery() {
                       <div className="flex items-center gap-2 mt-0.5 text-xs text-text-tertiary">
                         {result.vendor && <span>{result.vendor}</span>}
                         {result.model && <span className="truncate max-w-[200px]">{result.model}</span>}
-                        {result.interface_count != null && <span>{result.interface_count} 接口</span>}
-                        {result.response_time_ms != null && <span>{result.response_time_ms}ms</span>}
+                        {result.interface_count !== null && result.interface_count !== undefined && <span>{result.interface_count} 接口</span>}
+                        {result.response_time_ms !== null && result.response_time_ms !== undefined && <span>{result.response_time_ms}ms</span>}
                         {result.snmp_version && <span>SNMP {result.snmp_version.toUpperCase()}</span>}
                       </div>
                     </div>

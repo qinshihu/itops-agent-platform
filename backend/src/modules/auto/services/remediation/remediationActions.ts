@@ -86,7 +86,7 @@ export const remediationActionsMixin = {
     return audit || {};
   },
 
-  approveAudit(id: string, userId: string, action?: string, comment?: string): Record<string, unknown> {
+  approveAudit(id: string, userId: string, action?: string, _comment?: string): Record<string, unknown> {
     const audit = db.prepare('SELECT * FROM remediation_audits WHERE id = ?').get(id) as Record<string, unknown> | undefined;
     if (!audit) {
       throw new Error(`Audit not found: ${id}`);
@@ -131,7 +131,7 @@ export const remediationActionsMixin = {
       UPDATE remediation_audits SET status = 'executing' WHERE id = ?
     `).run(id);
 
-    const startTime = Date.now();
+    const _startTime = Date.now();
     const serverId = audit.server_id as string;
     const rca = audit.rca_id ? rootCauseAnalysisService.get(audit.rca_id as string) : null;
     const recommendations = rca?.recommendations ? JSON.parse(rca.recommendations) : [];
@@ -227,7 +227,7 @@ export const remediationActionsMixin = {
     }
 
     const serverId = audit.server_id as string;
-    const rca = audit.rca_id ? rootCauseAnalysisService.get(audit.rca_id as string) : null;
+    const _rca = audit.rca_id ? rootCauseAnalysisService.get(audit.rca_id as string) : null;
 
     let verificationResult: Record<string, unknown> = {};
 

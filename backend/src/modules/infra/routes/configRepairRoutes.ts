@@ -9,16 +9,6 @@ import { Router } from 'express';
 import { logger } from '../../../utils/logger';
 import { configRepairService } from '../services/configRepairService';
 import { configBackupService } from '../services/configBackupService';
-import {
-  AnalyzeConfigRequest,
-  AnalyzeConfigResponse,
-  GenerateRepairPlanRequest,
-  GenerateRepairPlanResponse,
-  ExecuteRepairRequest,
-  ExecuteRepairResponse,
-  RollbackRepairRequest,
-  RollbackRepairResponse,
-} from '../../../types/configRepair';
 
 const router = Router();
 
@@ -81,8 +71,8 @@ router.post('/analyze', async (req: Request, res: Response) => {
     }
 
     // 获取设备信息（这里简化处理）
-    const deviceName = req.body.deviceName || 'Unknown';
-    const deviceIp = req.body.deviceIp || 'Unknown';
+    const _deviceName = req.body.deviceName || 'Unknown';
+    const _deviceIp = req.body.deviceIp || 'Unknown';
 
     const analysis = await configRepairService.analyzeConfig(
       deviceId,
@@ -109,7 +99,7 @@ router.post('/analyze', async (req: Request, res: Response) => {
  */
 router.post('/plan', async (req: Request, res: Response) => {
   try {
-    const { deviceId, configPath, issues, content, templateId } = req.body;
+    const { deviceId, configPath, issues, content, _templateId } = req.body;
     
     if (!deviceId || !configPath || !issues || !content) {
       return res.status(400).json({

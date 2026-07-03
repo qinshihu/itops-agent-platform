@@ -54,45 +54,12 @@ interface AiRemediationRecord {
 }
 
 class AiRemediationService {
-  private initialized = false;
-
-  /** 初始化数据库表 */
-  private ensureTable(): void {
-    if (this.initialized) return;
-
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS ai_remediations (
-        id TEXT PRIMARY KEY,
-        alert_id TEXT NOT NULL,
-        device_id TEXT,
-        device_name TEXT,
-        device_ip TEXT,
-        task_id TEXT,
-        workflow_id TEXT,
-        diagnosis TEXT,
-        remediation_commands TEXT,
-        risk_level TEXT CHECK(risk_level IN ('low', 'medium', 'high')),
-        status TEXT CHECK(status IN ('pending', 'waiting_approval', 'approved', 'rejected', 'executing', 'completed', 'failed')),
-        execution_result TEXT,
-        error_message TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (alert_id) REFERENCES alerts(id),
-        FOREIGN KEY (task_id) REFERENCES tasks(id)
-      )
-    `);
-
-    this.initialized = true;
-    logger.info('✅ AI Remediation Service initialized');
-  }
 
   /**
    * 根据 AI 分析结果创建修复工作流并执行
    * 这是断点连接的核心方法
    */
   async createAndExecute(input: AiRemediationInput): Promise<AiRemediationRecord | null> {
-    this.ensureTable();
-
     const id = randomUUID();
     const now = new Date().toISOString();
 
@@ -185,7 +152,7 @@ class AiRemediationService {
    */
   private generateRemediationWorkflow(
     input: AiRemediationInput,
-    remediationId: string
+    _remediationId: string
   ): { workflow: any; workflowParsed: WorkflowParsed } {
     const approvalNodeId = randomUUID();
     const executionNodeId = randomUUID();
@@ -563,7 +530,6 @@ ${commandsText}
 
   /** 获取修复记录 */
   getRecord(id: string): AiRemediationRecord | null {
-    this.ensureTable();
     const row = db.prepare('SELECT * FROM ai_remediations WHERE id = ?').get(id) as any;
     if (!row) return null;
     return {
@@ -574,7 +540,6 @@ ${commandsText}
 
   /** 根据告警 ID 获取修复记录 */
   getByAlertId(alertId: string): AiRemediationRecord | null {
-    this.ensureTable();
     const row = db.prepare('SELECT * FROM ai_remediations WHERE alert_id = ? ORDER BY created_at DESC LIMIT 1').get(alertId) as any;
     if (!row) return null;
     return {
@@ -585,7 +550,6 @@ ${commandsText}
 
   /** 获取所有修复记录 */
   listRecords(limit = 50): AiRemediationRecord[] {
-    this.ensureTable();
     const rows = db.prepare('SELECT * FROM ai_remediations ORDER BY created_at DESC LIMIT ?').all(limit) as any[];
     return rows.map(row => ({
       ...row,
@@ -595,7 +559,6 @@ ${commandsText}
 
   /** 更新修复状态（由工作流执行器调用） */
   updateStatus(remediationId: string, status: AiRemediationRecord['status'], result?: string): void {
-    this.ensureTable();
     const record = this.getRecord(remediationId);
     if (!record) return;
     record.status = status;

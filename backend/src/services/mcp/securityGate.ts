@@ -16,7 +16,6 @@
 import {
   type RegisteredTool,
   type ToolCallContext,
-  RiskLevel,
 } from './types';
 import { logger } from '../../utils/logger';
 
@@ -288,7 +287,7 @@ export class SecurityGate {
     toolName: string,
     userId: string,
     reason: string,
-    ttlMs: number = 300_000 // 默认 5 分钟
+    ttlMs = 300_000 // 默认 5 分钟
   ): ApprovalTicket {
     const ticketId = `mcp_approval_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const ticket: ApprovalTicket = {
@@ -328,7 +327,7 @@ export class SecurityGate {
    */
   private detectPromptInjection(
     args: Record<string, unknown>,
-    depth: number = 0
+    depth = 0
   ): string[] {
     if (this.config.promptInjectionDetection === 'off') return [];
 
@@ -560,7 +559,7 @@ export class SecurityGate {
   }
 
   /** 获取最近的审计日志 */
-  getAuditLog(limit: number = 50) {
+  getAuditLog(limit = 50) {
     return this.auditLog.slice(-limit);
   }
 

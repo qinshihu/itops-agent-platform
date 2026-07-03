@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { composeService } from '../services/composeService';
 import { requireRole } from '../../../middleware/auth';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -22,8 +23,8 @@ router.get('/', (req: Request, res: Response) => {
     const total = projects.length;
     const data = projects.slice((page - 1) * pageSize, page * pageSize);
     res.json({ success: true, data, total });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -33,8 +34,8 @@ router.get('/:id', (req: Request, res: Response) => {
     const project = composeService.getProject(req.params.id);
     if (!project) return res.status(404).json({ success: false, message: '项目不存在' });
     res.json({ success: true, data: project });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -45,8 +46,8 @@ router.post('/', requireRole('admin', 'operator'), (req: Request, res: Response)
     if (!name || !composeContent) return res.status(400).json({ success: false, message: '名称和compose内容必填' });
     const project = composeService.createProject(name, composeContent, description, tags);
     res.json({ success: true, data: project });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -55,8 +56,8 @@ router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Respons
   try {
     const project = composeService.updateProject(req.params.id, req.body);
     res.json({ success: true, data: project });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -65,8 +66,8 @@ router.delete('/:id', requireRole('admin'), async (req: Request, res: Response) 
   try {
     await composeService.deleteProject(req.params.id);
     res.json({ success: true, message: '已删除' });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -75,8 +76,8 @@ router.post('/:id/up', requireRole('admin', 'operator'), async (req: Request, re
   try {
     const output = await composeService.upProject(req.params.id);
     res.json({ success: true, data: { output } });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -85,8 +86,8 @@ router.post('/:id/down', requireRole('admin', 'operator'), async (req: Request, 
   try {
     const output = await composeService.downProject(req.params.id);
     res.json({ success: true, data: { output } });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -95,8 +96,8 @@ router.post('/:id/restart', requireRole('admin', 'operator'), async (req: Reques
   try {
     const output = await composeService.restartProject(req.params.id);
     res.json({ success: true, data: { output } });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -105,8 +106,8 @@ router.get('/:id/services', async (req: Request, res: Response) => {
   try {
     const services = await composeService.listServices(req.params.id);
     res.json({ success: true, data: services });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -116,8 +117,8 @@ router.get('/:id/logs', async (req: Request, res: Response) => {
     const tail = parseInt(req.query.tail as string) || 100;
     const logs = await composeService.getLogs(req.params.id, tail);
     res.json({ success: true, data: { logs } });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 

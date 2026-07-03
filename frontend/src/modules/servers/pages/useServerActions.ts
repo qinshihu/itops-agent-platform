@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -6,6 +5,35 @@ import api from '../../../lib/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { useEscapeKey } from '../../../hooks/useEscapeKey';
 import type { Server, ServerGroup, CommandResult, CommandHistoryItem, ComplianceCheck } from './types';
+
+interface ApiError {
+  response?: {
+    data?: {
+      message?: string;
+      error?: string;
+    };
+  };
+  message?: string;
+}
+
+interface ServerImportItem {
+  name: string;
+  hostname: string;
+  port: number;
+  username: string;
+  password?: string;
+  private_key?: string;
+  use_ssh_key: number;
+  description: string;
+  tags: string[];
+  group_id?: string;
+}
+
+interface ImportResult {
+  success: number;
+  failed: number;
+  errors?: string[];
+}
 
 export function useServerActions() {
   const navigate = useNavigate();
@@ -66,7 +94,7 @@ export function useServerActions() {
 
   // Import related
   const [importData, setImportData] = useState('');
-  const [importResult, setImportResult] = useState<any>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
   // Group sidebar
   const [showGroups, setShowGroups] = useState(false);
@@ -204,7 +232,7 @@ export function useServerActions() {
   // 根据选中的标签或分组筛选服务器
   const safeServers = Array.isArray(servers) ? servers : [];
   const filteredServers = selectedGroupId
-    ? safeServers.filter((server: Server) => (server.groups || []).some((g: any) => g.id === selectedGroupId))
+    ? safeServers.filter((server: Server) => (server.groups || []).some((g: { id: string; name: string }) => g.id === selectedGroupId))
     : selectedTag
       ? safeServers.filter((server: Server) => (Array.isArray(server.tags) ? server.tags : []).includes(selectedTag))
       : safeServers;
@@ -231,7 +259,7 @@ export function useServerActions() {
 
   // ---------- Mutations ----------
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: typeof formData) => {
       const payload = {
         ...data,
         tags: data.tags ? data.tags.split(',').map((t: string) => t.trim()) : [],
@@ -246,13 +274,13 @@ export function useServerActions() {
       setIsModalOpen(false);
       toast.success('服务器已添加');
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast.error(err.response?.data?.message || err.response?.data?.error || '添加服务器失败');
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+    mutationFn: async ({ id, data }: { id: string; data: typeof formData }) => {
       const payload: Record<string, unknown> = {
         ...data,
         tags: data.tags ? data.tags.split(',').map((t: string) => t.trim()) : undefined,
@@ -273,7 +301,7 @@ export function useServerActions() {
       setSelectedServer(null);
       toast.success('服务器已更新');
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast.error(err.response?.data?.message || err.response?.data?.error || '更新服务器失败');
     },
   });
@@ -288,7 +316,7 @@ export function useServerActions() {
       setPendingDeleteServer(null);
       toast.success('服务器已删除');
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast.error(err.response?.data?.message || err.response?.data?.error || '删除服务器失败');
     },
   });
@@ -361,14 +389,14 @@ export function useServerActions() {
   });
 
   const importServersMutation = useMutation({
-    mutationFn: async (data: { servers: any[]; test_connection: boolean }) => {
+    mutationFn: async (data: { servers: ServerImportItem[]; test_connection: boolean }) => {
       const res = await api.post('/api/server-management/import', data);
       return res.data;
     },
   });
 
   const createGroupMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: typeof groupFormData) => {
       const res = await api.post('/api/server-groups', data);
       return res.data;
     },
@@ -382,7 +410,7 @@ export function useServerActions() {
   });
 
   const updateGroupMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+    mutationFn: async ({ id, data }: { id: string; data: typeof groupFormData }) => {
       const res = await api.put(`/api/server-groups/${id}`, data);
       return res.data;
     },
@@ -426,7 +454,7 @@ export function useServerActions() {
 
   const handleEdit = (server: Server) => {
     setSelectedServer(server);
-    const serverSshKeyId = (server as any).ssh_key_id || '';
+    const serverSshKeyId = server.ssh_key_id || '';
     setSelectedSshKeyId(serverSshKeyId);
 
     if (serverSshKeyId && sshKeys) {
@@ -448,8 +476,8 @@ export function useServerActions() {
       use_ssh_key: !!server.use_ssh_key,
       description: server.description || '',
       tags: server.tags ? server.tags.join(', ') : '',
-      os_type: (server as any).os_type || 'linux',
-      vnc_port: (server as any).vnc_port || 5900,
+      os_type: server.os_type || 'linux',
+      vnc_port: server.vnc_port || 5900,
       vnc_password: '',
     });
     setIsModalOpen(true);
@@ -567,8 +595,8 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
         setAiGeneratedCommand(output);
         setAiCommandExplanation('AI 生成的命令，请确认后执行');
       }
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || '未知错误';
+    } catch (err) {
+      const errorMsg = (err as ApiError).response?.data?.error || (err as ApiError).response?.data?.message || (err as ApiError).message || '未知错误';
       setAiGenerationError(`生成失败：${errorMsg}`);
     } finally {
       setIsAiGenerating(false);
@@ -685,8 +713,8 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
       const result = await importServersMutation.mutateAsync({ servers, test_connection: true });
       setImportResult(result.data);
       toast.success(`导入成功: ${result.data.success} 成功, ${result.data.failed} 失败`);
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || '导入失败');
+    } catch (err) {
+      toast.error((err as ApiError).response?.data?.error || '导入失败');
     }
   };
 

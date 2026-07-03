@@ -9,9 +9,8 @@
  * =============================================================================
  */
 
-import db from '../../../../../models/database';
+import { networkDeviceRepository, serversRepo, snmpRepository } from '../../../../../repositories';
 import { decrypt } from '../../../../auth/services/encryptionService';
-import { logger } from '../../../../../utils/logger';
 import type { DeviceRuntimeProfile, DeviceCategory, MetricsBaseline } from '../types';
 
 interface IdentificationSource {
@@ -20,7 +19,7 @@ interface IdentificationSource {
   ttl: number;      // 缓存有效期（秒）
 }
 
-const SOURCE_WEIGHTS: IdentificationSource[] = [
+const _SOURCE_WEIGHTS: IdentificationSource[] = [
   { name: 'database', weight: 0.40, ttl: 3600 },
   { name: 'fingerprint', weight: 0.30, ttl: 300 },
   { name: 'llm', weight: 0.20, ttl: 0 },
@@ -67,7 +66,7 @@ class DeviceProfiler {
     let bestAccess: 'ssh' | 'snmp' | 'both' | 'none' = 'none';
     let bestConfidence = 0;
     let bestId = '';
-    let bestName = '';
+    let _bestName = '';
     let bestHostname = '';
 
     const candidates: Array<{
@@ -120,7 +119,7 @@ class DeviceProfiler {
         bestType = c.type;
         bestAccess = c.access;
         bestId = c.id;
-        bestName = c.name;
+        _bestName = c.name;
         bestHostname = c.hostname;
       }
     }
@@ -150,11 +149,7 @@ class DeviceProfiler {
     hostname: string;
   } | null {
     // 先查 servers
-    const server = db.prepare(`
-      SELECT id, name, hostname, username, password, port
-      FROM servers WHERE hostname = ? OR ip_address = ? OR private_ip = ?
-      LIMIT 1
-    `).get(ip, ip, ip) as { id: string; name: string; hostname: string; username: string; password: string; port: number } | undefined;
+    const server = serversRepo.getByIp(ip);
 
     if (server?.username) {
       return {
@@ -167,11 +162,7 @@ class DeviceProfiler {
     }
 
     // 查 network_devices（优先有 SSH 凭证的）
-    const ndSsh = db.prepare(`
-      SELECT id, name, ip_address, username, password
-      FROM network_devices WHERE ip_address = ? AND username IS NOT NULL AND username != ''
-      LIMIT 1
-    `).get(ip) as { id: string; name: string; ip_address: string; username: string; password: string } | undefined;
+    const ndSsh = networkDeviceRepository.getByIpWithSshCreds(ip);
 
     if (ndSsh?.username) {
       return {
@@ -184,10 +175,7 @@ class DeviceProfiler {
     }
 
     // 查 network_devices（仅有 SNMP 的）
-    const ndSnmp = db.prepare(`
-      SELECT id, name, ip_address FROM network_devices WHERE ip_address = ? AND (username IS NULL OR username = '')
-      LIMIT 1
-    `).get(ip) as { id: string; name: string; ip_address: string } | undefined;
+    const ndSnmp = networkDeviceRepository.getByIpSnmpOnly(ip);
 
     if (ndSnmp) {
       return {
@@ -214,13 +202,7 @@ class DeviceProfiler {
   } | null {
     try {
       // 从 lldp/拓扑表中查邻居
-      const neighbor = db.prepare(`
-        SELECT d.id, d.name, d.ip_address, d.username
-        FROM network_devices d
-        JOIN topology_links t ON t.source_device_id = d.id OR t.target_device_id = d.id
-        WHERE t.source_ip = ? OR t.target_ip = ?
-        LIMIT 1
-      `).get(ip, ip) as { id: string; name: string; ip_address: string; username: string } | undefined;
+      const neighbor = networkDeviceRepository.getTopologyNeighborByIp(ip);
 
       if (neighbor) {
         return {
@@ -233,9 +215,7 @@ class DeviceProfiler {
       }
 
       // 查 devices 表（如果存在）
-      const device = db.prepare(`
-        SELECT id, name, ip_address, device_type FROM devices WHERE ip_address = ? LIMIT 1
-      `).get(ip) as { id: string; name: string; ip_address: string; device_type: string } | undefined;
+      const device = networkDeviceRepository.getDcDeviceByIp(ip);
 
       if (device) {
         return {
@@ -287,11 +267,7 @@ class DeviceProfiler {
     try {
       if (type === 'network_device') {
         // 从 SNMP 指标表计算 7 天均值
-        const metrics = db.prepare(`
-          SELECT AVG(if_in_octets) as traffic_avg, COUNT(*) as samples
-          FROM snmp_interface_metrics
-          WHERE device_id = ? AND sampled_at >= datetime('now', '-7 days', 'localtime')
-        `).get(deviceId) as { traffic_avg: number | null; samples: number } | undefined;
+        const metrics = snmpRepository.inspection.getInterfaceTrafficBaseline(deviceId);
 
         if (metrics && metrics.samples > 10) {
           return {
@@ -325,7 +301,7 @@ class DeviceProfiler {
     community?: string;
   } | null {
     if (type === 'server') {
-      const sv = db.prepare('SELECT hostname, username, password, port FROM servers WHERE id = ?').get(deviceId) as any;
+      const sv = serversRepo.getById(deviceId);
       if (!sv) return null;
       return {
         ip: sv.hostname,
@@ -336,11 +312,17 @@ class DeviceProfiler {
     }
 
     // 网络设备
-    const nd = db.prepare('SELECT ip_address, username, password, ssh_port, community FROM network_devices WHERE id = ?').get(deviceId) as any;
+    const nd = networkDeviceRepository.getById(deviceId);
     if (!nd) return null;
-    const creds: any = {
+    const creds: {
+      ip: string;
+      username?: string;
+      password?: string;
+      port?: number;
+      community?: string;
+    } = {
       ip: nd.ip_address,
-      community: nd.community || undefined,
+      community: (nd.community as string) || undefined,
     };
     if (nd.username) {
       creds.username = nd.username;

@@ -4,6 +4,73 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../../../lib/api';
 import type { Room, Rack, Slot, PDU, LifecycleRecord, OverviewData } from './types';
 
+interface DeviceSummary {
+  id: string;
+  name?: string;
+  device_name?: string;
+  device_type?: string;
+}
+
+interface DeviceGroup {
+  room_id?: string;
+  room_name?: string;
+  room_label?: string;
+  devices?: DeviceSummary[];
+}
+
+interface ExportData {
+  summary?: { rooms?: number; racks?: number; devices?: number };
+  rooms?: unknown[];
+  racks?: unknown[];
+}
+
+interface Manufacturer {
+  id: string;
+  name: string;
+  description?: string;
+  type_count?: number;
+}
+
+interface DeviceType {
+  id: string;
+  model: string;
+  manufacturer_name?: string;
+  device_type?: string;
+  u_height?: number;
+  instance_count?: number;
+}
+
+interface PowerPanel {
+  id: string;
+  name: string;
+  room_name?: string;
+  type?: string;
+  phase?: string;
+  voltage?: number;
+  feed_count?: number;
+}
+
+interface PowerFeed {
+  id: string;
+  name: string;
+  panel_name?: string;
+  rack_name?: string;
+  phase?: string;
+  voltage?: number;
+  amperage?: number;
+  max_power?: number;
+}
+
+interface Cable {
+  id: string;
+  label: string;
+  type?: string;
+  status?: string;
+  a_device_name?: string;
+  b_device_name?: string;
+  length_m?: number;
+}
+
 /** 数据中心管理页面的所有状态和 API 操作 */
 export default function useDataCenter() {
   const navigate = useNavigate();
@@ -62,11 +129,11 @@ export default function useDataCenter() {
   const [expandedRooms, setExpandedRooms] = useState<Record<string, boolean>>({});
 
   // ===== NetBox 功能：制造商/型号/配电柜/供电线路/线缆 =====
-  const [manufacturers, setManufacturers] = useState<any[]>([]);
-  const [deviceTypes, setDeviceTypes] = useState<any[]>([]);
-  const [powerPanels, setPowerPanels] = useState<any[]>([]);
-  const [powerFeeds, setPowerFeeds] = useState<any[]>([]);
-  const [cables, setCables] = useState<any[]>([]);
+  const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
+  const [deviceTypes, setDeviceTypes] = useState<DeviceType[]>([]);
+  const [powerPanels, setPowerPanels] = useState<PowerPanel[]>([]);
+  const [powerFeeds, setPowerFeeds] = useState<PowerFeed[]>([]);
+  const [cables, setCables] = useState<Cable[]>([]);
   const [mfLoading, setMfLoading] = useState(false);
   const [dtLoading, setDtLoading] = useState(false);
   const [ppLoading, setPpLoading] = useState(false);
@@ -75,19 +142,19 @@ export default function useDataCenter() {
 
   // ===== NetBox Modal 状态 =====
   const [mfModalOpen, setMfModalOpen] = useState(false);
-  const [editingMf, setEditingMf] = useState<any>(null);
+  const [editingMf, setEditingMf] = useState<Manufacturer | null>(null);
   const [mfForm] = Form.useForm();
   const [dtModalOpen, setDtModalOpen] = useState(false);
-  const [editingDt, setEditingDt] = useState<any>(null);
+  const [editingDt, setEditingDt] = useState<DeviceType | null>(null);
   const [dtForm] = Form.useForm();
   const [ppModalOpen, setPpModalOpen] = useState(false);
-  const [editingPp, setEditingPp] = useState<any>(null);
+  const [editingPp, setEditingPp] = useState<PowerPanel | null>(null);
   const [ppForm] = Form.useForm();
   const [pfModalOpen, setPfModalOpen] = useState(false);
-  const [editingPf, setEditingPf] = useState<any>(null);
+  const [editingPf, setEditingPf] = useState<PowerFeed | null>(null);
   const [pfForm] = Form.useForm();
   const [cableModalOpen, setCableModalOpen] = useState(false);
-  const [editingCable, setEditingCable] = useState<any>(null);
+  const [editingCable, setEditingCable] = useState<Cable | null>(null);
   const [cableForm] = Form.useForm();
 
   // ===== 搜索过滤器 =====
@@ -537,8 +604,8 @@ export default function useDataCenter() {
       setImportModalOpen(false);
       setImportText('');
       loadAll();
-    } catch (e: any) {
-      message.error(e.response?.data?.message || '导入失败，请检查JSON格式');
+    } catch (e) {
+      message.error((e as { response?: { data?: { message?: string } } }).response?.data?.message || '导入失败，请检查JSON格式');
     } finally {
       setImportLoading(false);
     }

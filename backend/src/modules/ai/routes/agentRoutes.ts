@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
-import db from '../../../models/database';
+import { agentRepository, agentExecutionRepository } from '../../../repositories';
 import { executeAgentWithLLM } from '../services/llm/llmService';
 import { executeAgentNode } from '../services/agents/agentExecutor';
 import { requireRole } from '../../../middleware/auth';
@@ -9,42 +9,20 @@ import { agentToolRegistry } from '../services/agents/agentToolRegistry';
 
 const router = Router();
 
+// 解析 tags 字段（JSON 字符串 → 数组）
+function parseAgentTags<T extends { tags?: string | null }>(agent: T): T & { tags: unknown[] } {
+  return { ...agent, tags: agent.tags ? JSON.parse(agent.tags) : [] };
+}
+
 router.get('/', (req: Request, res: Response) => {
   try {
     const { category, enabled, search } = req.query;
-    let query = `
-      SELECT a.*, 
-        pm.name as primary_model_name,
-        fm.name as fallback_model_name
-      FROM agents a
-      LEFT JOIN ai_models pm ON a.primary_model_id = pm.id
-      LEFT JOIN ai_models fm ON a.fallback_model_id = fm.id
-      WHERE 1=1
-    `;
-    const params: unknown[] = [];
-    
-    if (category) {
-      query += ' AND a.category = ?';
-      params.push(category);
-    }
-    if (enabled !== undefined) {
-      query += ' AND a.enabled = ?';
-      params.push(enabled === 'true' ? 1 : 0);
-    }
-    if (search) {
-      query += ' AND (a.name LIKE ? OR a.role LIKE ? OR a.description LIKE ?)';
-      const searchTerm = `%${search}%`;
-      params.push(searchTerm, searchTerm, searchTerm);
-    }
-    
-    query += ' ORDER BY a.is_preset DESC, a.usage_count DESC, a.created_at DESC';
-    
-    const agents = db.prepare(query).all(...params);
-    // 解析tags字段
-    const processedAgents = (agents as Array<{ id: string; tags?: string; [key: string]: unknown }>).map(agent => ({
-      ...agent,
-      tags: agent.tags ? JSON.parse(agent.tags) : []
-    }));
+    const agents = agentRepository.list({
+      category: category as string | undefined,
+      enabled: enabled !== undefined ? (enabled === 'true' ? 1 : 0) : undefined,
+      search: search as string | undefined,
+    });
+    const processedAgents = agents.map(parseAgentTags);
     res.json({ success: true, data: processedAgents });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to fetch agents' });
@@ -54,19 +32,12 @@ router.get('/', (req: Request, res: Response) => {
 // 获取Agent统计信息
 router.get('/stats/summary', (_req: Request, res: Response) => {
   try {
-    const totalAgents = (db.prepare('SELECT COUNT(*) as count FROM agents').get() as { count: number }).count;
-    const enabledAgents = (db.prepare('SELECT COUNT(*) as count FROM agents WHERE enabled = 1').get() as { count: number }).count;
-    const presetAgents = (db.prepare('SELECT COUNT(*) as count FROM agents WHERE is_preset = 1').get() as { count: number }).count;
-    const totalExecutions = (db.prepare('SELECT COUNT(*) as count FROM agent_executions').get() as { count: number }).count;
-    
-    // 获取分类统计
-    const categoryStats = db.prepare(`
-      SELECT category, COUNT(*) as count 
-      FROM agents 
-      WHERE category IS NOT NULL 
-      GROUP BY category
-    `).all();
-    
+    const totalAgents = agentRepository.countAll();
+    const enabledAgents = agentRepository.countEnabled();
+    const presetAgents = agentRepository.countPreset();
+    const totalExecutions = agentExecutionRepository.countAll();
+    const categoryStats = agentRepository.countByCategory();
+
     res.json({
       success: true,
       data: {
@@ -84,20 +55,11 @@ router.get('/stats/summary', (_req: Request, res: Response) => {
 
 router.get('/:id', (req: Request, res: Response) => {
   try {
-    const agent = db.prepare(`
-      SELECT a.*, 
-        pm.name as primary_model_name,
-        fm.name as fallback_model_name
-      FROM agents a
-      LEFT JOIN ai_models pm ON a.primary_model_id = pm.id
-      LEFT JOIN ai_models fm ON a.fallback_model_id = fm.id
-      WHERE a.id = ?
-    `).get(req.params.id);
+    const agent = agentRepository.getByIdWithModels(req.params.id);
     if (!agent) {
       return res.status(404).json({ success: false, error: 'Agent not found' });
     }
-    const processedAgent = { ...(agent as { id: string; name: string; role: string; tags?: string; [key: string]: unknown }), tags: (agent as { tags?: string })?.tags ? JSON.parse((agent as { tags?: string }).tags!) : [] };
-    res.json({ success: true, data: processedAgent });
+    res.json({ success: true, data: parseAgentTags(agent) });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to fetch agent' });
   }
@@ -107,36 +69,25 @@ router.get('/:id', (req: Request, res: Response) => {
 router.get('/:id/executions', (req: Request, res: Response) => {
   try {
     const { limit = 20, offset = 0, status } = req.query;
-    let query = 'SELECT * FROM agent_executions WHERE agent_id = ?';
-    const params: unknown[] = [req.params.id];
-    
-    if (status) {
-      query += ' AND status = ?';
-      params.push(status);
-    }
-    
-    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit as string), parseInt(offset as string));
-    
-    const executions = db.prepare(query).all(...params);
-    
-    // 获取总数
-    let countQuery = 'SELECT COUNT(*) as count FROM agent_executions WHERE agent_id = ?';
-    const countParams: unknown[] = [req.params.id];
-    if (status) {
-      countQuery += ' AND status = ?';
-      countParams.push(status);
-    }
-    const totalCount = (db.prepare(countQuery).get(...countParams) as { count: number }).count;
-    
+    const limitNum = parseInt(limit as string);
+    const offsetNum = parseInt(offset as string);
+
+    const executions = agentExecutionRepository.listByAgent(req.params.id, {
+      status: status as string | undefined,
+      limit: limitNum,
+      offset: offsetNum,
+    });
+
+    const totalCount = agentExecutionRepository.countByAgent(req.params.id, status as string | undefined);
+
     res.json({
       success: true,
       data: {
         executions,
         pagination: {
           total: totalCount,
-          limit: parseInt(limit as string),
-          offset: parseInt(offset as string)
+          limit: limitNum,
+          offset: offsetNum
         }
       }
     });
@@ -149,31 +100,27 @@ router.post('/', requireRole('admin', 'operator'), (req: Request, res: Response)
   try {
     const { name, avatar, role, system_prompt, model, temperature, enabled, category, tags, description, api_provider, primary_model_id, fallback_model_id } = req.body;
     const id = randomUUID();
-    
-    db.prepare(`
-      INSERT INTO agents (id, name, avatar, role, system_prompt, model, temperature, enabled, is_preset, category, tags, description, api_provider, primary_model_id, fallback_model_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id, 
-      name, 
-      avatar, 
-      role, 
-      system_prompt, 
-      model || 'doubao-4o', 
-      temperature || 0.7, 
-      enabled !== false ? 1 : 0, 
-      0, 
-      category || null, 
-      tags ? JSON.stringify(tags) : null,
-      description || null,
-      api_provider || 'doubao',
-      primary_model_id || null,
-      fallback_model_id || null
-    );
-    
-    const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(id);
-    const processedAgent = { ...(agent as { id: string; name: string; role: string; tags?: string; [key: string]: unknown }), tags: (agent as { tags?: string })?.tags ? JSON.parse((agent as { tags?: string }).tags!) : [] };
-    res.status(201).json({ success: true, data: processedAgent });
+
+    agentRepository.create({
+      id,
+      name,
+      avatar,
+      role,
+      system_prompt,
+      model: model || 'doubao-4o',
+      temperature: temperature ?? 0.7,
+      enabled: enabled !== false ? 1 : 0,
+      is_preset: 0,
+      category: category || null,
+      tags: tags ? JSON.stringify(tags) : null,
+      description: description || null,
+      api_provider: api_provider || 'doubao',
+      primary_model_id: primary_model_id || null,
+      fallback_model_id: fallback_model_id || null,
+    });
+
+    const agent = agentRepository.getById(id);
+    res.status(201).json({ success: true, data: parseAgentTags(agent!) });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to create agent' });
   }
@@ -196,68 +143,59 @@ const PRESET_TEST_INPUTS: Record<string, string> = {
 router.post('/:id/test', async (req: Request, res: Response) => {
   try {
     const { input, serverId, serverIds, context, databaseId } = req.body;
-    const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id);
-    
+    const agent = agentRepository.getById(req.params.id);
+
     if (!agent) {
       return res.status(404).json({ success: false, error: 'Agent not found' });
     }
-    
+
     const executionId = randomUUID();
     const startTime = Date.now();
-    const agentName = (agent as { name: string }).name;
-    
+    const agentName = agent.name;
+
     let output = '';
     let status = 'success';
-    let errorMessage = null;
-    
+    let errorMessage: string | null = null;
+
     // 构建上下文
     const executionContext: Record<string, unknown> = {
       ...context,
       serverIds: serverIds && serverIds.length > 0 ? serverIds : (serverId ? [serverId] : undefined),
       databaseId: databaseId || undefined
     };
-    
+
     try {
       // 检查是否是服务器相关Agent或数据库运维Agent，如果是，就用增强的执行器
       if (agentName.includes('服务器') || agentName.includes('巡检') || agentName.includes('数据库运维')) {
-        output = await executeAgentNode((agent as { id: string }).id, input, executionContext);
+        output = await executeAgentNode(agent.id, input, executionContext);
       } else {
         // 其他Agent用LLM执行
-        output = await executeAgentWithLLM((agent as { id: string }).id, input);
+        output = await executeAgentWithLLM(agent.id, input);
       }
     } catch (error) {
       status = 'error';
       errorMessage = (error as Error).message;
       output = `Agent "${agentName}" 执行失败: ${errorMessage}`;
     }
-    
+
     const executionTime = Date.now() - startTime;
-    
+
     // 保存执行记录
-    db.prepare(`
-      INSERT INTO agent_executions (id, agent_id, agent_name, input_text, output_text, status, error_message, execution_time_ms, metadata, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
-    `).run(
-      executionId,
-      req.params.id,
-      (agent as { name: string }).name,
-      input,
-      output,
+    agentExecutionRepository.create({
+      id: executionId,
+      agentId: req.params.id,
+      agentName: agent.name,
+      inputText: input,
+      outputText: output,
       status,
       errorMessage,
-      executionTime,
-      JSON.stringify({ test: true, context: executionContext, serverId, serverIds, databaseId })
-    );
-    
+      executionTimeMs: executionTime,
+      metadata: { test: true, context: executionContext, serverId, serverIds, databaseId },
+    });
+
     // 更新Agent使用统计
-    db.prepare(`
-      UPDATE agents 
-      SET usage_count = usage_count + 1, 
-          last_used_at = datetime('now','localtime'),
-          updated_at = datetime('now','localtime')
-      WHERE id = ?
-    `).run(req.params.id);
-    
+    agentRepository.incrementUsageStats(req.params.id);
+
     res.json({
       success: true,
       data: {
@@ -279,20 +217,20 @@ router.post('/:id/test', async (req: Request, res: Response) => {
 // 获取Agent的推荐测试输入
 router.get('/:id/test-input', (req: Request, res: Response) => {
   try {
-    const agent = db.prepare('SELECT name, role, category FROM agents WHERE id = ?').get(req.params.id);
+    const agent = agentRepository.getNameRoleCategory(req.params.id);
     if (!agent) {
       return res.status(404).json({ success: false, error: 'Agent not found' });
     }
-    
-    const agentName = (agent as { name: string }).name;
+
+    const agentName = agent.name;
     let testInput = PRESET_TEST_INPUTS[agentName];
-    
+
     // 如果没有预设的测试输入，生成一个通用的
     if (!testInput) {
-      const role = (agent as { role?: string }).role || '运维助手';
+      const role = agent.role || '运维助手';
       testInput = `你好，我是${role}，帮助我处理一个运维相关的问题`;
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -308,27 +246,25 @@ router.get('/:id/test-input', (req: Request, res: Response) => {
 router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { name, avatar, role, system_prompt, model, temperature, enabled, category, tags, description, api_provider, primary_model_id, fallback_model_id } = req.body;
-    
-    db.prepare(`
-      UPDATE agents 
-      SET name = ?, avatar = ?, role = ?, system_prompt = ?, 
-          model = ?, temperature = ?, enabled = ?, 
-          category = ?, tags = ?, description = ?, api_provider = ?,
-          primary_model_id = ?, fallback_model_id = ?,
-          updated_at = datetime('now','localtime')
-      WHERE id = ?
-    `).run(
-      name, avatar, role, system_prompt, 
-      model, temperature, enabled ? 1 : 0, 
-      category || null, tags ? JSON.stringify(tags) : null, 
-      description || null, api_provider || 'doubao',
-      primary_model_id || null, fallback_model_id || null,
-      req.params.id
-    );
-    
-    const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id);
-    const processedAgent = { ...(agent as { id: string; name: string; role: string; tags?: string; [key: string]: unknown }), tags: (agent as { tags?: string })?.tags ? JSON.parse((agent as { tags?: string }).tags!) : [] };
-    res.json({ success: true, data: processedAgent });
+
+    agentRepository.update(req.params.id, {
+      name,
+      avatar,
+      role,
+      system_prompt,
+      model,
+      temperature,
+      enabled: enabled ? 1 : 0,
+      category: category || null,
+      tags: tags ? JSON.stringify(tags) : null,
+      description: description || null,
+      api_provider: api_provider || 'doubao',
+      primary_model_id: primary_model_id || null,
+      fallback_model_id: fallback_model_id || null,
+    });
+
+    const agent = agentRepository.getById(req.params.id);
+    res.json({ success: true, data: parseAgentTags(agent!) });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to update agent' });
   }
@@ -336,12 +272,12 @@ router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Respons
 
 router.delete('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
-    const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id);
+    const agent = agentRepository.getById(req.params.id);
     if (!agent) {
       return res.status(404).json({ success: false, error: 'Agent not found' });
     }
-    
-    db.prepare('DELETE FROM agents WHERE id = ?').run(req.params.id);
+
+    agentRepository.delete(req.params.id);
     res.json({ success: true, message: 'Agent deleted successfully' });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to delete agent' });
@@ -354,32 +290,27 @@ router.post('/import', (req: Request, res: Response) => {
     if (!Array.isArray(agents)) {
       return res.status(400).json({ success: false, error: 'Invalid format: agents must be an array' });
     }
-    
-    const insertStmt = db.prepare(`
-      INSERT INTO agents (id, name, avatar, role, system_prompt, model, temperature, enabled, is_preset, category, tags, description)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    
-    const imported = [];
+
+    const imported: string[] = [];
     for (const agent of agents) {
       const id = randomUUID();
-      insertStmt.run(
+      agentRepository.create({
         id,
-        agent.name,
-        agent.avatar,
-        agent.role,
-        agent.system_prompt,
-        agent.model || 'doubao-4o',
-        agent.temperature || 0.7,
-        agent.enabled !== false ? 1 : 0,
-        0,
-        agent.category || null,
-        agent.tags ? JSON.stringify(agent.tags) : null,
-        agent.description || null
-      );
+        name: agent.name,
+        avatar: agent.avatar,
+        role: agent.role,
+        system_prompt: agent.system_prompt,
+        model: agent.model || 'doubao-4o',
+        temperature: agent.temperature ?? 0.7,
+        enabled: agent.enabled !== false ? 1 : 0,
+        is_preset: 0,
+        category: agent.category || null,
+        tags: agent.tags ? JSON.stringify(agent.tags) : null,
+        description: agent.description || null,
+      });
       imported.push(id);
     }
-    
+
     res.status(201).json({ success: true, data: { importedCount: imported.length, ids: imported } });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to import agents' });
@@ -388,12 +319,12 @@ router.post('/import', (req: Request, res: Response) => {
 
 router.get('/export/:id', (req: Request, res: Response) => {
   try {
-    const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id);
+    const agent = agentRepository.getById(req.params.id);
     if (!agent) {
       return res.status(404).json({ success: false, error: 'Agent not found' });
     }
-    
-    const { id: _id, created_at: _created_at, updated_at: _updated_at, is_preset: _is_preset, usage_count: _usage_count, last_used_at: _last_used_at, ...exportData } = agent as { id: string; created_at: string; updated_at: string; is_preset: number; usage_count: number; last_used_at: string; tags?: string; [key: string]: unknown };
+
+    const { id: _id, created_at: _created_at, updated_at: _updated_at, is_preset: _is_preset, usage_count: _usage_count, last_used_at: _last_used_at, ...exportData } = agent;
     const finalData = {
       ...exportData,
       tags: exportData.tags ? JSON.parse(exportData.tags) : []
@@ -411,13 +342,13 @@ router.get('/tools/list', (req: Request, res: Response) => {
   try {
     const { category } = req.query;
     let tools;
-    
+
     if (category) {
-      tools = agentToolRegistry.listToolsByCategory(category as any);
+      tools = agentToolRegistry.listToolsByCategory(category as never);
     } else {
       tools = agentToolRegistry.listTools();
     }
-    
+
     // 简化工具信息，避免暴露内部实现
     const simplifiedTools = tools.map(tool => ({
       id: tool.id,
@@ -426,12 +357,12 @@ router.get('/tools/list', (req: Request, res: Response) => {
       category: tool.category,
       schema: tool.schema,
     }));
-    
+
     res.json({
       success: true,
       data: simplifiedTools,
     });
-  } catch (error) {
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to get tools' });
   }
 });
@@ -440,18 +371,18 @@ router.get('/tools/list', (req: Request, res: Response) => {
 router.post('/tools/test', async (req: Request, res: Response) => {
   try {
     const { toolId, args } = req.body;
-    
+
     if (!toolId) {
       return res.status(400).json({ success: false, error: 'Tool ID is required' });
     }
-    
+
     const tool = agentToolRegistry.getTool(toolId);
     if (!tool) {
       return res.status(404).json({ success: false, error: `Tool ${toolId} not found` });
     }
-    
+
     const result = await tool.execute(args || {});
-    
+
     res.json({
       success: true,
       data: {
@@ -460,13 +391,13 @@ router.post('/tools/test', async (req: Request, res: Response) => {
         result,
       },
     });
-  } catch (error) {
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to execute tool' });
   }
 });
 
 // 获取工具的描述（给 LLM 用的格式）
-router.get('/tools/descriptions', (req: Request, res: Response) => {
+router.get('/tools/descriptions', (_req: Request, res: Response) => {
   try {
     const descriptions = agentToolRegistry.generateToolDescriptions();
     res.json({
@@ -475,7 +406,7 @@ router.get('/tools/descriptions', (req: Request, res: Response) => {
         description: descriptions,
       },
     });
-  } catch (error) {
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to get tool descriptions' });
   }
 });

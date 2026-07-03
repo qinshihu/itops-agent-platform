@@ -1,9 +1,8 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import db from '../../../models/database';
 import { requireRole } from '../../../middleware/auth';
 import { resumeWorkflow, rejectWorkflow } from '../../workflow/services/workflowExecutor';
-import type { ApprovalRequest } from '../../../types';
+import { approvalsRepo } from '../../../repositories';
 
 const router = Router();
 
@@ -11,24 +10,12 @@ const router = Router();
 router.get('/', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { status, limit } = req.query;
-    let query = 'SELECT * FROM approval_requests';
-    const params: unknown[] = [];
-
-    if (status) {
-      query += ' WHERE status = ?';
-      params.push(status);
-    }
-
-    query += ' ORDER BY created_at DESC';
-
-    if (limit) {
-      query += ' LIMIT ?';
-      params.push(parseInt(limit as string));
-    }
-
-    const approvals = db.prepare(query).all(...params) as ApprovalRequest[];
+    const approvals = approvalsRepo.list({
+      status: status as string | undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
+    });
     res.json({ success: true, data: approvals });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to fetch approvals' });
   }
 });
@@ -36,9 +23,9 @@ router.get('/', requireRole('admin', 'operator'), (req: Request, res: Response) 
 // 查询待审批数量（用于前端角标）
 router.get('/pending/count', requireRole('admin', 'operator'), (_req: Request, res: Response) => {
   try {
-    const result = db.prepare("SELECT COUNT(*) as count FROM approval_requests WHERE status = 'pending'").get() as { count: number };
-    res.json({ success: true, data: { count: result.count } });
-  } catch (error) {
+    const count = approvalsRepo.countPending();
+    res.json({ success: true, data: { count } });
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to count pending approvals' });
   }
 });
@@ -46,12 +33,12 @@ router.get('/pending/count', requireRole('admin', 'operator'), (_req: Request, r
 // 查询审批详情
 router.get('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
-    const approval = db.prepare('SELECT * FROM approval_requests WHERE id = ?').get(req.params.id) as ApprovalRequest | undefined;
+    const approval = approvalsRepo.getById(req.params.id);
     if (!approval) {
       return res.status(404).json({ success: false, error: 'Approval not found' });
     }
     res.json({ success: true, data: approval });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to fetch approval' });
   }
 });
@@ -63,7 +50,7 @@ router.post('/:id/approve', requireRole('admin', 'operator'), async (req: Reques
     const { comment } = req.body;
     const userId = (req as any).user?.id || 'unknown';
 
-    const approval = db.prepare('SELECT * FROM approval_requests WHERE id = ?').get(id) as ApprovalRequest | undefined;
+    const approval = approvalsRepo.getById(id);
     if (!approval) {
       return res.status(404).json({ success: false, error: 'Approval not found' });
     }
@@ -83,7 +70,7 @@ router.post('/:id/approve', requireRole('admin', 'operator'), async (req: Reques
         console.error('Failed to resume workflow:', error);
       }
     });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to approve' });
   }
 });
@@ -99,7 +86,7 @@ router.post('/:id/reject', requireRole('admin', 'operator'), async (req: Request
       return res.status(400).json({ success: false, error: 'Reject reason is required' });
     }
 
-    const approval = db.prepare('SELECT * FROM approval_requests WHERE id = ?').get(id) as ApprovalRequest | undefined;
+    const approval = approvalsRepo.getById(id);
     if (!approval) {
       return res.status(404).json({ success: false, error: 'Approval not found' });
     }
@@ -119,7 +106,7 @@ router.post('/:id/reject', requireRole('admin', 'operator'), async (req: Request
         console.error('Failed to reject workflow:', error);
       }
     });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to reject' });
   }
 });

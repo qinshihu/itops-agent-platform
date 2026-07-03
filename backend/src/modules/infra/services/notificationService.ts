@@ -1,20 +1,11 @@
-import db, { getIOInstance } from '../../../models/database';
+import { settingsRepository, infraRepository } from '../../../repositories';
+import { getIOInstance } from '../../../shared/websocket/io';
 import { logger } from '../../../utils/logger';
 import axios from 'axios';
 import { randomUUID } from 'crypto';
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import { credentialService } from '../../auth/services/credentialService';
-
-interface NotificationDB {
-  id: string;
-  type: string;
-  title: string;
-  content: string;
-  recipient: string;
-  related_alert_id: string | null;
-  related_task_id: string | null;
-}
 
 interface NotificationConfig {
   wechat_enabled?: boolean;
@@ -88,10 +79,7 @@ class NotificationService {
   private ensureInitialized() {
     if (this.initialized) return;
     try {
-      const configs = db.prepare('SELECT * FROM settings WHERE key LIKE ?').all('notification_%') as Array<{
-        key: string;
-        value: string;
-      }>;
+      const configs = settingsRepository.getByKeyPrefix('notification_');
       const configData: Record<string, unknown> = {};
       configs.forEach((c) => {
         const key = c.key.replace('notification_', '');
@@ -111,10 +99,7 @@ class NotificationService {
   private loadConfig() {
     this.ensureInitialized();
     try {
-      const configs = db.prepare('SELECT * FROM settings WHERE key LIKE ?').all('notification_%') as Array<{
-        key: string;
-        value: string;
-      }>;
+      const configs = settingsRepository.getByKeyPrefix('notification_');
       const configData: Record<string, unknown> = {};
       configs.forEach((c) => {
         const key = c.key.replace('notification_', '');
@@ -143,29 +128,26 @@ class NotificationService {
     const now = new Date().toISOString();
 
     // 保存到数据库
-    db.prepare(`
-      INSERT INTO notifications (id, type, title, content, recipient, status, related_alert_id, related_task_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    infraRepository.notifications.create({
       id,
-      notification.type,
-      notification.title,
-      notification.content,
-      notification.recipient || 'default',
-      'pending',
-      notification.related_alert_id || null,
-      notification.related_task_id || null,
-      now
-    );
+      type: notification.type,
+      title: notification.title,
+      content: notification.content,
+      recipient: notification.recipient || 'default',
+      status: 'pending',
+      related_alert_id: notification.related_alert_id || null,
+      related_task_id: notification.related_task_id || null,
+      created_at: now,
+    });
 
     // 尝试发送
     try {
       await this.send(notification);
-      db.prepare('UPDATE notifications SET status = ?, sent_at = ? WHERE id = ?').run('sent', now, id);
+      infraRepository.notifications.markSent(id);
       return { success: true, id };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      db.prepare('UPDATE notifications SET status = ?, error_message = ? WHERE id = ?').run('failed', errorMessage, id);
+      infraRepository.notifications.markFailed(id, errorMessage);
       return { success: false, error: errorMessage, id };
     }
   }
@@ -351,21 +333,12 @@ class NotificationService {
 
   // 获取通知历史
   getNotificationHistory(limit = 50) {
-    return db.prepare(`
-      SELECT * FROM notifications 
-      ORDER BY created_at DESC 
-      LIMIT ?
-    `).all(limit);
+    return infraRepository.notifications.getHistory(limit);
   }
 
   // 重新发送失败的通知
   async retryFailedNotifications() {
-    const failed = db.prepare(`
-      SELECT * FROM notifications 
-      WHERE status = 'failed'
-      ORDER BY created_at DESC
-      LIMIT 10
-    `).all() as NotificationDB[];
+    const failed = infraRepository.notifications.list({ status: 'failed', limit: 10 });
 
     const results = [];
     for (const notification of failed) {

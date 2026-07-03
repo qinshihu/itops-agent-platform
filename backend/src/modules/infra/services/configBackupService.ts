@@ -2,9 +2,10 @@ import { randomUUID } from 'crypto';
 import { createHash } from 'crypto';
 import { Client } from 'ssh2';
 import db from '../../../models/database';
+import { networkDeviceRepository } from '../../../repositories';
 import { logger } from '../../../utils/logger';
-import { createVendorAdapter, VendorType } from '../../network/services/vendorAdapter';
 import { decrypt } from '../../auth/services/encryptionService';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 // ================================================================
 // 网络设备配置备份与对比服务
@@ -37,9 +38,7 @@ class ConfigBackupService {
    * 备份单台设备配置（保留最近 30 份，自动清理旧版本）
    */
   async backupDevice(deviceId: string): Promise<ConfigBackup> {
-    const device = db.prepare(
-      'SELECT id, name, ip_address, vendor, ssh_port, username, password FROM network_devices WHERE id = ?'
-    ).get(deviceId) as any;
+    const device = networkDeviceRepository.getConnectionCredentials(deviceId);
     if (!device) throw new Error(`Device not found: ${deviceId}`);
 
     const backupId = randomUUID();
@@ -69,8 +68,7 @@ class ConfigBackupService {
       this.cleanupOldBackups(deviceId, 30);
 
       // 更新设备最后备份时间
-      db.prepare('UPDATE network_devices SET last_backup_at = datetime(\'now\',\'localtime\') WHERE id = ?')
-        .run(deviceId);
+      networkDeviceRepository.updateLastBackupAt(deviceId);
 
       logger.info(`Config backup saved for ${device.name} (${md5.substring(0, 8)}..., ${(output.length / 1024).toFixed(1)}KB)`);
 
@@ -83,13 +81,13 @@ class ConfigBackupService {
         status: 'success',
         created_at: new Date().toISOString(),
       };
-    } catch (error: any) {
-      logger.error(`Config backup failed for ${device.name}: ${error.message}`);
+    } catch (error: unknown) {
+      logger.error(`Config backup failed for ${device.name}: ${getErrorMessage(error)}`);
 
       db.prepare(`
         INSERT INTO network_config_backups (id, device_id, config_md5, config_size, status, error_message)
         VALUES (?, ?, '', 0, 'failed', ?)
-      `).run(backupId, deviceId, error.message.substring(0, 500));
+      `).run(backupId, deviceId, getErrorMessage(error).substring(0, 500));
 
       return {
         id: backupId,
@@ -98,7 +96,7 @@ class ConfigBackupService {
         config_md5: '',
         config_size: 0,
         status: 'failed',
-        error_message: error.message,
+        error_message: getErrorMessage(error),
         created_at: new Date().toISOString(),
       };
     }

@@ -1,4 +1,3 @@
-import { logger } from '../../../utils/logger';
 import { normalizeSeverityLabel } from '../../../utils/alertSeverity';
 
 export interface NormalizedAlert {
@@ -123,11 +122,11 @@ export function adaptZabbix(payload: unknown): AlertAdapterResult {
       external_id: eventId ? `zabbix-${eventId}` : undefined,
       source: 'zabbix',
       severity,
-      raw_severity: rawSeverity == null ? undefined : String(rawSeverity),
+      raw_severity: (rawSeverity === null || rawSeverity === undefined) ? undefined : String(rawSeverity),
       title: `[${severity.toUpperCase()}] ${trigger}`,
       content,
       metadata: {
-        raw_severity: rawSeverity == null ? null : String(rawSeverity),
+        raw_severity: (rawSeverity === null || rawSeverity === undefined) ? null : String(rawSeverity),
         zabbix_host: host,
         zabbix_host_ip: hostIp,
         zabbix_trigger_id: triggerId,
@@ -175,7 +174,7 @@ export function adaptGrafana(payload: unknown): AlertAdapterResult {
         external_id: alert.ruleUID ? `grafana-${alert.ruleUID}` : undefined,
         source: 'grafana',
         severity: normalizeSeverityLabel(rawSeverity),
-        raw_severity: rawSeverity == null ? undefined : String(rawSeverity),
+        raw_severity: (rawSeverity === null || rawSeverity === undefined) ? undefined : String(rawSeverity),
         title,
         content,
         metadata: {
@@ -238,7 +237,7 @@ export function adaptAliyun(payload: unknown): AlertAdapterResult {
       external_id: body.alertId || body.ruleId ? `aliyun-${body.alertId || body.ruleId}` : undefined,
       source: 'aliyun',
       severity: normalizeSeverityLabel(level),
-      raw_severity: level == null ? undefined : String(level),
+      raw_severity: (level === null || level === undefined) ? undefined : String(level),
       title: `[${product}] ${name}`,
       content: contentParts,
       metadata: {
@@ -294,7 +293,7 @@ export function adaptTencentCloud(payload: unknown): AlertAdapterResult {
       external_id: policyId ? `tencent-${policyId}` : undefined,
       source: 'tencent',
       severity: normalizeSeverityLabel(level),
-      raw_severity: level == null ? undefined : String(level),
+      raw_severity: (level === null || level === undefined) ? undefined : String(level),
       title: `[${alarmType}] ${alarmName}`,
       content: contentParts,
       metadata: {

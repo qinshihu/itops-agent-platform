@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { vmSnapshotSchedulerService } from '../../containers/services/vmSnapshotSchedulerService';
 import { requireRole } from '../../../middleware/auth';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -10,8 +11,8 @@ router.get('/', (_req: Request, res: Response) => {
   try {
     const policies = vmSnapshotSchedulerService.listPolicies();
     res.json({ success: true, data: policies });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -21,8 +22,8 @@ router.get('/:id', (req: Request, res: Response) => {
     const policy = vmSnapshotSchedulerService.getPolicy(req.params.id);
     if (!policy) return res.status(404).json({ success: false, message: '策略不存在' });
     res.json({ success: true, data: policy });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -40,8 +41,8 @@ router.post('/', requireRole('admin', 'operator'), (req: Request, res: Response)
       enabled: enabled !== undefined ? enabled : true,
     });
     res.json({ success: true, data: policy });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -50,8 +51,8 @@ router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Respons
   try {
     const policy = vmSnapshotSchedulerService.updatePolicy(req.params.id, req.body);
     res.json({ success: true, data: policy });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -60,8 +61,8 @@ router.delete('/:id', requireRole('admin'), (req: Request, res: Response) => {
   try {
     vmSnapshotSchedulerService.deletePolicy(req.params.id);
     res.json({ success: true, message: '已删除' });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 

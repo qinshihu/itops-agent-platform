@@ -1,6 +1,7 @@
 import { dockerService } from './dockerService';
 import { logger } from '../../../utils/logger';
 import type { Server as SocketIOServer } from 'socket.io';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 class ContainerMonitorService {
   private intervals: Map<string, NodeJS.Timeout> = new Map();
@@ -33,8 +34,8 @@ class ContainerMonitorService {
             timestamp: new Date().toISOString(),
           });
         }
-      } catch (err: any) {
-        logger.error(`Monitor error for ${containerId}:`, err.message);
+      } catch (err: unknown) {
+        logger.error(`Monitor error for ${containerId}:`, getErrorMessage(err));
         this.stopMonitoring(containerId);
       }
     }, intervalMs);

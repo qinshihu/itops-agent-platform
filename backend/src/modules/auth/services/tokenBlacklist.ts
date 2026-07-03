@@ -1,4 +1,4 @@
-import db from '../../../models/database';
+import { tokenBlacklistRepository } from '../../../repositories/tokenBlacklistRepository';
 import { logger } from '../../../utils/logger';
 import { randomUUID } from 'crypto';
 import jwt from 'jsonwebtoken';
@@ -68,10 +68,7 @@ class TokenBlacklistService {
       blacklistedTokenCache.set(token, { token, expiresAt });
       this.enforceCacheLimit();
       
-      db.prepare(`
-        INSERT OR IGNORE INTO token_blacklist (id, token, user_id, reason, expires_at)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(
+      tokenBlacklistRepository.add(
         randomUUID(),
         token,
         userId || null,
@@ -94,12 +91,7 @@ class TokenBlacklistService {
     }
     
     try {
-      const result = db.prepare(`
-        SELECT 1 FROM token_blacklist 
-        WHERE token = ? AND expires_at > datetime('now','localtime')
-      `).get(token);
-      
-      const isBlacklisted = !!result;
+      const isBlacklisted = tokenBlacklistRepository.isBlacklisted(token);
       if (isBlacklisted) {
         try {
           const decoded = jwt.decode(token) as { exp?: number } | null;
@@ -129,12 +121,9 @@ class TokenBlacklistService {
     try {
       this.cleanupExpiredCache();
       
-      const result = db.prepare(`
-        DELETE FROM token_blacklist 
-        WHERE expires_at < datetime('now','localtime')
-      `).run();
+      const changes = tokenBlacklistRepository.cleanExpired();
       
-      logger.info(`Cleaned up ${result.changes} expired tokens from blacklist`);
+      logger.info(`Cleaned up ${changes} expired tokens from blacklist`);
     } catch (error) {
       logger.error('Failed to clean expired tokens:', error);
     }

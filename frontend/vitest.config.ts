@@ -25,6 +25,14 @@ export default defineConfig({
         'src/**/*.d.ts',
         'src/**/*.{test,spec}.{ts,tsx}',
       ],
+      thresholds: {
+        global: {
+          branches: 15,
+          functions: 15,
+          lines: 15,
+          statements: 15,
+        },
+      },
     },
   },
 });

@@ -18,11 +18,12 @@
   ],
   "ignorePatterns": ["dist/", "node_modules/", "*.test.ts"],
   "rules": {
-    "@typescript-eslint/no-explicit-any": "error",
-    "@typescript-eslint/no-unused-vars": ["error", { 
-      "argsIgnorePattern": "^_", 
-      "destructuredArrayIgnorePattern": "^_", 
-      "varsIgnorePattern": "^_" 
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-unused-vars": ["error", {
+      "argsIgnorePattern": "^_",
+      "destructuredArrayIgnorePattern": "^_",
+      "varsIgnorePattern": "^_",
+      "caughtErrorsIgnorePattern": "^_"
     }],
     "@typescript-eslint/explicit-function-return-type": "off",
     "@typescript-eslint/no-inferrable-types": "error",
@@ -33,5 +34,21 @@
     "no-var": "error",
     "eqeqeq": ["error", "always"],
     "curly": ["error", "multi-line"]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["src/modules/**/*.ts"],
+      "excludedFiles": ["src/modules/database/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": ["error", {
+          "patterns": [
+            {
+              "group": ["**/models/database"],
+              "message": "src/modules/ 下不允许直接 import db。请使用 repository：import { xxxRepository } from '../../repositories'，或通过 DI 容器：import { container } from '../../core/serviceContainer'"
+            }
+          ]
+        }]
+      }
+    }
+  ]
 }

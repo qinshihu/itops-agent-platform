@@ -6,11 +6,11 @@
  */
 
 // ── LLM 调用层 ──
+// 注意：callDoubaoAPI / callOpenAIAPI / callLocalAIAPI 已不再对外暴露，
+// 业务层请统一使用 generateCompletion / generateCompletionWithTools（走 AI 模型池）。
 export {
-  callDoubaoAPI,
-  callOpenAIAPI,
-  callLocalAIAPI,
   generateCompletion,
+  generateCompletionWithTools,
   executeAgentWithLLM,
   checkLLMAvailability,
   getCircuitBreaker,
@@ -25,14 +25,26 @@ export { executeAgentNode, getThinkingSteps } from './agents/agentExecutor';
 export { agentToolRegistry } from './agents/agentToolRegistry';
 export type { AgentTool } from './agents/agentToolRegistry';
 export { copilotService } from './agents/copilotService';
+
+// ── 多 Agent 协作（Coordinator + Specialist 双层架构）──
 export {
-  MultiAgentOrchestrator,
-  AgentMessageBus,
-} from './agents/multiAgentCollaboration';
+  initializeMultiAgentSystem,
+  getCoordinator,
+  executeTask,
+  specialistRegistry,
+  Coordinator,
+  SpecialistBase,
+  SpecialistDomain,
+  TaskStatus,
+} from './multiAgent';
 export type {
-  CollaborationMessage,
-  AgentCollaborationContext,
-} from './agents/multiAgentCollaboration';
+  AgentResponse,
+  TaskContext,
+  ExecutionResult,
+  AgentCapability,
+  SpecialistRegistryEntry,
+  CoordinatorConfig,
+} from './multiAgent';
 
 // ── 根因分析 (RCA) ──
 export { rootCauseAnalysisService } from './rca/rootCauseAnalysisService';

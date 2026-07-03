@@ -227,7 +227,7 @@ export default function AutoScale() {
           <TrendingUp size={28} className="text-purple-400" />
           <h1 className="text-2xl font-bold text-white">自动伸缩</h1>
         </div>
-        <Button icon={<ReloadOutlined />} onClick={() => { activeTab === 'rules' ? fetchRules() : fetchHistory(); }}>
+        <Button icon={<ReloadOutlined />} onClick={() => { if (activeTab === 'rules') fetchRules(); else fetchHistory(); }}>
           刷新
         </Button>
       </div>

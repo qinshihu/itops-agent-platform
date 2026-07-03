@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { Router } from 'express';
 import { executeCommand, testConnection, runComplianceCheck, complianceChecks } from '../services/sshService';
 import { randomUUID } from 'crypto';
-import db from '../../../models/database';
+import { auditLogRepository } from '../../../repositories';
 import { logger } from '../../../utils/logger';
 import { requireRole } from '../../../middleware/auth';
 import { checkCommandSafety } from '../../../middleware/commandFilter';
@@ -17,17 +17,14 @@ function logCommandAudit(
   warnings: string[]
 ) {
   try {
-    db.prepare(`
-      INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, details, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))
-    `).run(
-      randomUUID(),
-      userId,
-      'command-execute',
-      'server',
-      serverId,
-      JSON.stringify({ command, isSafe, warnings })
-    );
+    auditLogRepository.insert({
+      id: randomUUID(),
+      user_id: userId,
+      action: 'command-execute',
+      resource_type: 'server',
+      resource_id: serverId,
+      details: JSON.stringify({ command, isSafe, warnings }),
+    });
   } catch (error) {
     logger.error('Failed to log command audit:', error);
   }

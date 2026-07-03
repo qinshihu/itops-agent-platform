@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Table, Button, Tag, Card, Statistic, Row, Col, Drawer, Descriptions, Progress, message, Switch, Space, Tooltip } from 'antd';
 import { Play, Square, Eye, Activity, RefreshCw } from 'lucide-react';
 import api from '../../../lib/api';
-import io, { Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
+import io from 'socket.io-client';
 
 interface ContainerStats {
   containerId: string;

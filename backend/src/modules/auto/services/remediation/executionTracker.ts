@@ -209,7 +209,7 @@ export const executionTrackerMixin = {
     }
   },
 
-  notifySelfHeal(alertId: string | undefined, alertTitle: string | undefined): void {
+  notifySelfHeal(alertId: string | undefined, _alertTitle: string | undefined): void {
     if (!alertId) return;
     try {
       const alert = db.prepare('SELECT source, title FROM alerts WHERE id = ?').get(alertId) as { source: string; title: string } | undefined;

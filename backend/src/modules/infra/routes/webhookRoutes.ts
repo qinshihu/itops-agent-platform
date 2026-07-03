@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
-import { Router } from 'express';
-import db, { getIOInstance } from '../../../models/database';
+import { Router, json as expressJson } from 'express';
+import { getIOInstance } from '../../../shared/websocket/io';
 import { logger } from '../../../utils/logger';
 import { randomUUID } from 'crypto';
 import { createAuditLog } from '../services/auditService';
@@ -19,12 +19,21 @@ import {
   detectSourceType
 } from '../../alerts/services/alertSourceAdapters';
 import { alertDeviceResolver } from '../../alerts/services/alertDeviceResolver';
-import { alertProcessor } from '../../../core/AlertProcessor';
+import { alertProcessor } from '../../alerts/services/AlertProcessor';
 import { emitToAlerts } from '../../../shared/websocket/handler';
 import { validateBody } from '../../../middleware/validation';
 import { z } from 'zod';
+import { alertRepository } from '../../../repositories';
 
 const router = Router();
+
+// 捕获原始 body 字节流用于签名验证（必须在 JSON 解析之前注册）
+router.use(expressJson({
+  verify: (req: Request, _res, buf: Buffer) => {
+    // 保存原始 body 字节流，供 verifyWebhookSignature 使用
+    (req as Request & { rawBody?: Buffer }).rawBody = buf;
+  },
+}));
 
 function logWebhookInvocation(
   source: string,
@@ -37,27 +46,24 @@ function logWebhookInvocation(
 ) {
   try {
     const id = randomUUID();
-    db.prepare(
-      `INSERT INTO alert_webhook_logs (id, source, status, alert_count, resolved_count, error_message, ip_address, user_agent, processing_time_ms)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
+    alertRepository.webhookLogs.logInvocation({
       id,
       source,
       status,
-      alertCount,
-      resolvedCount,
-      errorMessage || null,
-      req?.ip || null,
-      req?.headers['user-agent'] as string || null,
-      processingTimeMs || null
-    );
+      alert_count: alertCount,
+      resolved_count: resolvedCount,
+      error_message: errorMessage || null,
+      ip_address: req?.ip || null,
+      user_agent: req?.headers['user-agent'] as string || null,
+      processing_time_ms: processingTimeMs || null,
+    });
   } catch (e) {
     logger.debug('Failed to log webhook invocation:', e);
   }
 }
 
 interface WebhookSignatureConfig {
-  enabled: boolean;
+  mode: 'true' | 'false' | 'warn';
   secret?: string;
   headerName: string;
   algorithm?: string;
@@ -66,16 +72,19 @@ interface WebhookSignatureConfig {
 /**
  * ⚠️ 安全警告 (SECURITY WARNING)
  *
- * 生产环境必须启用 Webhook 签名验证！
- * 当前实现通过 env.WEBHOOK_VERIFY_ENABLED 和 env.WEBHOOK_SECRET 控制签名验证。
- * 如果未启用签名验证，任何知道 Webhook URL 的人都可以向系统发送伪造告警，
- * 可能导致：
+ * Webhook 签名验证默认开启（secure by default）。
+ * 通过 env.WEBHOOK_VERIFY_ENABLED 控制三种模式：
+ *   - 'true'  (默认): 强制校验签名，缺失或错误均拒绝
+ *   - 'warn'        : 缺失签名放行但记录 WARN 审计日志，签名错误仍拒绝
+ *   - 'false'       : 完全关闭校验（仅用于隔离测试环境）
+ *
+ * 未启用签名验证的风险：
  *   - 恶意告警注入，触发错误的自动工作流
  *   - 虚假告警恢复，掩盖真实故障
  *   - 拒绝服务攻击（大量伪造告警）
  *
  * 生产环境配置要求：
- *   1. 设置 WEBHOOK_VERIFY_ENABLED=true
+ *   1. 保持 WEBHOOK_VERIFY_ENABLED=true（默认）
  *   2. 设置 WEBHOOK_SECRET 为强随机字符串（至少 32 字节）
  *   3. 在告警源（Zabbix/Prometheus/Grafana 等）中配置相同的 Secret
  *   4. 确保告警源通过 HTTPS 发送请求，并携带正确的签名 Header
@@ -87,32 +96,95 @@ interface WebhookSignatureConfig {
  *   - 比较方式：timingSafeEqual（防时序攻击）
  */
 function getWebhookConfig(source: string): WebhookSignatureConfig {
-  const enabled = env.WEBHOOK_VERIFY_ENABLED || false;
-  const secret = env.WEBHOOK_SECRET;
   return {
-    enabled,
-    secret,
+    mode: env.WEBHOOK_VERIFY_ENABLED,
+    secret: env.WEBHOOK_SECRET,
     headerName: `X-Webhook-Signature-${source}`,
     algorithm: 'sha256',
   };
 }
 
+const PLACEHOLDER_SECRETS = new Set([
+  'your-webhook-secret-key-change-me',
+  '',
+]);
+
+function validateWebhookConfig(): void {
+  const mode = env.WEBHOOK_VERIFY_ENABLED;
+  const secret = env.WEBHOOK_SECRET;
+  if (mode === 'false') {
+    logger.warn('Webhook signature verification is DISABLED. Only use in isolated test environments.');
+    return;
+  }
+  if (!secret || PLACEHOLDER_SECRETS.has(secret)) {
+    if (mode === 'true') {
+      throw new Error(
+        'WEBHOOK_VERIFY_ENABLED=true requires WEBHOOK_SECRET to be set to a non-placeholder value. ' +
+        'Generate one with: openssl rand -hex 32. ' +
+        'For backward compatibility with unsigned senders, set WEBHOOK_VERIFY_ENABLED=warn.'
+      );
+    }
+    logger.warn(
+      'WEBHOOK_VERIFY_ENABLED=warn but WEBHOOK_SECRET is missing/placeholder. ' +
+      'Signature will not be validated; unsigned requests will be accepted with a warning. ' +
+      'Set WEBHOOK_SECRET (openssl rand -hex 32) to fully enable verification.'
+    );
+  }
+}
+
+validateWebhookConfig();
+
 function verifyWebhookSignature(req: Request, source: string): boolean {
   const config = getWebhookConfig(source);
-  if (!config.enabled || !config.secret) {
+
+  if (config.mode === 'false') {
     return true;
+  }
+
+  const secret = config.secret && !PLACEHOLDER_SECRETS.has(config.secret) ? config.secret : undefined;
+  if (!secret) {
+    if (config.mode === 'warn') {
+      logger.warn(`Webhook from ${source} accepted without signature (mode=warn, no secret configured). IP=${req.ip}`);
+      createAuditLog({
+        action: 'webhook_signature_skipped',
+        resource_type: 'webhook',
+        details: { source, ip: req.ip, reason: 'warn_mode_no_secret' },
+      });
+      return true;
+    }
+    return false;
   }
 
   const signature = req.headers[config.headerName.toLowerCase()] as string;
   if (!signature) {
+    if (config.mode === 'warn') {
+      logger.warn(`Webhook from ${source} accepted without signature header (mode=warn). IP=${req.ip}`);
+      createAuditLog({
+        action: 'webhook_signature_skipped',
+        resource_type: 'webhook',
+        details: { source, ip: req.ip, reason: 'warn_mode_no_header' },
+      });
+      return true;
+    }
     return false;
   }
 
-  const body = JSON.stringify(req.body);
+  // 使用原始 body 字节流计算签名（与标准 webhook 签名实践一致）
+  const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+  if (!rawBody) {
+    // 如果没有原始 body（中间件未正确注册），回退到 JSON.stringify
+    logger.warn('rawBody not available, falling back to JSON.stringify for signature verification');
+  }
+  
+  const bodyForSigning = rawBody ?? Buffer.from(JSON.stringify(req.body));
   const expectedSignature = crypto
-    .createHmac(config.algorithm || 'sha256', config.secret)
-    .update(body)
+    .createHmac(config.algorithm || 'sha256', secret)
+    .update(bodyForSigning)
     .digest('hex');
+
+  if (signature.length !== expectedSignature.length) {
+    return false;
+  }
 
   return crypto.timingSafeEqual(
     Buffer.from(signature),
@@ -129,21 +201,11 @@ function processNormalizedAlert(
   if (alert.status === 'resolved') {
     let updated = 0;
     if (alert.external_id) {
-      const result = db.prepare(
-        `UPDATE alerts SET status = 'resolved_auto', resolved_at = local_now(),
-         resolved_by = 'auto', resolution_notes = ?
-         WHERE metadata LIKE ? AND status IN ('new', 'confirmed', 'in_progress')`
-      ).run(`Auto-resolved by ${sourceLabel}`, `%${alert.external_id}%`);
-      updated = result.changes;
+      updated = alertRepository.resolveAutoByExternalId(`Auto-resolved by ${sourceLabel}`, alert.external_id);
     }
 
     if (updated === 0 && alert.host) {
-      db.prepare(
-        `UPDATE alerts SET status = 'resolved_auto', resolved_at = local_now(),
-         resolved_by = 'auto', resolution_notes = ?
-         WHERE source = ? AND title LIKE ? AND status IN ('new', 'confirmed', 'in_progress')
-         AND created_at >= datetime('now', '-24 hours')`
-      ).run(`Auto-resolved by ${sourceLabel}`, alert.source, `%${alert.host}%`);
+      alertRepository.resolveAutoByHost(`Auto-resolved by ${sourceLabel}`, alert.source, alert.host);
     }
 
     createAuditLog({
@@ -164,18 +226,14 @@ function processNormalizedAlert(
   const title = alert.title;
   const content = alert.content;
 
-  db.prepare(`
-    INSERT INTO alerts (id, source, severity, title, content, metadata, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  alertRepository.create({
     id,
-    alert.source,
+    source: alert.source,
     severity,
     title,
     content,
-    JSON.stringify(alert.metadata),
-    'new'
-  );
+    metadata: alert.metadata || {},
+  });
 
   // ============================================================
   //  统一修复流水线: 修复策略匹配 + 设备关联 + RCA + WebSocket

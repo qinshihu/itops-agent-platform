@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -7,6 +6,7 @@ import type {
   Edge,
   Node,
   NodeTypes,
+  ReactFlowInstance,
 } from '@xyflow/react';
 import {
   ReactFlow,
@@ -52,7 +52,45 @@ interface WorkflowData {
 
 import { Handle, Position } from '@xyflow/react';
 
-const AgentNode = ({ data, selected }: { data: any; selected: boolean }) => {
+interface AgentNodeData {
+  label?: string;
+  avatar?: string;
+  description?: string;
+  inputKey?: string;
+  outputKey?: string;
+  prompt?: string;
+  agentId?: string;
+}
+
+interface ApprovalNodeData {
+  label?: string;
+  description?: string;
+  approvalConfig?: {
+    description?: string;
+    timeout?: number;
+    timeoutAction?: string;
+    approvers?: string[];
+  };
+}
+
+interface ProviderNodeData {
+  label?: string;
+  description?: string;
+  providerId?: string;
+  providerName?: string;
+  providerType?: string;
+  configSchema?: { properties?: Record<string, { title?: string; description?: string; type?: string; enum?: string[]; default?: string }> } | null;
+  method?: string;
+  config?: Record<string, unknown>;
+}
+
+interface GenericNodeData {
+  label?: string;
+}
+
+type NodeData = AgentNodeData | ApprovalNodeData | ProviderNodeData | GenericNodeData;
+
+const AgentNode = ({ data, selected }: { data: AgentNodeData; selected: boolean }) => {
   return (
     <div
       className={`
@@ -174,7 +212,7 @@ const StartNode = ({ data, selected }: any) => (
   </div>
 );
 
-const EndNode = ({ data, selected }: any) => (
+const EndNode = ({ data, selected }: { data: GenericNodeData; selected: boolean }) => (
   <div className={defaultNodeStyle('red', selected)} style={{ borderRadius: '9999px' }}>
     <Handle type="target" position={Position.Left} className="w-3 h-3 bg-red-500" />
     <span className="font-semibold text-sm">{data.label || '结束'}</span>
@@ -206,7 +244,7 @@ const RiskAssessNode = ({ data, selected }: any) => (
   </div>
 );
 
-const DecisionNode = ({ data, selected }: any) => (
+const DecisionNode = ({ data, selected }: { data: GenericNodeData; selected: boolean }) => (
   <div className={defaultNodeStyle('indigo', selected)}>
     <Handle type="target" position={Position.Left} className="w-3 h-3 bg-indigo-500" />
     <div className="flex items-center gap-1"><Zap className="w-4 h-4 text-indigo-400" /><span className="font-semibold text-sm">{data.label || '决策'}</span></div>
@@ -230,7 +268,7 @@ const RollbackNode = ({ data, selected }: any) => (
   </div>
 );
 
-const GenericNode = ({ data, selected, icon, color }: any) => (
+const GenericNode = ({ data, selected, icon, color }: { data: GenericNodeData; selected: boolean; icon?: unknown; color?: string }) => (
   <div className={defaultNodeStyle(color || 'gray', selected)}>
     <Handle type="target" position={Position.Left} className="w-3 h-3 bg-gray-400" />
     <span className="font-semibold text-sm">{data.label || '节点'}</span>
@@ -265,7 +303,7 @@ function WorkflowEditorContent() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -312,7 +350,6 @@ function WorkflowEditorContent() {
     setHistoryIndex(newHistory.length - 1);
   }, [nodes, edges, history, historyIndex]);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   const initializedRef = useRef(false);
   useEffect(() => {
     if (workflow && !initializedRef.current) {
@@ -395,7 +432,7 @@ function WorkflowEditorContent() {
       navigate('/workflows');
       toast.success('保存成功！');
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message || '保存失败，请重试');
     },
   });
@@ -954,10 +991,10 @@ function WorkflowEditorContent() {
                       <div>
                         <label className="block text-sm text-text-secondary mb-1">审批说明</label>
                         <textarea
-                          value={(selectedNode.data?.approvalConfig as any)?.description || ''}
+                          value={(selectedNode.data as ApprovalNodeData)?.approvalConfig?.description || ''}
                           onChange={(e) => {
                             const newConfig = {
-                              ...(selectedNode.data?.approvalConfig as any),
+                              ...(selectedNode.data as ApprovalNodeData)?.approvalConfig,
                               description: e.target.value,
                             };
                             setNodes((nds) =>
@@ -978,10 +1015,10 @@ function WorkflowEditorContent() {
                         <label className="block text-sm text-text-secondary mb-1">超时时间（秒）</label>
                         <input
                           type="number"
-                          value={(selectedNode.data?.approvalConfig as any)?.timeout || 3600}
+                          value={(selectedNode.data as ApprovalNodeData)?.approvalConfig?.timeout || 3600}
                           onChange={(e) => {
                             const newConfig = {
-                              ...(selectedNode.data?.approvalConfig as any),
+                              ...(selectedNode.data as ApprovalNodeData)?.approvalConfig,
                               timeout: parseInt(e.target.value) || 3600,
                             };
                             setNodes((nds) =>
@@ -1001,10 +1038,10 @@ function WorkflowEditorContent() {
                       <div>
                         <label className="block text-sm text-text-secondary mb-1">超时行为</label>
                         <select
-                          value={(selectedNode.data?.approvalConfig as any)?.timeoutAction || 'reject'}
+                          value={(selectedNode.data as ApprovalNodeData)?.approvalConfig?.timeoutAction || 'reject'}
                           onChange={(e) => {
                             const newConfig = {
-                              ...(selectedNode.data?.approvalConfig as any),
+                              ...(selectedNode.data as ApprovalNodeData)?.approvalConfig,
                               timeoutAction: e.target.value,
                             };
                             setNodes((nds) =>
@@ -1058,11 +1095,11 @@ function WorkflowEditorContent() {
                           ))}
                         </select>
                       </div>
-                      {(selectedNode.data as any)?.configSchema?.properties && (
+                      {(selectedNode.data as ProviderNodeData)?.configSchema?.properties && (
                         <div>
                           <label className="block text-sm text-text-secondary mb-2">配置参数</label>
                           <div className="space-y-2">
-                            {Object.entries((selectedNode.data as any).configSchema.properties as Record<string, any>).map(([key, schema]: [string, any]) => (
+                            {Object.entries((selectedNode.data as ProviderNodeData).configSchema!.properties!).map(([key, schema]) => (
                               <div key={key}>
                                 <label className="block text-xs text-text-secondary mb-1">
                                   {schema.title || key}
@@ -1071,9 +1108,9 @@ function WorkflowEditorContent() {
                                 {schema.type === 'boolean' ? (
                                   <input
                                     type="checkbox"
-                                    checked={!!(selectedNode.data?.config as any)?.[key]}
+                                    checked={!!((selectedNode.data as ProviderNodeData)?.config)?.[key]}
                                     onChange={(e) => {
-                                      const newConfig = { ...(selectedNode.data?.config as any || {}), [key]: e.target.checked };
+                                      const newConfig = { ...((selectedNode.data as ProviderNodeData)?.config || {}), [key]: e.target.checked };
                                       setNodes((nds) => nds.map((n) => n.id === selectedNode.id ? { ...n, data: { ...n.data, config: newConfig } } : n));
                                       setSelectedNode((prev) => prev ? { ...prev, data: { ...prev.data, config: newConfig } } : null);
                                     }}
@@ -1081,9 +1118,9 @@ function WorkflowEditorContent() {
                                   />
                                 ) : schema.enum ? (
                                   <select
-                                    value={(selectedNode.data?.config as any)?.[key] || ''}
+                                    value={((selectedNode.data as ProviderNodeData)?.config)?.[key] || ''}
                                     onChange={(e) => {
-                                      const newConfig = { ...(selectedNode.data?.config as any || {}), [key]: e.target.value };
+                                      const newConfig = { ...((selectedNode.data as ProviderNodeData)?.config || {}), [key]: e.target.value };
                                       setNodes((nds) => nds.map((n) => n.id === selectedNode.id ? { ...n, data: { ...n.data, config: newConfig } } : n));
                                       setSelectedNode((prev) => prev ? { ...prev, data: { ...prev.data, config: newConfig } } : null);
                                     }}
@@ -1097,10 +1134,10 @@ function WorkflowEditorContent() {
                                 ) : (
                                   <input
                                     type={schema.type === 'number' ? 'number' : 'text'}
-                                    value={(selectedNode.data?.config as any)?.[key] || ''}
+                                    value={((selectedNode.data as ProviderNodeData)?.config)?.[key] || ''}
                                     onChange={(e) => {
                                       const val = schema.type === 'number' ? Number(e.target.value) : e.target.value;
-                                      const newConfig = { ...(selectedNode.data?.config as any || {}), [key]: val };
+                                      const newConfig = { ...((selectedNode.data as ProviderNodeData)?.config || {}), [key]: val };
                                       setNodes((nds) => nds.map((n) => n.id === selectedNode.id ? { ...n, data: { ...n.data, config: newConfig } } : n));
                                       setSelectedNode((prev) => prev ? { ...prev, data: { ...prev.data, config: newConfig } } : null);
                                     }}

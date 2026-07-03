@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import db from '../../../models/database';
+import { auditLogRepository } from '../../../repositories';
 
 export const createAuditLog = (data: {
   user_id?: string;
@@ -12,18 +12,15 @@ export const createAuditLog = (data: {
   try {
     const id = randomUUID();
 
-    db.prepare(`
-      INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, details, ip_address)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    auditLogRepository.insert({
       id,
-      data.user_id || null,
-      data.action,
-      data.resource_type,
-      data.resource_id || null,
-      data.details ? JSON.stringify(data.details) : null,
-      data.ip_address || null
-    );
+      user_id: data.user_id || null,
+      action: data.action,
+      resource_type: data.resource_type,
+      resource_id: data.resource_id || null,
+      details: data.details ? JSON.stringify(data.details) : null,
+      ip_address: data.ip_address || null
+    });
 
     return id;
   } catch (error) {

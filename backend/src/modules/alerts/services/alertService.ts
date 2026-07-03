@@ -1,6 +1,7 @@
 import { logger } from '../../../utils/logger';
 import { env } from '../../../utils/env';
-import db from '../../../models/database';
+import { settingsRepository, alertRepository } from '../../../repositories';
+import { rcaRepository } from '../../ai/services/rca/rootCauseAnalysisService/rcaRepository';
 import { rootCauseAnalysisService } from '../../ai/services/rca/rootCauseAnalysisService';
 import { circuitBreakers } from '../../ai/services/llm/llmService';
 import { credentialService } from '../../auth/services/credentialService';
@@ -169,9 +170,9 @@ export class AlertService {
 
   private loadRules(): void {
     try {
-      const saved = db.prepare('SELECT value FROM settings WHERE key = ?').get('alert_rules') as { value: string } | undefined;
+      const saved = settingsRepository.getValue('alert_rules');
       if (saved) {
-        const rules = JSON.parse(saved.value) as AlertRule[];
+        const rules = JSON.parse(saved) as AlertRule[];
         rules.forEach(rule => this.rules.set(rule.id, rule));
       }
     } catch (error) {
@@ -187,10 +188,7 @@ export class AlertService {
   private saveRules(): void {
     const rules = Array.from(this.rules.values());
     const json = JSON.stringify(rules);
-    db.prepare(`
-      INSERT OR REPLACE INTO settings (key, value, updated_at)
-      VALUES ('alert_rules', ?, datetime('now','localtime'))
-    `).run(json);
+    settingsRepository.upsert('alert_rules', json);
   }
 
   getRules(): AlertRule[] {
@@ -453,13 +451,7 @@ export class AlertService {
   }
 
   processDatabaseAlert(alertId: string): void {
-    const alert = db.prepare('SELECT id, title, content, severity, source FROM alerts WHERE id = ?').get(alertId) as {
-      id: string;
-      title: string;
-      content: string;
-      severity: string;
-      source: string;
-    } | undefined;
+    const alert = alertRepository.getSummaryById(alertId);
 
     if (!alert) {
       logger.warn(`⚠️ [AlertService] Alert not found for RCA trigger: ${alertId}`);
@@ -469,11 +461,9 @@ export class AlertService {
     if (alert.severity === 'critical' || alert.severity === 'high' || alert.severity === 'warning') {
       setImmediate(async () => {
         try {
-          const existingRCA = db.prepare(
-            "SELECT id FROM root_cause_analyses WHERE alert_id = ? AND status != 'failed'"
-          ).get(alert.id) as { id: string } | undefined;
+          const existingRCA = rcaRepository.getByAlert(alert.id);
 
-          if (existingRCA) {
+          if (existingRCA && existingRCA.status !== 'failed') {
             logger.info(`⏭️ [AlertService] Skipping RCA for alert ${alertId} - already analyzed (existing RCA: ${existingRCA.id})`);
             return;
           }

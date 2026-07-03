@@ -12,17 +12,16 @@
  */
 
 import { Client } from 'ssh2';
-import db from '../../../../../models/database';
+import { alertRepository, networkDeviceRepository, serversRepo, settingsRepository } from '../../../../../repositories';
 import { decrypt } from '../../../../auth/services/encryptionService';
-import { withRetry, isRetryableError } from '../../../../../utils/retry';
 import { logger } from '../../../../../utils/logger';
 import { verificationGates } from './verificationGates';
 import { knowledgeFeedbackLoop } from '../adaptive/knowledgeFeedbackLoop';
-import { adaptiveAutomationEngine } from '../adaptive/adaptiveAutomation';
 import type {
   DeviceRuntimeProfile, RemediationPlan, RemediationCommand,
-  ProbeResult, VerificationChainResult, AlertResponseLog,
+  ProbeResult, VerificationChainResult,
 } from '../types';
+import { getErrorMessage } from '../../../../../utils/errorHelpers';
 
 export interface ExecutionResult {
   success: boolean;
@@ -75,16 +74,16 @@ class RemediationExecutor {
         if (!output.success && !cmd.allowFailure) {
           throw new Error(`Command failed: ${cmd.command} - ${output.output}`);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         executedCommands.push({
           command: cmd.command,
           success: false,
-          output: err.message,
+          output: getErrorMessage(err),
         });
 
         // 不允许失败的命令 → 触发回滚
         if (!cmd.allowFailure) {
-          logger.error(`[RemediationExecutor] Fatal command failure: ${err.message}`);
+          logger.error(`[RemediationExecutor] Fatal command failure: ${getErrorMessage(err)}`);
 
           // 执行回滚
           const rollbackResult = await this.executeRollback(plan, device);
@@ -94,12 +93,12 @@ class RemediationExecutor {
             executedCommands,
             verificationResult: {
               result: 'failed',
-              stages: [{ stage: 'command_success', passed: false, skipped: false, detail: err.message }],
+              stages: [{ stage: 'command_success', passed: false, skipped: false, detail: getErrorMessage(err) }],
               failedStage: 'command_success',
               diagnosticAfterRemediation: '',
             },
             durationMs: Date.now() - start,
-            error: err.message,
+            error: getErrorMessage(err),
             rolledBack: true,
             rollbackResult,
             diagnosticAfter: '',
@@ -140,8 +139,8 @@ class RemediationExecutor {
         executionCommands: executedCommands.map(e => e.command),
         durationMs: Date.now() - start,
       });
-    } catch (err: any) {
-      logger.warn(`[RemediationExecutor] Feedback loop error: ${err.message}`);
+    } catch (err: unknown) {
+      logger.warn(`[RemediationExecutor] Feedback loop error: ${getErrorMessage(err)}`);
     }
 
     // Step 5: 成功 → 标记告警已解决 + 通知降噪
@@ -204,8 +203,8 @@ class RemediationExecutor {
       });
 
       return { success: true, output: output.substring(0, 2000) };
-    } catch (err: any) {
-      return { success: false, output: `[ERROR] ${err.message}` };
+    } catch (err: unknown) {
+      return { success: false, output: `[ERROR] ${getErrorMessage(err)}` };
     }
   }
 
@@ -218,8 +217,8 @@ class RemediationExecutor {
       try {
         const { output } = await this.executeCommand(device, cmd);
         parts.push(`Rollback '${cmd.command}': ${output}`);
-      } catch (err: any) {
-        parts.push(`Rollback '${cmd.command}': ERROR - ${err.message}`);
+      } catch (err: unknown) {
+        parts.push(`Rollback '${cmd.command}': ERROR - ${getErrorMessage(err)}`);
       }
     }
     const result = parts.join('\n');
@@ -233,7 +232,7 @@ class RemediationExecutor {
   private getDeviceCredentials(device: DeviceRuntimeProfile): { username?: string; password?: string; port?: number } {
     try {
       if (device.type === 'server') {
-        const sv = db.prepare('SELECT username, password, port FROM servers WHERE id = ?').get(device.deviceId) as any;
+        const sv = serversRepo.getById(device.deviceId);
         if (sv) {
           return {
             username: sv.username,
@@ -242,7 +241,7 @@ class RemediationExecutor {
           };
         }
       } else {
-        const nd = db.prepare('SELECT username, password, ssh_port FROM network_devices WHERE id = ?').get(device.deviceId) as any;
+        const nd = networkDeviceRepository.getSshCredentials(device.deviceId);
         if (nd?.username) {
           return {
             username: nd.username,
@@ -251,7 +250,7 @@ class RemediationExecutor {
           };
         }
       }
-    } catch {}
+    } catch { /* ignore */ }
     return { username: 'root' };
   }
 
@@ -260,13 +259,10 @@ class RemediationExecutor {
    */
   private markAlertResolved(alertId: string, summary: string): void {
     try {
-      db.prepare(`
-        UPDATE alerts SET status = 'resolved', updated_at = datetime('now','localtime')
-        WHERE id = ?
-      `).run(alertId);
+      alertRepository.resolve(alertId);
       logger.info(`[RemediationExecutor] Alert ${alertId} marked as resolved: ${summary}`);
-    } catch (err: any) {
-      logger.warn(`Failed to resolve alert ${alertId}: ${err.message}`);
+    } catch (err: unknown) {
+      logger.warn(`Failed to resolve alert ${alertId}: ${getErrorMessage(err)}`);
     }
   }
 
@@ -275,13 +271,10 @@ class RemediationExecutor {
    */
   private notifyNoiseReduction(alertId: string, alertTitle: string): void {
     try {
-      const alert = db.prepare('SELECT source FROM alerts WHERE id = ?').get(alertId) as { source: string } | undefined;
-      if (!alert) return;
-      db.prepare(`
-        INSERT OR REPLACE INTO settings (key, value)
-        VALUES (?, ?)
-      `).run(
-        `self_healed:${alert.source}:${alertTitle.substring(0, 100)}`,
+      const source = alertRepository.getSourceById(alertId);
+      if (!source) return;
+      settingsRepository.upsert(
+        `self_healed:${source}:${alertTitle.substring(0, 100)}`,
         new Date().toISOString()
       );
     } catch {

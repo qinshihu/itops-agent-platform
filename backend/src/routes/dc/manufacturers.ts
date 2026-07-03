@@ -1,7 +1,8 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { db } from '../../models/database';
 import crypto from 'crypto';
+import { dcRepository } from '../../repositories';
+import { getErrorMessage } from '../../utils/errorHelpers';
 
 const router = Router();
 
@@ -10,12 +11,10 @@ const router = Router();
  */
 router.get('/', (_req: Request, res: Response) => {
   try {
-    const list = db.prepare(
-      'SELECT * FROM device_manufacturers ORDER BY sort_order, name'
-    ).all();
+    const list = dcRepository.devices.listManufacturersOrdered();
     res.json({ success: true, data: list });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -24,14 +23,12 @@ router.get('/', (_req: Request, res: Response) => {
  */
 router.get('/:id', (req: Request, res: Response) => {
   try {
-    const mfg = db.prepare('SELECT * FROM device_manufacturers WHERE id = ?').get(req.params.id);
+    const mfg = dcRepository.devices.getManufacturerById(req.params.id);
     if (!mfg) return res.status(404).json({ success: false, message: 'Manufacturer not found' });
-    const typeCount = db.prepare(
-      'SELECT COUNT(*) as cnt FROM device_types WHERE manufacturer_id = ?'
-    ).get(req.params.id) as any;
-    res.json({ success: true, data: { ...mfg as any, device_type_count: typeCount?.cnt || 0 } });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    const typeCount = dcRepository.devices.countDeviceTypesByManufacturer(req.params.id);
+    res.json({ success: true, data: { ...mfg, device_type_count: typeCount } });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -43,13 +40,10 @@ router.post('/', (req: Request, res: Response) => {
     const { name, slug, description, logo_url, sort_order } = req.body;
     if (!name || !slug) return res.status(400).json({ success: false, message: 'name and slug required' });
     const id = crypto.randomUUID();
-    db.prepare(`
-      INSERT INTO device_manufacturers (id, name, slug, description, logo_url, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, name, slug, description || '', logo_url || '', sort_order || 0);
+    dcRepository.devices.createManufacturer({ id, name, slug, description, logo_url, sort_order });
     res.json({ success: true, data: { id } });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -59,15 +53,10 @@ router.post('/', (req: Request, res: Response) => {
 router.put('/:id', (req: Request, res: Response) => {
   try {
     const { name, slug, description, logo_url, sort_order } = req.body;
-    db.prepare(`
-      UPDATE device_manufacturers
-      SET name=?, slug=?, description=?, logo_url=?, sort_order=?,
-          updated_at=datetime('now','localtime')
-      WHERE id=?
-    `).run(name, slug, description || '', logo_url || '', sort_order || 0, req.params.id);
+    dcRepository.devices.updateManufacturer(req.params.id, { id: req.params.id, name, slug, description, logo_url, sort_order });
     res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -76,19 +65,17 @@ router.put('/:id', (req: Request, res: Response) => {
  */
 router.delete('/:id', (req: Request, res: Response) => {
   try {
-    const typeCount = db.prepare(
-      'SELECT COUNT(*) as cnt FROM device_types WHERE manufacturer_id = ?'
-    ).get(req.params.id) as any;
-    if (typeCount?.cnt > 0) {
+    const typeCount = dcRepository.devices.countDeviceTypesByManufacturer(req.params.id);
+    if (typeCount > 0) {
       return res.status(409).json({
         success: false,
-        message: `Cannot delete manufacturer with ${typeCount.cnt} associated device type(s)`
+        message: `Cannot delete manufacturer with ${typeCount} associated device type(s)`
       });
     }
-    db.prepare('DELETE FROM device_manufacturers WHERE id = ?').run(req.params.id);
+    dcRepository.devices.deleteManufacturer(req.params.id);
     res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 

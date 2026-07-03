@@ -1,9 +1,9 @@
 import { randomUUID } from 'crypto';
 import { Client } from 'ssh2';
-import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
 import { encrypt, decrypt } from '../../auth/services/encryptionService';
 import type { VendorType } from './vendorAdapter';
+import { networkDeviceRepository, sshKeysRepo, snmpInspectionRepo } from '../../../repositories';
 
 export interface NetworkDevice {
   id: string;
@@ -67,36 +67,21 @@ export interface UpdateDeviceRequest {
 
 class NetworkDeviceService {
   private ensureSnmpCredIdColumn() {
-    try {
-      const cols = db.prepare("PRAGMA table_info('network_devices')").all() as { name: string }[];
-      if (!cols.find(c => c.name === 'snmp_credential_id')) {
-        db.exec('ALTER TABLE network_devices ADD COLUMN snmp_credential_id TEXT REFERENCES snmp_credentials(id) ON DELETE SET NULL');
-      }
-    } catch { /* 表可能还不存在 */ }
+    networkDeviceRepository.ensureSnmpCredIdColumn();
   }
 
   getAllDevices(): Array<NetworkDevice> {
     this.ensureSnmpCredIdColumn();
-    const devices = db.prepare(`
-      SELECT nd.*, sc.name AS snmp_credential_name
-      FROM network_devices nd
-      LEFT JOIN snmp_credentials sc ON nd.snmp_credential_id = sc.id
-      ORDER BY nd.created_at DESC
-    `).all() as Array<NetworkDevice>;
+    const devices = networkDeviceRepository.list();
 
-    return devices.map(d => this.sanitizeDevice(d));
+    return devices.map(d => this.sanitizeDevice(d as unknown as NetworkDevice));
   }
 
   getDeviceById(id: string): NetworkDevice | undefined {
     this.ensureSnmpCredIdColumn();
-    const device = db.prepare(`
-      SELECT nd.*, sc.name AS snmp_credential_name
-      FROM network_devices nd
-      LEFT JOIN snmp_credentials sc ON nd.snmp_credential_id = sc.id
-      WHERE nd.id = ?
-    `).get(id) as NetworkDevice | undefined;
+    const device = networkDeviceRepository.getByIdWithCredential(id);
 
-    return device ? this.sanitizeDevice(device) : undefined;
+    return device ? this.sanitizeDevice(device as unknown as NetworkDevice) : undefined;
   }
 
   createDevice(data: CreateDeviceRequest): NetworkDevice {
@@ -107,16 +92,13 @@ class NetworkDeviceService {
     let finalPassword = data.password || '';
 
     if (data.ssh_key_id) {
-      const credential = db.prepare(
-        'SELECT auth_type, username, password, private_key FROM ssh_keys WHERE id = ?'
-      ).get(data.ssh_key_id) as { auth_type: string; username: string; password: string; private_key: string } | undefined;
+      const credential = sshKeysRepo.getById(data.ssh_key_id);
 
       if (credential) {
         if (credential.auth_type === 'password') {
           finalUsername = credential.username || '';
           finalPassword = credential.password ? decrypt(credential.password) : '';
         }
-        // 如果是密钥类型，暂时不支持（网络设备通常使用密码）
       }
     }
 
@@ -124,29 +106,25 @@ class NetworkDeviceService {
     const encryptedEnablePassword = data.enable_password ? encrypt(data.enable_password) : null;
 
     this.ensureSnmpCredIdColumn();
-    db.prepare(
-      `INSERT INTO network_devices
-      (id, name, ip_address, vendor, model, os_version, ssh_port, ssh_key_id, username, password, enable_password, location, role, status, snmp_enabled, snmp_credential_id, snmp_port)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
+    networkDeviceRepository.create({
       id,
-      data.name,
-      data.ip_address,
-      data.vendor,
-      data.model || null,
-      data.os_version || null,
-      data.ssh_port || 22,
-      data.ssh_key_id || null,
-      finalUsername || data.username || '',
-      encryptedPassword,
-      encryptedEnablePassword,
-      data.location || null,
-      data.role || null,
-      'online',
-      data.snmp_enabled ?? 1,
-      data.snmp_credential_id || null,
-      data.snmp_port || 161
-    );
+      name: data.name,
+      ip_address: data.ip_address,
+      vendor: data.vendor,
+      model: data.model || null,
+      os_version: data.os_version || null,
+      ssh_port: data.ssh_port || 22,
+      ssh_key_id: data.ssh_key_id || null,
+      username: finalUsername || data.username || '',
+      password: encryptedPassword,
+      enable_password: encryptedEnablePassword,
+      location: data.location || null,
+      role: data.role || null,
+      status: 'online',
+      snmp_enabled: data.snmp_enabled ?? 1,
+      snmp_credential_id: data.snmp_credential_id || null,
+      snmp_port: data.snmp_port || 161,
+    });
 
     logger.info(`Network device created: ${data.name} (${data.ip_address})`);
 
@@ -154,53 +132,42 @@ class NetworkDeviceService {
   }
 
   updateDevice(id: string, data: UpdateDeviceRequest): NetworkDevice | undefined {
-    const existing = db.prepare(
-      'SELECT * FROM network_devices WHERE id = ?'
-    ).get(id) as NetworkDevice | undefined;
+    const existing = networkDeviceRepository.getById(id);
 
     if (!existing) {
       return undefined;
     }
 
-    const updates: Array<{ column: string; value: unknown }> = [];
+    const fields: Record<string, unknown> = {};
 
-    if (data.name !== undefined) updates.push({ column: 'name', value: data.name });
-    if (data.model !== undefined) updates.push({ column: 'model', value: data.model });
-    if (data.os_version !== undefined) updates.push({ column: 'os_version', value: data.os_version });
-    if (data.ssh_port !== undefined) updates.push({ column: 'ssh_port', value: data.ssh_port });
-    if (data.ssh_key_id !== undefined) updates.push({ column: 'ssh_key_id', value: data.ssh_key_id || null });
-    if (data.username !== undefined) updates.push({ column: 'username', value: data.username });
-    // 保护：空字符串不清空现有密码
+    if (data.name !== undefined) fields.name = data.name;
+    if (data.model !== undefined) fields.model = data.model;
+    if (data.os_version !== undefined) fields.os_version = data.os_version;
+    if (data.ssh_port !== undefined) fields.ssh_port = data.ssh_port;
+    if (data.ssh_key_id !== undefined) fields.ssh_key_id = data.ssh_key_id || null;
+    if (data.username !== undefined) fields.username = data.username;
     if (data.password !== undefined && data.password !== '') {
-      updates.push({ column: 'password', value: encrypt(data.password) });
+      fields.password = encrypt(data.password);
     }
-    if (data.enable_password !== undefined) updates.push({ column: 'enable_password', value: data.enable_password ? encrypt(data.enable_password) : null });
-    if (data.location !== undefined) updates.push({ column: 'location', value: data.location });
-    if (data.role !== undefined) updates.push({ column: 'role', value: data.role });
-    if (data.snmp_enabled !== undefined) updates.push({ column: 'snmp_enabled', value: data.snmp_enabled ? 1 : 0 });
-    if (data.snmp_credential_id !== undefined) updates.push({ column: 'snmp_credential_id', value: data.snmp_credential_id || null });
-    if (data.snmp_port !== undefined) updates.push({ column: 'snmp_port', value: data.snmp_port });
+    if (data.enable_password !== undefined) fields.enable_password = data.enable_password ? encrypt(data.enable_password) : null;
+    if (data.location !== undefined) fields.location = data.location;
+    if (data.role !== undefined) fields.role = data.role;
+    if (data.snmp_enabled !== undefined) fields.snmp_enabled = data.snmp_enabled ? 1 : 0;
+    if (data.snmp_credential_id !== undefined) fields.snmp_credential_id = data.snmp_credential_id || null;
+    if (data.snmp_port !== undefined) fields.snmp_port = data.snmp_port;
 
     // 如果切换了凭证，更新认证信息
     if (data.ssh_key_id !== undefined && data.ssh_key_id) {
-      const credential = db.prepare(
-        'SELECT auth_type, username, password FROM ssh_keys WHERE id = ?'
-      ).get(data.ssh_key_id) as { auth_type: string; username: string; password: string } | undefined;
+      const credential = sshKeysRepo.getById(data.ssh_key_id);
 
       if (credential?.auth_type === 'password') {
-        updates.push({ column: 'username', value: credential.username || '' });
-        updates.push({ column: 'password', value: encrypt(credential.password ? decrypt(credential.password) : '') });
+        fields.username = credential.username || '';
+        fields.password = encrypt(credential.password ? decrypt(credential.password) : '');
       }
     }
 
-    if (updates.length > 0) {
-      const setClause = updates.map(u => `${u.column} = ?`).join(', ');
-      const values = [...updates.map(u => u.value), id];
-
-      db.prepare(
-        `UPDATE network_devices SET ${setClause}, updated_at = datetime('now','localtime') WHERE id = ?`
-      ).run(...values);
-
+    if (Object.keys(fields).length > 0) {
+      networkDeviceRepository.update(id, fields as any);
       logger.info(`Network device updated: ${id}`);
     }
 
@@ -208,11 +175,9 @@ class NetworkDeviceService {
   }
 
   deleteDevice(id: string): boolean {
-    const result = db.prepare(
-      'DELETE FROM network_devices WHERE id = ?'
-    ).run(id);
+    const result = networkDeviceRepository.delete(id);
 
-    if (result.changes > 0) {
+    if (result) {
       logger.info(`Network device deleted: ${id}`);
       return true;
     }
@@ -221,9 +186,7 @@ class NetworkDeviceService {
   }
 
   async testConnection(deviceId: string): Promise<{ success: boolean; message: string; latency?: number }> {
-    const device = db.prepare(
-      'SELECT id, name, ip_address, ssh_port, username, password FROM network_devices WHERE id = ?'
-    ).get(deviceId) as NetworkDevice | undefined;
+    const device = networkDeviceRepository.getTestConnectionFields(deviceId);
 
     if (!device) {
       return { success: false, message: 'Device not found' };
@@ -305,15 +268,11 @@ class NetworkDeviceService {
   }
 
   getInspectionHistory(deviceId: string, limit = 20): Array<any> {
-    return db.prepare(
-      'SELECT * FROM network_inspection_history WHERE device_id = ? ORDER BY created_at DESC LIMIT ?'
-    ).all(deviceId, limit) as Array<any>;
+    return snmpInspectionRepo.listAllByDeviceId(deviceId, limit);
   }
 
   getInspectionDetail(inspectionId: string): any {
-    return db.prepare(
-      'SELECT * FROM network_inspection_history WHERE id = ?'
-    ).get(inspectionId) as any;
+    return snmpInspectionRepo.getById(inspectionId);
   }
 
   private sanitizeDevice(device: NetworkDevice): NetworkDevice {
@@ -338,7 +297,7 @@ class NetworkDeviceService {
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const hardTimeout = setTimeout(() => {
-        try { stream?.end(); } catch {}
+        try { stream?.end(); } catch { /* ignore */ }
         reject(new Error('Command timeout'));
       }, timeoutMs);
 
@@ -351,7 +310,7 @@ class NetworkDeviceService {
       const finish = (ok: boolean, msg?: string) => {
         if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
         clearTimeout(hardTimeout);
-        try { stream?.end(); } catch {}
+        try { stream?.end(); } catch { /* ignore */ }
         if (ok) resolve();
         else reject(new Error(msg || 'No response from device'));
       };
@@ -368,7 +327,7 @@ class NetworkDeviceService {
             buffer = '';
             try {
               stream.write(command + '\n');
-            } catch (e) {
+            } catch (_e) {
               finish(false, 'Failed to send command');
             }
           }

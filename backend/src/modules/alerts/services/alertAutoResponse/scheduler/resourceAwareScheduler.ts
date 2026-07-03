@@ -10,7 +10,6 @@
  * =============================================================================
  */
 
-import db from '../../../../../models/database';
 import { logger } from '../../../../../utils/logger';
 import type { ScheduledTaskConfig, PriorityLevel, ResourceConstraints } from '../types';
 

@@ -16,13 +16,10 @@
 import type { QueueJob, QueueAdapter, QueueStats } from './queueService';
 
 // 延迟导入，仅在启用 Redis 时加载
-let Bull: any;
-let Queue: any;
-let Worker: any;
-let QueueScheduler: any;
+let Bull: Record<string, unknown> | null = null;
 
 export class BullQueueAdapter implements QueueAdapter {
-  private queue: any;
+  private queue: Record<string, unknown> | null = null;
   private redisUrl: string;
   private initialized = false;
 
@@ -35,10 +32,11 @@ export class BullQueueAdapter implements QueueAdapter {
 
     try {
       // 动态导入 BullMQ（可选依赖，不强制安装）
-      Bull = require('bullmq');
-      Queue = Bull.Queue;
-      Worker = Bull.Worker;
-      QueueScheduler = Bull.QueueScheduler;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      Bull = require('bullmq') as Record<string, unknown>;
+      const Queue = Bull.Queue as new (...args: unknown[]) => Record<string, unknown>;
+      const _Worker = Bull.Worker;
+      const QueueScheduler = Bull.QueueScheduler as new (...args: unknown[]) => Record<string, unknown>;
 
       this.queue = new Queue('itops-queue', {
         connection: { url: this.redisUrl },
@@ -87,11 +85,11 @@ export class BullQueueAdapter implements QueueAdapter {
     return null;
   }
 
-  async acknowledge(id: string): Promise<void> {
+  async acknowledge(_id: string): Promise<void> {
     // BullMQ 在 Worker 完成后自动 acknowledge
   }
 
-  async fail(id: string, error: string): Promise<void> {
+  async fail(_id: string, _error: string): Promise<void> {
     // BullMQ 在 Worker 抛出异常时自动 fail
   }
 

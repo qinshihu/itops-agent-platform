@@ -1,9 +1,8 @@
 import snmp from 'net-snmp';
 import { randomUUID } from 'crypto';
-import dgram from 'dgram';
-import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
-import { alertService } from '../../alerts/services/alertService';
+import { getErrorMessage } from '../../../utils/errorHelpers';
+import { snmpTrapEventsRepo, networkDeviceRepository, alertRepository } from '../../../repositories';
 
 // ================================================================
 // SNMP Trap 接收器
@@ -58,8 +57,8 @@ class SnmpTrapService {
       this.running = true;
 
       logger.info(`SNMP Trap receiver listening on ${address}:${port}`);
-    } catch (error: any) {
-      logger.error(`Failed to start SNMP Trap receiver: ${error.message}`);
+    } catch (error: unknown) {
+      logger.error(`Failed to start SNMP Trap receiver: ${getErrorMessage(error)}`);
     }
   }
 
@@ -111,8 +110,8 @@ class SnmpTrapService {
       this.injectAlert(event);
 
       logger.debug(`SNMP Trap received: type=${event.trap_type} from=${event.source_ip}`);
-    } catch (error: any) {
-      logger.error(`Failed to process SNMP trap: ${error.message}`);
+    } catch (error: unknown) {
+      logger.error(`Failed to process SNMP trap: ${getErrorMessage(error)}`);
     }
   }
 
@@ -121,21 +120,18 @@ class SnmpTrapService {
    */
   private saveTrapEvent(event: TrapEvent): void {
     try {
-      db.prepare(`
-        INSERT INTO snmp_trap_events (id, source_ip, trap_type, enterprise_oid, agent_address, generic_type, specific_type, varbinds_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        event.id,
-        event.source_ip,
-        event.trap_type,
-        event.enterprise_oid || '',
-        event.agent_address || '',
-        event.generic_type,
-        event.specific_type,
-        JSON.stringify(event.varbinds),
-      );
-    } catch (error: any) {
-      logger.error(`Failed to save trap event: ${error.message}`);
+      snmpTrapEventsRepo.insert({
+        id: event.id,
+        source_ip: event.source_ip,
+        trap_type: event.trap_type,
+        enterprise_oid: event.enterprise_oid || '',
+        agent_address: event.agent_address || '',
+        generic_type: event.generic_type,
+        specific_type: event.specific_type,
+        varbinds_json: JSON.stringify(event.varbinds),
+      });
+    } catch (error: unknown) {
+      logger.error(`Failed to save trap event: ${getErrorMessage(error)}`);
     }
   }
 
@@ -146,9 +142,7 @@ class SnmpTrapService {
     try {
       // 尝试匹配 trap 来源设备
       let deviceName = event.agent_address || event.source_ip;
-      const device = db.prepare(
-        "SELECT id, name FROM network_devices WHERE ip_address = ?"
-      ).get(event.source_ip) as { id: string; name: string } | undefined;
+      const device = networkDeviceRepository.getByIp(event.source_ip);
       if (device) deviceName = device.name;
 
       // Trap 类型 → 告警映射
@@ -187,30 +181,27 @@ class SnmpTrapService {
 
       const alertDef = trapAlerts[event.trap_type];
       if (alertDef) {
-        // 写入 alerts 表
         const alertId = randomUUID();
-        db.prepare(`
-          INSERT INTO alerts (id, source, severity, title, content, metadata, status)
-          VALUES (?, 'snmp_trap', ?, ?, ?, ?, 'new')
-        `).run(
-          alertId,
-          alertDef.severity,
-          alertDef.title,
-          alertDef.content,
-          JSON.stringify({
+        alertRepository.create({
+          id: alertId,
+          source: 'snmp_trap',
+          severity: alertDef.severity,
+          title: alertDef.title,
+          content: alertDef.content,
+          metadata: {
             source_ip: event.source_ip,
             generic_type: event.generic_type,
             specific_type: event.specific_type,
             varbinds: event.varbinds,
             device_name: deviceName,
             device_id: device?.id,
-          }),
-        );
+          },
+        });
 
         logger.info(`SNMP Trap → Alert: ${alertDef.title}`);
       }
-    } catch (error: any) {
-      logger.error(`Failed to inject alert from trap: ${error.message}`);
+    } catch (error: unknown) {
+      logger.error(`Failed to inject alert from trap: ${getErrorMessage(error)}`);
     }
   }
 
@@ -225,18 +216,7 @@ class SnmpTrapService {
    * 获取 Trap 历史
    */
   getTrapHistory(limit = 50, sourceIp?: string): TrapEvent[] {
-    let query: string;
-    let params: any[];
-
-    if (sourceIp) {
-      query = 'SELECT * FROM snmp_trap_events WHERE source_ip = ? ORDER BY created_at DESC LIMIT ?';
-      params = [sourceIp, limit];
-    } else {
-      query = 'SELECT * FROM snmp_trap_events ORDER BY created_at DESC LIMIT ?';
-      params = [limit];
-    }
-
-    const rows = db.prepare(query).all(...params) as any[];
+    const rows = snmpTrapEventsRepo.list(limit, sourceIp) as any[];
     return rows.map(r => ({
       id: r.id,
       source_ip: r.source_ip,

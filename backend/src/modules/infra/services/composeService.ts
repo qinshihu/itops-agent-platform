@@ -2,9 +2,10 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
-import { db } from '../../../models/database';
+import db from '../../../models/database';
 import fs from 'fs';
 import path from 'path';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 const execAsync = promisify(exec);
 
@@ -37,33 +38,7 @@ class ComposeService {
     if (!fs.existsSync(this.composeDataDir)) {
       fs.mkdirSync(this.composeDataDir, { recursive: true });
     }
-    // Tables initialized via ensureTables() called from app.ts after DB ready
-  }
-
-  ensureTables() {
-    this.initTables();
-  }
-
-  private initTables() {
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS compose_projects (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL UNIQUE,
-          description TEXT,
-          compose_content TEXT NOT NULL,
-          status TEXT DEFAULT 'stopped',
-          service_count INTEGER DEFAULT 0,
-          running_count INTEGER DEFAULT 0,
-          working_dir TEXT,
-          tags TEXT,
-          created_at TEXT DEFAULT (datetime('now','localtime')),
-          updated_at TEXT DEFAULT (datetime('now','localtime'))
-        )
-      `);
-    } catch (err) {
-      logger.error('Failed to create compose_projects table:', err);
-    }
+    // 表结构由 migration v044 维护，本服务不再 ensureTables。
   }
 
   /**
@@ -102,7 +77,7 @@ class ComposeService {
    */
   createProject(name: string, composeContent: string, description?: string, tags?: string[]): ComposeProject {
     const id = randomUUID();
-    const now = new Date().toISOString();
+    const _now = new Date().toISOString();
 
     const projectDir = path.join(this.composeDataDir, id);
     fs.mkdirSync(projectDir, { recursive: true });
@@ -152,7 +127,7 @@ class ComposeService {
     if (!project) throw new Error('项目不存在');
 
     if (project.status === 'running') {
-      try { await this.downProject(projectId); } catch {}
+      try { await this.downProject(projectId); } catch { /* ignore */ }
     }
 
     if (project.workingDir && fs.existsSync(project.workingDir)) {
@@ -179,9 +154,9 @@ class ComposeService {
 
       await this.refreshStatus(projectId);
       return stdout || stderr;
-    } catch (err: any) {
+    } catch (err: unknown) {
       db.prepare(`UPDATE compose_projects SET status='error', updated_at=datetime('now','localtime') WHERE id=?`).run(projectId);
-      throw new Error(err.stderr || err.message);
+      throw new Error((err as { stderr?: string }).stderr || getErrorMessage(err));
     }
   }
 
@@ -199,8 +174,8 @@ class ComposeService {
       });
       db.prepare(`UPDATE compose_projects SET status='stopped', running_count=0, updated_at=datetime('now','localtime') WHERE id=?`).run(projectId);
       return stdout || stderr;
-    } catch (err: any) {
-      throw new Error(err.stderr || err.message);
+    } catch (err: unknown) {
+      throw new Error((err as { stderr?: string }).stderr || getErrorMessage(err));
     }
   }
 
@@ -218,8 +193,8 @@ class ComposeService {
       });
       await this.refreshStatus(projectId);
       return stdout || stderr;
-    } catch (err: any) {
-      throw new Error(err.stderr || err.message);
+    } catch (err: unknown) {
+      throw new Error((err as { stderr?: string }).stderr || getErrorMessage(err));
     }
   }
 
@@ -265,8 +240,8 @@ class ComposeService {
         timeout: 15000,
       });
       return stdout;
-    } catch (err: any) {
-      return err.stdout || err.stderr || '';
+    } catch (err: unknown) {
+      return (err as { stdout?: string }).stdout || (err as { stderr?: string }).stderr || '';
     }
   }
 
@@ -279,10 +254,10 @@ class ComposeService {
       fs.mkdirSync(tempDir, { recursive: true });
       fs.writeFileSync(path.join(tempDir, 'docker-compose.yml'), content);
 
-      const { stderr } = await execAsync('docker compose config --quiet', { cwd: tempDir, timeout: 10000 });
+      await execAsync('docker compose config --quiet', { cwd: tempDir, timeout: 10000 });
       return { valid: true, errors: [] };
-    } catch (err: any) {
-      return { valid: false, errors: [err.stderr || err.message || '未知错误'] };
+    } catch (err: unknown) {
+      return { valid: false, errors: [(err as { stderr?: string }).stderr || getErrorMessage(err) || '未知错误'] };
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }

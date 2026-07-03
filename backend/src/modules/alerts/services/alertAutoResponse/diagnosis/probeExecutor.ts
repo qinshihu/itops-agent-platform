@@ -10,13 +10,12 @@
  * =============================================================================
  */
 
-import db from '../../../../../models/database';
+import { networkDeviceRepository, serversRepo } from '../../../../../repositories';
 import { decrypt } from '../../../../auth/services/encryptionService';
 import { withRetry } from '../../../../../utils/retry';
-import { logger } from '../../../../../utils/logger';
 import { Client } from 'ssh2';
-import { getProbeById } from '../probeUnit';
 import type { ProbeUnit, ProbeResult, DeviceRuntimeProfile } from '../types';
+import { getErrorMessage } from '../../../../../utils/errorHelpers';
 
 // SSDP 执行并发池
 const MAX_CONCURRENT = 5;
@@ -51,6 +50,7 @@ class ProbeExecutor {
     alertTitle: string | undefined,
     results: ProbeResult[]
   ): Promise<void> {
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       const probe = queue.shift();
       if (!probe) break;
@@ -58,13 +58,13 @@ class ProbeExecutor {
       try {
         const result = await this.executeSingleProbe(probe, device);
         results.push(result);
-      } catch (err: any) {
+      } catch (err: unknown) {
         results.push({
           probeId: probe.id,
           success: false,
-          rawOutput: `Executor error: ${err.message}`,
+          rawOutput: `Executor error: ${getErrorMessage(err)}`,
           durationMs: 0,
-          error: err.message,
+          error: getErrorMessage(err),
         });
       }
     }
@@ -83,13 +83,13 @@ class ProbeExecutor {
       } else {
         return await this.executeSshProbe(probe, device, start);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       return {
         probeId: probe.id,
         success: false,
-        rawOutput: `Error: ${err.message}`,
+        rawOutput: `Error: ${getErrorMessage(err)}`,
         durationMs: Date.now() - start,
-        error: err.message,
+        error: getErrorMessage(err),
       };
     }
   }
@@ -114,9 +114,9 @@ class ProbeExecutor {
           device
         );
         outputParts.push(`## ${cmdRaw}\n\`\`\`\n${output.trim() || '(no output)'}\n\`\`\``);
-      } catch (err: any) {
+      } catch (err: unknown) {
         allSuccess = false;
-        outputParts.push(`## ${cmdRaw}\n\`\`\`\n[ERROR] ${err.message}\n\`\`\``);
+        outputParts.push(`## ${cmdRaw}\n\`\`\`\n[ERROR] ${getErrorMessage(err)}\n\`\`\``);
       }
     }
 
@@ -140,9 +140,9 @@ class ProbeExecutor {
       // 从数据库获取设备的 community
       let community = 'public';
       try {
-        const nd = db.prepare('SELECT community FROM network_devices WHERE id = ?').get(device.deviceId) as { community: string } | undefined;
-        if (nd?.community) community = nd.community;
-      } catch {}
+        const comm = networkDeviceRepository.getCommunity(device.deviceId);
+        if (comm) community = comm;
+      } catch { /* ignore */ }
 
       const outputParts: string[] = [];
       let allSuccess = true;
@@ -154,9 +154,9 @@ class ProbeExecutor {
             { maxRetries: 2, initialDelayMs: 500 }
           );
           outputParts.push(`OID ${oid}: ${value}`);
-        } catch (err: any) {
+        } catch (err: unknown) {
           allSuccess = false;
-          outputParts.push(`OID ${oid}: [ERROR] ${err.message}`);
+          outputParts.push(`OID ${oid}: [ERROR] ${getErrorMessage(err)}`);
         }
       }
 
@@ -166,13 +166,13 @@ class ProbeExecutor {
         rawOutput: outputParts.join('\n'),
         durationMs: Date.now() - start,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       return {
         probeId: probe.id,
         success: false,
-        rawOutput: `SNMP error: ${err.message}`,
+        rawOutput: `SNMP error: ${getErrorMessage(err)}`,
         durationMs: Date.now() - start,
-        error: err.message,
+        error: getErrorMessage(err),
       };
     }
   }
@@ -184,7 +184,10 @@ class ProbeExecutor {
     return new Promise((resolve, reject) => {
       const conn = new Client();
       let output = '';
-      let timer: NodeJS.Timeout;
+      const timer: NodeJS.Timeout = setTimeout(() => {
+        conn.end();
+        reject(new Error(`SSH timeout after ${timeoutMs}ms`));
+      }, timeoutMs);
 
       conn.on('ready', () => {
         conn.exec(command, { pty: { term: 'vt100', cols: 200, rows: 50 } }, (err, stream) => {
@@ -197,11 +200,6 @@ class ProbeExecutor {
 
       conn.on('error', (err) => { clearTimeout(timer); reject(err); });
 
-      timer = setTimeout(() => {
-        conn.end();
-        reject(new Error(`SSH timeout after ${timeoutMs}ms`));
-      }, timeoutMs);
-
       // 获取凭证
       try {
         const creds = this.getDeviceCredentials(device);
@@ -212,7 +210,7 @@ class ProbeExecutor {
           password: creds.password,
           readyTimeout: timeoutMs,
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         clearTimeout(timer);
         reject(err);
       }
@@ -225,7 +223,7 @@ class ProbeExecutor {
   private getDeviceCredentials(device: DeviceRuntimeProfile): { username?: string; password?: string; port?: number } {
     try {
       if (device.type === 'server') {
-        const sv = db.prepare('SELECT username, password, port FROM servers WHERE id = ?').get(device.deviceId) as any;
+        const sv = serversRepo.getById(device.deviceId);
         if (sv) {
           return {
             username: sv.username,
@@ -234,7 +232,7 @@ class ProbeExecutor {
           };
         }
       } else {
-        const nd = db.prepare('SELECT username, password, ssh_port FROM network_devices WHERE id = ?').get(device.deviceId) as any;
+        const nd = networkDeviceRepository.getSshCredentials(device.deviceId);
         if (nd?.username) {
           return {
             username: nd.username,
@@ -257,10 +255,12 @@ class ProbeExecutor {
     return new Promise((resolve, reject) => {
       let snmp: any;
       try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         snmp = require('net-snmp');
       } catch {
         // 尝试从平台已有的 snmpService 获取
         try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
           const { getOID } = require('../../../../../services/services/snmpService');
           resolve(getOID(host, community, oid));
           return;

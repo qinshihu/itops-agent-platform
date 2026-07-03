@@ -127,7 +127,7 @@ export default function DataCenterManage() {
     }},
     { title: '所在机柜', dataIndex: 'rack_name', key: 'rack_name', render: (v: string) => v || '未分配' },
     { title: '额定功率(W)', dataIndex: 'power_capacity_w', key: 'power_capacity_w', render: (v: number) => v ? `${v}W` : '-' },
-    { title: '当前负载(W)', dataIndex: 'current_load_w', key: 'current_load_w', render: (v: number) => v != null ? `${v}W` : '-' },
+    { title: '当前负载(W)', dataIndex: 'current_load_w', key: 'current_load_w', render: (v: number) => v !== null && v !== undefined ? `${v}W` : '-' },
     { title: '输入电压(V)', dataIndex: 'input_voltage', key: 'input_voltage', render: (v: number) => v ? `${v}V` : '-' },
     { title: 'IP地址', dataIndex: 'ip_address', key: 'ip_address', render: (v: string) => v || '-' },
     {

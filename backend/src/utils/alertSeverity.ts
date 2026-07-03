@@ -44,7 +44,7 @@ const SEVERITY_MAP: Record<string, string> = {
  * @returns 归一化后的级别: critical | high | medium | low
  */
 export function normalizeSeverityLabel(raw: string | number | undefined | null): string {
-  if (raw == null) return 'medium';
+  if (raw === null || raw === undefined) return 'medium';
 
   const key = String(raw).toLowerCase().trim();
   const mapped = SEVERITY_MAP[key];

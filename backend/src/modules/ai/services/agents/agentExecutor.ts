@@ -1,6 +1,7 @@
+import { agentRepository, serversRepo } from '../../../../repositories';
 import db from '../../../../models/database';
 import { logger } from '../../../../utils/logger';
-import { executeAgentWithLLM, callDoubaoAPIWithTools, type LLMTool, type ToolCall } from '../llm/llmService';
+import { executeAgentWithLLM, generateCompletionWithTools } from '../llm/llmService';
 import { executeCommand, runComplianceCheck } from '../../../servers/services/sshService';
 import { AGENT_NAMES } from '../../../../constants/agentNames';
 import { decrypt } from '../../../auth/services/encryptionService';
@@ -125,15 +126,11 @@ type AgentRow = Pick<Agent, 'id' | 'name'> & { system_prompt: string };
 type ServerRow = Pick<Server, 'id' | 'name' | 'hostname'>;
 
 function getAgent(agentId: string): AgentRow | undefined {
-  return db.prepare(
-    'SELECT id, name, system_prompt FROM agents WHERE id = ?'
-  ).get(agentId) as AgentRow | undefined;
+  return agentRepository.getNamePrompt(agentId) as AgentRow | undefined;
 }
 
 function getEnabledServers(): ServerRow[] {
-  return db.prepare(
-    'SELECT id, name, hostname FROM servers WHERE enabled = 1'
-  ).all() as ServerRow[];
+  return serversRepo.listEnabled() as unknown as ServerRow[];
 }
 
 export async function executeAgentNode(
@@ -231,7 +228,7 @@ async function executeAgentNodeWithNativeFC(
   logger.info(`🤖 [${agent.name}] Native FC: ${mcpTools.length} tools available`);
 
   try {
-    const response = await callDoubaoAPIWithTools(
+    const response = await generateCompletionWithTools(
       agent.system_prompt,
       input,
       agent.name || 'Agent',
@@ -265,7 +262,7 @@ async function executeAgentNodeWithNativeFC(
  * 执行 Agent Node（支持工具调用的版本 - 旧版文本解析，已废弃）
  * @deprecated 请使用 executeAgentNodeWithNativeFC
  */
-async function executeAgentNodeWithTools(
+async function _executeAgentNodeWithTools(
   agent: AgentRow | undefined,
   input: string,
   conversationHistory: string[]

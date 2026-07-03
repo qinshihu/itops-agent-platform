@@ -1,7 +1,6 @@
 import path from 'path';
 import db from '../../../models/database';
 import { randomUUID } from 'crypto';
-import { logger } from '../../../utils/logger';
 import PDFDocument from 'pdfkit';
 
 export interface ReportTemplate {

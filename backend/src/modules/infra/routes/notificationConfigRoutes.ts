@@ -1,9 +1,8 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { db } from '../../../models/database';
 import { logger } from '../../../utils/logger';
 import { requireRole } from '../../../middleware/auth';
-import { notificationService } from '../services/notificationService';
+import { settingsRepository } from '../../../repositories';
 import { sendWeCom, sendDingTalk } from '../services/notificationChannels';
 import nodemailer from 'nodemailer';
 
@@ -12,13 +11,13 @@ const router = Router();
 // 获取通知配置
 router.get('/', requireRole('admin'), async (_req: Request, res: Response) => {
   try {
-    const configs = db.prepare('SELECT * FROM settings WHERE key LIKE ?').all('notification_%') as Array<{ key: string; value: string }>;
-    
+    const configs = settingsRepository.getByKeyPrefix('notification_');
+
     const config: Record<string, unknown> = {};
     configs.forEach((c) => {
       const key = c.key.replace('notification_', '');
       try {
-        config[key] = JSON.parse(c.value);
+        config[key] = JSON.parse(c.value ?? '');
       } catch {
         config[key] = c.value;
       }
@@ -132,26 +131,19 @@ router.put('/', requireRole('admin'), async (req: Request, res: Response) => {
       task_notification
     } = req.body;
 
-    const updates = [
-      { key: 'notification_webhook_enabled', value: JSON.stringify(webhook_enabled) },
-      { key: 'notification_email_enabled', value: JSON.stringify(email_enabled) },
-      { key: 'notification_wechat_enabled', value: JSON.stringify(wechat_enabled) },
-      { key: 'notification_dingtalk_enabled', value: JSON.stringify(dingtalk_enabled) },
-      { key: 'notification_email_config', value: JSON.stringify(email_config) },
-      { key: 'notification_wechat_config', value: JSON.stringify(wechat_config) },
-      { key: 'notification_dingtalk_config', value: JSON.stringify(dingtalk_config) },
-      { key: 'notification_alert_notification', value: JSON.stringify(alert_notification) },
-      { key: 'notification_task_notification', value: JSON.stringify(task_notification) }
-    ];
+    const updates: Record<string, string> = {
+      'notification_webhook_enabled': JSON.stringify(webhook_enabled),
+      'notification_email_enabled': JSON.stringify(email_enabled),
+      'notification_wechat_enabled': JSON.stringify(wechat_enabled),
+      'notification_dingtalk_enabled': JSON.stringify(dingtalk_enabled),
+      'notification_email_config': JSON.stringify(email_config),
+      'notification_wechat_config': JSON.stringify(wechat_config),
+      'notification_dingtalk_config': JSON.stringify(dingtalk_config),
+      'notification_alert_notification': JSON.stringify(alert_notification),
+      'notification_task_notification': JSON.stringify(task_notification)
+    };
 
-    const stmt = db.prepare(`
-      INSERT OR REPLACE INTO settings (key, value, updated_at)
-      VALUES (?, ?, datetime('now','localtime'))
-    `);
-
-    updates.forEach(update => {
-      stmt.run(update.key, update.value);
-    });
+    settingsRepository.upsertMany(updates);
 
     res.json({
       success: true,

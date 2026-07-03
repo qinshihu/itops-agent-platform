@@ -6,6 +6,7 @@ import { networkCommandGenerator } from '../services/networkCommandGenerator';
 import { snmpPollingService } from '../services/snmpPollingService';
 import { logger } from '../../../utils/logger';
 import { requireRole } from '../../../middleware/auth';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -182,9 +183,9 @@ router.post('/:id/inspect-snmp', requireRole('admin'), async (req: Request, res:
       return res.status(400).json({ success: false, error: '设备未启用 SNMP 或不存在' });
     }
     res.json({ success: true, data: result });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('SNMP inspection failed:', error);
-    res.status(500).json({ success: false, error: error.message || 'SNMP 巡检失败' });
+    res.status(500).json({ success: false, error: getErrorMessage(error) || 'SNMP 巡检失败' });
   }
 });
 

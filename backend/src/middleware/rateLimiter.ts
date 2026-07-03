@@ -33,15 +33,16 @@ const ipWhitelist: readonly string[] = env.WEBHOOK_IP_WHITELIST
   : [];
 
 function isIpWhitelisted(ip: string | undefined): boolean {
-  if (ipWhitelist.length === 0) return true;
+  if (ipWhitelist.length === 0) return false;
   if (!ip) return false;
 
   const clientIp = ip.replace(/^::ffff:/, '');
   return ipWhitelist.some(whitelistedIp => {
+    if (whitelistedIp === '*') return true;
     if (whitelistedIp.includes('/')) {
       return isIpInCidr(clientIp, whitelistedIp);
     }
-    return clientIp === whitelistedIp || whitelistedIp === '*';
+    return clientIp === whitelistedIp;
   });
 }
 

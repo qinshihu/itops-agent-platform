@@ -10,13 +10,13 @@
  */
 
 import { z } from 'zod';
+import type {
+  RiskLevel} from './types';
 import {
   type RegisteredTool,
   type ToolDefinition,
   type ToolCallResult,
   type ToolCallContext,
-  type ToolHandler,
-  RiskLevel,
   MCP_TOOL_NAME_MAX_CHARS,
   MCP_TOOL_DESCRIPTION_MAX_CHARS,
   MCP_RATE_LIMIT_PER_MINUTE,

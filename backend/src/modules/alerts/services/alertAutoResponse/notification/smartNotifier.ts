@@ -11,9 +11,9 @@
  */
 
 import { notificationService } from '../../../../infra/services/notificationService';
-import db from '../../../../../models/database';
 import { logger } from '../../../../../utils/logger';
 import type { DeviceRuntimeProfile } from '../types';
+import { getErrorMessage } from '../../../../../utils/errorHelpers';
 
 export type NotificationReason =
   | 'diagnosis_complete'
@@ -54,8 +54,8 @@ class SmartNotifier {
           related_alert_id: params.alertId,
         });
         logger.info(`[SmartNotifier] Sent ${params.reason} notification via ${channel}`);
-      } catch (err: any) {
-        logger.warn(`[SmartNotifier] Failed to send via ${channel}: ${err.message}`);
+      } catch (err: unknown) {
+        logger.warn(`[SmartNotifier] Failed to send via ${channel}: ${getErrorMessage(err)}`);
       }
     }
   }

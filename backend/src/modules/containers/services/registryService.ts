@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
-import { db } from '../../../models/database';
+import db from '../../../models/database';
 import { credentialService } from '../../auth/services/credentialService';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 interface RegistryConfig {
   id: string;
@@ -33,35 +34,7 @@ interface RegistryImage {
 
 class RegistryService {
   constructor() {
-    // Tables initialized via ensureTables() called from app.ts after DB ready
-  }
-
-  ensureTables() {
-    this.initTables();
-  }
-
-  private initTables() {
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS image_registries (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          type TEXT NOT NULL,
-          url TEXT NOT NULL,
-          username TEXT,
-          encrypted_password TEXT,
-          encrypted_password_iv TEXT,
-          status TEXT DEFAULT 'inactive',
-          error_message TEXT,
-          project_count INTEGER DEFAULT 0,
-          repo_count INTEGER DEFAULT 0,
-          created_at TEXT DEFAULT (datetime('now','localtime')),
-          updated_at TEXT DEFAULT (datetime('now','localtime'))
-        )
-      `);
-    } catch (err) {
-      logger.error('Failed to create image_registries table:', err);
-    }
+    // 表结构由 migration v045 维护，本服务不再 ensureTables。
   }
 
   private decryptPassword(registry: any): string {
@@ -69,7 +42,7 @@ class RegistryService {
       if (registry.encrypted_password && registry.encrypted_password_iv) {
         return credentialService.decryptCredential(registry.encrypted_password, registry.encrypted_password_iv);
       }
-    } catch {}
+    } catch { /* ignore */ }
     return '';
   }
 
@@ -204,10 +177,10 @@ class RegistryService {
           }
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       db.prepare(`UPDATE image_registries SET status='error', error_message=?, updated_at=datetime('now','localtime') WHERE id=?`)
-        .run(err.message, registryId);
-      return { success: false, message: err.message };
+        .run(getErrorMessage(err), registryId);
+      return { success: false, message: getErrorMessage(err) };
     }
   }
 
@@ -251,8 +224,8 @@ class RegistryService {
                   }
                 }
               }
-            } catch (err: any) {
-              logger.warn(`Failed to fetch Harbor project ${p}:`, err.message);
+            } catch (err: unknown) {
+              logger.warn(`Failed to fetch Harbor project ${p}:`, getErrorMessage(err));
             }
           }
           return images;
@@ -276,8 +249,8 @@ class RegistryService {
           return [];
         }
       }
-    } catch (err: any) {
-      logger.error('Failed to list registry images:', err.message);
+    } catch (err: unknown) {
+      logger.error('Failed to list registry images:', getErrorMessage(err));
       return [];
     }
   }

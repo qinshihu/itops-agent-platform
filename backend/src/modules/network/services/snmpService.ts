@@ -1,103 +1,22 @@
 import snmp from 'net-snmp';
 import { decrypt } from '../../auth/services/encryptionService';
-import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
+import { snmpCredentialsRepo, networkDeviceRepository } from '../../../repositories';
 import {
   SYSTEM_OIDS,
   IF_MIB_OIDS,
-  ENTITY_MIB_OIDS,
-  LLDP_MIB_OIDS,
   VENDOR_OIDS,
   IANA_IF_TYPE,
-  INTERFACE_THRESHOLDS,
 } from './snmpOidRegistry';
-import { VendorType } from './vendorAdapter';
-
-// ================================================================
-// 类型定义
-// ================================================================
-
-// net-snmp Counter64 类型值为 70
-const SNMP_COUNTER64_TYPE = 70;
-
-/** 将 Counter64 Buffer 字节转为 BigInt 的十进制字符串 */
-function counter64BufferToString(buf: Buffer): string {
-  if (buf.length === 0) return '0';
-  let result = BigInt(0);
-  for (const byte of buf) {
-    result = (result << BigInt(8)) + BigInt(byte);
-  }
-  return result.toString();
-}
-
-/** 统一处理 SNMP 返回值：Counter64 转数字字符串，Buffer 转 UTF-8，其余不变 */
-function normalizeSnmpValue(type: number | undefined, value: any): any {
-  if (Buffer.isBuffer(value)) {
-    if (type === SNMP_COUNTER64_TYPE) {
-      return counter64BufferToString(value);
-    }
-    return value.toString('utf8');
-  }
-  return value;
-}
-
-export type SnmpVersion = 'v1' | 'v2c' | 'v3';
-
-export interface SnmpCredential {
-  id: string;
-  device_id?: string;
-  name: string;
-  community?: string;      // v1/v2c
-  snmp_user?: string;      // v3
-  snmp_auth_protocol?: 'MD5' | 'SHA';
-  snmp_auth_key?: string;
-  snmp_priv_protocol?: 'DES' | 'AES';
-  snmp_priv_key?: string;
-  snmp_version: SnmpVersion;
-  snmp_port: number;
-}
-
-export interface SnmpResult {
-  oid: string;
-  value: any;
-  type?: number;
-  typeName?: string;
-}
-
-export interface InterfaceInfo {
-  index: number;
-  name: string;
-  descr: string;
-  type: number;
-  typeName: string;
-  speed: number;          // bps
-  mtu: number;
-  mac: string;
-  adminStatus: 'up' | 'down';
-  operStatus: 'up' | 'down';
-  alias: string;
-  inOctets: number;
-  outOctets: number;
-  inErrors: number;
-  outErrors: number;
-  inUtilization: number;  // %
-  outUtilization: number; // %
-}
-
-export interface DeviceHealth {
-  sysName: string;
-  sysDescr: string;
-  sysUptime: number;
-  sysLocation: string;
-  sysContact: string;
-  cpuUsage: number | null;
-  memoryUsage: number | null;
-  temperature: number | null;
-  interfaceCount: number;
-  interfacesUp: number;
-  interfacesDown: number;
-  interfaceHighUtil: number; // >80% interfaces
-}
+export type { SnmpVersion, SnmpCredential, SnmpResult, InterfaceInfo, DeviceHealth } from './snmpTypes';
+import {
+  normalizeSnmpValue,
+  type SnmpVersion,
+  type SnmpCredential,
+  type SnmpResult,
+  type InterfaceInfo,
+  type DeviceHealth,
+} from './snmpTypes';
 
 // ================================================================
 // SNMP 服务
@@ -109,9 +28,7 @@ class SnmpService {
    * 获取设备 SNMP 凭证
    */
   getCredential(deviceId: string): SnmpCredential | null {
-    const row = db.prepare(
-      'SELECT * FROM snmp_credentials WHERE device_id = ? ORDER BY snmp_version DESC LIMIT 1'
-    ).get(deviceId) as any;
+    const row = snmpCredentialsRepo.getByDeviceId(deviceId);
     if (!row) return null;
 
     return {
@@ -133,9 +50,7 @@ class SnmpService {
    * 获取默认凭证（全局 community string）
    */
   getDefaultCredential(): SnmpCredential | null {
-    const row = db.prepare(
-      'SELECT * FROM snmp_credentials WHERE device_id IS NULL LIMIT 1'
-    ).get() as any;
+    const row = snmpCredentialsRepo.getDefault();
     if (!row) return null;
 
     return {
@@ -401,8 +316,8 @@ class SnmpService {
       const outOctets = BigInt(outOctetsHCMap.get(idx) || outOctets32Map.get(idx) || '0');
 
       // 模拟实时利用率（这里拿到的是累积值；真实需要两次采样间隔，当前给累积值参考）
-      const inUtil = effectiveSpeed > 0 ? Math.min(100, Number(inOctets) * 8 / effectiveSpeed / 100 * 100) : 0;
-      const outUtil = effectiveSpeed > 0 ? Math.min(100, Number(outOctets) * 8 / effectiveSpeed / 100 * 100) : 0;
+      const _inUtil = effectiveSpeed > 0 ? Math.min(100, Number(inOctets) * 8 / effectiveSpeed / 100 * 100) : 0;
+      const _outUtil = effectiveSpeed > 0 ? Math.min(100, Number(outOctets) * 8 / effectiveSpeed / 100 * 100) : 0;
 
       const adminStatus = adminMap.get(idx) === '1' ? 'up' : 'down';
       const operStatus = operMap.get(idx) === '1' ? 'up' : 'down';
@@ -438,8 +353,7 @@ class SnmpService {
     const credential = this.getCredential(deviceId) || this.getDefaultCredential();
     if (!credential) return null;
 
-    const device = db.prepare('SELECT id, name, ip_address, vendor FROM network_devices WHERE id = ?')
-      .get(deviceId) as any;
+    const device = networkDeviceRepository.getByIdWithVendor(deviceId);
     if (!device) return null;
 
     const targetHost = host || device.ip_address;

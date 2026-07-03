@@ -14,14 +14,16 @@
  * 支持 MCP 客户端（Claude Desktop、Cursor 等）通过 SSE 或直接 HTTP 连接
  */
 
-import { Router, Request, Response } from 'express';
+import type { Request, Response } from 'express';
+import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { toolRegistry } from './toolRegistry';
 import { securityGate } from './securityGate';
 import { externalServerManager } from './externalServerManager';
+import type {
+  JsonRpcResponse} from './types';
 import {
   JsonRpcRequestSchema,
-  JsonRpcResponse,
   InitializeParamsSchema,
   ToolCallParamsSchema,
   MCPMethod,
@@ -31,6 +33,10 @@ import {
   type ToolCallContext,
 } from './types';
 import { logger } from '../../utils/logger';
+
+interface AuthenticatedRequest extends Request {
+  user?: { id: string; username: string };
+}
 
 const router = Router();
 
@@ -163,8 +169,8 @@ router.post('/message', async (req: Request, res: Response) => {
     const params = rpcRequest.params || {};
 
     const context: ToolCallContext = {
-      userId: (req as any).user?.id,
-      username: (req as any).user?.username,
+      userId: (req as AuthenticatedRequest).user?.id,
+      username: (req as AuthenticatedRequest).user?.username,
       sessionId: session.sessionId,
       traceId: (req.headers['x-trace-id'] as string) || rpcRequest.id?.toString(),
       securityChecked: false,
@@ -174,8 +180,8 @@ router.post('/message', async (req: Request, res: Response) => {
     let result: unknown;
     switch (method) {
       case MCPMethod.INITIALIZE:
-        if (params && (params as any).clientInfo) {
-          session.clientInfo = (params as any).clientInfo;
+        if (params && (params as Record<string, unknown>).clientInfo) {
+          session.clientInfo = (params as Record<string, unknown>).clientInfo as { name: string; version: string };
         }
         result = handleInitialize(params, session);
         break;
@@ -269,7 +275,7 @@ router.post('/rpc', async (req: Request, res: Response) => {
 
     // 如果是 ToolCallResult（含 isError），包装为 JSON-RPC 响应
     if (result && typeof result === 'object' && 'isError' in result) {
-      const toolResult = result as { isError: boolean };
+      const _toolResult = result as { isError: boolean };
       // 工具调用成功但业务错误 → 仍返回 200，通过 isError 标识
       res.json(buildSuccess(rpcRequest.id, result));
       return;
@@ -393,7 +399,7 @@ function handleInitialize(params: unknown, session?: McpSession) {
 
   // SSE 传输：告知客户端消息端点
   if (session) {
-    (result as any)._meta = {
+    (result as Record<string, unknown>)._meta = {
       sessionId: session.sessionId,
       messageEndpoint: `/api/mcp/message?sessionId=${session.sessionId}`,
     };

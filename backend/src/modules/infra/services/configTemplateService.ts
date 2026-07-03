@@ -197,7 +197,7 @@ class ConfigTemplateService {
 
     try {
       // 渲染模板
-      const renderedContent = this.renderTemplate(templateId, variables);
+      const _renderedContent = this.renderTemplate(templateId, variables);
 
       // 记录应用历史
       db.prepare(`

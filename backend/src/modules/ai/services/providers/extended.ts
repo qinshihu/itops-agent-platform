@@ -790,7 +790,7 @@ export const kubernetesProvider: Provider = {
 
 // Kubernetes 方法实现（简化版）
 export const kubernetesMethods = {
-  async listPods(params: any): Promise<ProviderResult> {
+  async listPods(_params: any): Promise<ProviderResult> {
     // 简化实现，实际需要 kubernetes-client 库
     logger.info('[KubernetesProvider] listPods called');
     return {
@@ -801,7 +801,7 @@ export const kubernetesMethods = {
     };
   },
 
-  async getPodLogs(params: any): Promise<ProviderResult> {
+  async getPodLogs(_params: any): Promise<ProviderResult> {
     logger.info('[KubernetesProvider] getPodLogs called');
     return {
       success: true,
@@ -811,7 +811,7 @@ export const kubernetesMethods = {
     };
   },
 
-  async listNodes(params: any): Promise<ProviderResult> {
+  async listNodes(_params: any): Promise<ProviderResult> {
     logger.info('[KubernetesProvider] listNodes called');
     return {
       success: true,

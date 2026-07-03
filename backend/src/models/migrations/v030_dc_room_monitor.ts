@@ -14,7 +14,7 @@ export function up(db: Database) {
   } catch { /* column may already exist */ }
 }
 
-export function down(db: Database) {
+export function down(_db: Database) {
   // SQLite doesn't support DROP COLUMN in older versions
   // no-op
 }

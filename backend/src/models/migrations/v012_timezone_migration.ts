@@ -43,7 +43,7 @@ const migration: Migration = {
           if (result.changes > 0) {
             totalRows += result.changes;
           }
-        } catch (e) {
+        } catch (_e) {
           // 某些列可能不是文本格式，跳过
         }
       }
@@ -77,7 +77,7 @@ const migration: Migration = {
           if (result.changes > 0) {
             totalRows += result.changes;
           }
-        } catch (e) {
+        } catch (_e) {
           // skip
         }
       }

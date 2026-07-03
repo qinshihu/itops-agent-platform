@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
-import { db } from '../../../models/database';
+import db from '../../../models/database';
 import { vmManagementService } from '../../containers/services/vmManagement';
 
 interface SnapshotPolicy {
@@ -22,35 +22,15 @@ class VmSnapshotSchedulerService {
   private intervals: Map<string, NodeJS.Timeout> = new Map();
 
   constructor() {
-    // Tables and policies initialized via ensureTables() called from app.ts after DB ready
+    // 表结构由 migration v050 维护；本服务的运行时策略加载由 initialize() 负责。
   }
 
-  ensureTables() {
-    this.initTables();
+  /**
+   * 启动时加载已启用的快照策略
+   * （原 ensureTables() 的运行时部分，schema 已下沉到 migration v050）
+   */
+  initialize() {
     this.loadPolicies();
-  }
-
-  private initTables() {
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS vm_snapshot_policies (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          platform_id TEXT NOT NULL,
-          vm_id TEXT NOT NULL,
-          cron_expression TEXT NOT NULL,
-          retention INTEGER DEFAULT 7,
-          snapshot_memory INTEGER DEFAULT 1,
-          enabled INTEGER DEFAULT 1,
-          last_run_at TEXT,
-          next_run_at TEXT,
-          created_at TEXT DEFAULT (datetime('now','localtime')),
-          updated_at TEXT DEFAULT (datetime('now','localtime'))
-        )
-      `);
-    } catch (err) {
-      logger.error('Failed to create vm_snapshot_policies table:', err);
-    }
   }
 
   private loadPolicies() {

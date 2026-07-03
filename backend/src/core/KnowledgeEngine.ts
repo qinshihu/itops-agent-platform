@@ -62,63 +62,8 @@ class KnowledgeEngine {
 
   init(): void {
     if (this.initialized) return;
-    this.ensureTable();
     this.initialized = true;
     logger.info('📚 KnowledgeEngine 统一知识引擎已启动');
-  }
-
-  private ensureTable(): void {
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS knowledge_base (
-          id TEXT PRIMARY KEY,
-          title TEXT NOT NULL,
-          category TEXT NOT NULL DEFAULT 'general',
-          content TEXT,
-          tags TEXT,
-          solutions TEXT,
-          source TEXT DEFAULT 'manual',
-          alert_id TEXT,
-          workflow_id TEXT,
-          task_id TEXT,
-          server_id TEXT,
-          success_rating REAL DEFAULT 0.5,
-          duration_ms INTEGER,
-          usage_count INTEGER DEFAULT 1,
-          created_at DATETIME DEFAULT (datetime('now','localtime')),
-          updated_at DATETIME DEFAULT (datetime('now','localtime'))
-        );
-        CREATE INDEX IF NOT EXISTS idx_kb_category ON knowledge_base(category);
-        CREATE INDEX IF NOT EXISTS idx_kb_source ON knowledge_base(source);
-        CREATE INDEX IF NOT EXISTS idx_kb_alert_id ON knowledge_base(alert_id);
-        CREATE INDEX IF NOT EXISTS idx_kb_workflow_id ON knowledge_base(workflow_id);
-      `);
-    } catch (e) {
-      logger.warn('knowledge_base 表已存在或创建失败');
-    }
-
-    // 保证现有表的列存在（兼容旧数据）
-    try {
-      db.exec('ALTER TABLE knowledge_base ADD COLUMN success_rating REAL DEFAULT 0.5');
-    } catch { /* 列已存在 */ }
-    try {
-      db.exec('ALTER TABLE knowledge_base ADD COLUMN source TEXT DEFAULT \'manual\'');
-    } catch { /* 列已存在 */ }
-    try {
-      db.exec('ALTER TABLE knowledge_base ADD COLUMN alert_id TEXT');
-    } catch { /* 列已存在 */ }
-    try {
-      db.exec('ALTER TABLE knowledge_base ADD COLUMN workflow_id TEXT');
-    } catch { /* 列已存在 */ }
-    try {
-      db.exec('ALTER TABLE knowledge_base ADD COLUMN task_id TEXT');
-    } catch { /* 列已存在 */ }
-    try {
-      db.exec('ALTER TABLE knowledge_base ADD COLUMN server_id TEXT');
-    } catch { /* 列已存在 */ }
-    try {
-      db.exec('ALTER TABLE knowledge_base ADD COLUMN duration_ms INTEGER');
-    } catch { /* 列已存在 */ }
   }
 
   // ── 存储 ──
@@ -182,7 +127,7 @@ class KnowledgeEngine {
     const parts: string[] = [];
     parts.push(`# ${params.workflowName} - 执行记录\n`);
 
-    for (const [nodeId, result] of Object.entries(params.nodeResults)) {
+    for (const [_nodeId, result] of Object.entries(params.nodeResults)) {
       if (result.output) {
         parts.push(`## 节点输出\n${result.output.substring(0, 500)}\n`);
       }
@@ -309,7 +254,7 @@ class KnowledgeEngine {
   /**
    * 按关键词模糊搜索（标题 + 内容）
    */
-  search(keyword: string, limit: number = 10): KnowledgeEntry[] {
+  search(keyword: string, limit = 10): KnowledgeEntry[] {
     const likePattern = `%${keyword}%`;
     const rows = db.prepare(`
       SELECT * FROM knowledge_base
@@ -325,7 +270,7 @@ class KnowledgeEngine {
    * 智能推荐：根据告警信息查找最匹配的历史案例
    * 返回按相似度排序的匹配列表
    */
-  recommend(alertTitle: string, alertContent?: string, limit: number = 5): KnowledgeMatch[] {
+  recommend(alertTitle: string, alertContent?: string, limit = 5): KnowledgeMatch[] {
     const titleWords = this.tokenize(alertTitle);
     if (titleWords.length === 0) return [];
 

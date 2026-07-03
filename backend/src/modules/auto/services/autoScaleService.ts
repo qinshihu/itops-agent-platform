@@ -1,7 +1,8 @@
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
-import { db } from '../../../models/database';
+import db from '../../../models/database';
 import { dockerService } from '../../containers/services/dockerService';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 interface ScaleRule {
   id: string;
@@ -42,38 +43,15 @@ class AutoScaleService {
   private cooldowns: Map<string, number> = new Map();
 
   constructor() {
-    // Tables and checker initialized via init() called from app.ts after DB ready
+    // 表结构由 migration v048 维护；本服务的运行时定时检查由 initialize() 负责。
   }
 
-  ensureTables() {
-    this.initTables();
+  /**
+   * 启动时启动伸缩规则检查定时器
+   * （原 ensureTables() 的运行时部分，schema 已下沉到 migration v048）
+   */
+  initialize() {
     this.startChecker();
-  }
-
-  private initTables() {
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS auto_scale_rules (
-          id TEXT PRIMARY KEY, name TEXT NOT NULL,
-          target_type TEXT NOT NULL, target_id TEXT NOT NULL, target_name TEXT,
-          metric_type TEXT NOT NULL, threshold REAL NOT NULL, target_value REAL NOT NULL,
-          min_instances INTEGER DEFAULT 1, max_instances INTEGER DEFAULT 10,
-          scale_up_cooldown INTEGER DEFAULT 300, scale_down_cooldown INTEGER DEFAULT 600,
-          enabled INTEGER DEFAULT 1, last_scale_time TEXT,
-          created_at TEXT DEFAULT (datetime('now','localtime')),
-          updated_at TEXT DEFAULT (datetime('now','localtime'))
-        );
-        CREATE TABLE IF NOT EXISTS auto_scale_history (
-          id TEXT PRIMARY KEY, rule_id TEXT, rule_name TEXT,
-          target_type TEXT, target_id TEXT,
-          action TEXT, previous_count INTEGER, current_count INTEGER,
-          metric_value REAL, result TEXT, reason TEXT,
-          timestamp TEXT DEFAULT (datetime('now','localtime'))
-        );
-      `);
-    } catch (err) {
-      logger.error('Failed to create auto_scale tables:', err);
-    }
   }
 
   private startChecker() {
@@ -128,8 +106,8 @@ class AutoScaleService {
       db.prepare(`UPDATE auto_scale_rules SET last_scale_time=datetime('now','localtime') WHERE id=?`).run(rule.id);
       this.logHistory(rule, 'scale_up', currentCount, newCount, metricValue, 'success');
       logger.info(`📈 Scale up: ${rule.name} (${currentCount} → ${newCount})`);
-    } catch (err: any) {
-      this.logHistory(rule, 'scale_up', currentCount, currentCount, metricValue, 'failed', err.message);
+    } catch (err: unknown) {
+      this.logHistory(rule, 'scale_up', currentCount, currentCount, metricValue, 'failed', getErrorMessage(err));
     }
   }
 
@@ -141,8 +119,8 @@ class AutoScaleService {
       db.prepare(`UPDATE auto_scale_rules SET last_scale_time=datetime('now','localtime') WHERE id=?`).run(rule.id);
       this.logHistory(rule, 'scale_down', currentCount, newCount, metricValue, 'success');
       logger.info(`📉 Scale down: ${rule.name} (${currentCount} → ${newCount})`);
-    } catch (err: any) {
-      this.logHistory(rule, 'scale_down', currentCount, currentCount, metricValue, 'failed', err.message);
+    } catch (err: unknown) {
+      this.logHistory(rule, 'scale_down', currentCount, currentCount, metricValue, 'failed', getErrorMessage(err));
     }
   }
 

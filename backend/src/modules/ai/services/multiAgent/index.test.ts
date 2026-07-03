@@ -3,11 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock upstream dependencies
 vi.mock("../../../../models/database", () => ({ default: {}, db: {}, initializeDatabase: vi.fn(), performMaintenance: vi.fn(), getIOInstance: vi.fn() }));
 vi.mock("../../../../utils/logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), shutdown: vi.fn() } }));
-vi.mock("../llm/llmService.ts", () => ({
-  callDoubaoAPI: vi.fn(),
-  callOpenAIAPI: vi.fn(),
-  callLocalAIAPI: vi.fn(),
+vi.mock("../llm/llmService", () => ({
   generateCompletion: vi.fn(),
+  generateCompletionWithTools: vi.fn(),
   checkLLMAvailability: vi.fn(),
 }));
 

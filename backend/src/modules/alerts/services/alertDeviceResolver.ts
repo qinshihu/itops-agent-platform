@@ -1,5 +1,5 @@
-import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
+import { serversRepo, networkDeviceRepository, deviceAssociationsRepo } from '../../../repositories';
 
 // ================================================================
 // 告警→设备自动关联服务
@@ -25,7 +25,7 @@ class AlertDeviceResolver {
    * 解析告警关联的设备
    * 返回最匹配的设备，如果没有命中返回 null
    */
-  resolve(alertId: string, title: string, content: string, hostname?: string, source?: string): AlertDeviceAssociation | null {
+  resolve(alertId: string, title: string, content: string, hostname?: string, _source?: string): AlertDeviceAssociation | null {
     // 策略 1: 精确主机名匹配（告警中的 hostname）
     if (hostname) {
       const match = this.matchByHostname(hostname);
@@ -53,10 +53,13 @@ class AlertDeviceResolver {
    * 保存告警-设备关联到数据库
    */
   saveAssociation(alertId: string, deviceType: 'server' | 'network_device', deviceId: string, matchMethod: string, confidence: number): void {
-    db.prepare(`
-      INSERT OR REPLACE INTO alert_device_associations (alert_id, device_type, device_id, match_method, confidence, created_at)
-      VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))
-    `).run(alertId, deviceType, deviceId, matchMethod, confidence);
+    deviceAssociationsRepo.save({
+      alert_id: alertId,
+      device_type: deviceType,
+      device_id: deviceId,
+      match_method: matchMethod,
+      confidence,
+    });
 
     logger.debug(`Alert ${alertId} associated with ${deviceType}:${deviceId} (${matchMethod}, ${confidence}%)`);
   }
@@ -65,21 +68,15 @@ class AlertDeviceResolver {
    * 获取告警关联的设备信息
    */
   getDeviceForAlert(alertId: string): { device_type: string; device_id: string; device_name: string } | null {
-    const assoc = db.prepare(`
-      SELECT ad.device_type, ad.device_id, ad.match_method
-      FROM alert_device_associations ad
-      WHERE ad.alert_id = ?
-    `).get(alertId) as any;
+    const assoc = deviceAssociationsRepo.getByAlertId(alertId);
 
     if (!assoc) return null;
 
     if (assoc.device_type === 'server') {
-      const server = db.prepare('SELECT id, hostname as name FROM servers WHERE id = ?')
-        .get(assoc.device_id) as any;
-      if (server) return { ...assoc, device_name: server.name };
+      const server = serversRepo.getIdHostnameById(assoc.device_id);
+      if (server) return { ...assoc, device_name: server.hostname };
     } else {
-      const device = db.prepare('SELECT id, name FROM network_devices WHERE id = ?')
-        .get(assoc.device_id) as any;
+      const device = networkDeviceRepository.getByIdNameOnly(assoc.device_id);
       if (device) return { ...assoc, device_name: device.name };
     }
 
@@ -93,9 +90,7 @@ class AlertDeviceResolver {
     const hn = hostname.trim();
 
     // 1. 精确匹配服务器 hostname
-    const server = db.prepare(
-      "SELECT id, hostname FROM servers WHERE hostname = ? OR hostname LIKE ? OR hostname LIKE ?"
-    ).get(hn, `%-${hn}%`, `${hn}-%`) as { id: string; hostname: string } | undefined;
+    const server = serversRepo.findIdHostnameByHostname(hn, `%-${hn}%`, `${hn}-%`);
     if (server) {
       return {
         alert_id: '',
@@ -108,9 +103,7 @@ class AlertDeviceResolver {
     }
 
     // 2. 精确匹配网络设备名
-    const device = db.prepare(
-      "SELECT id, name FROM network_devices WHERE name = ? OR ip_address = ?"
-    ).get(hn, hn) as { id: string; name: string } | undefined;
+    const device = networkDeviceRepository.getByNameOrIp(hn, hn);
     if (device) {
       return {
         alert_id: '',
@@ -123,9 +116,7 @@ class AlertDeviceResolver {
     }
 
     // 3. 模糊匹配（主机名前缀）
-    const serverFuzzy = db.prepare(
-      "SELECT id, hostname FROM servers WHERE hostname LIKE ? OR ? LIKE CONCAT('%', hostname) LIMIT 1"
-    ).get(`%${hn}%`, hn) as { id: string; hostname: string } | undefined;
+    const serverFuzzy = serversRepo.findIdHostnameByHostnameFuzzy(`%${hn}%`, hn);
     if (serverFuzzy) {
       return {
         alert_id: '',
@@ -155,9 +146,7 @@ class AlertDeviceResolver {
 
     for (const ip of ips) {
       // 检查是否是服务器 IP
-      const server = db.prepare(
-        "SELECT id, hostname FROM servers WHERE ip_address = ? OR hostname LIKE ?"
-      ).get(ip, `%${ip}%`) as { id: string; hostname: string } | undefined;
+      const server = serversRepo.findIdHostnameByIpOrHostname(ip, `%${ip}%`);
       if (server) {
         return {
           alert_id: '',
@@ -170,9 +159,7 @@ class AlertDeviceResolver {
       }
 
       // 检查是否是网络设备 IP
-      const device = db.prepare(
-        "SELECT id, name FROM network_devices WHERE ip_address = ?"
-      ).get(ip) as { id: string; name: string } | undefined;
+      const device = networkDeviceRepository.getByIp(ip);
       if (device) {
         return {
           alert_id: '',
@@ -197,9 +184,7 @@ class AlertDeviceResolver {
 
     for (const kw of [...new Set(keywords)]) {
       // 服务器匹配
-      const server = db.prepare(
-        "SELECT id, hostname FROM servers WHERE hostname LIKE ? LIMIT 1"
-      ).get(`%${kw}%`) as { id: string; hostname: string } | undefined;
+      const server = serversRepo.findIdHostnameByHostnameLike(`%${kw}%`);
       if (server) {
         return {
           alert_id: '',
@@ -212,9 +197,7 @@ class AlertDeviceResolver {
       }
 
       // 网络设备匹配
-      const device = db.prepare(
-        "SELECT id, name FROM network_devices WHERE name LIKE ? LIMIT 1"
-      ).get(`%${kw}%`) as { id: string; name: string } | undefined;
+      const device = networkDeviceRepository.findByNameLike(`%${kw}%`);
       if (device) {
         return {
           alert_id: '',
@@ -231,10 +214,7 @@ class AlertDeviceResolver {
   }
 
   private recordUnmatchedAlert(alertId: string, title: string, hostname?: string): void {
-    db.prepare(`
-      INSERT OR IGNORE INTO alert_device_match_log (id, alert_title, alert_hostname, match_method, matched)
-      VALUES (?, ?, ?, 'auto', 0)
-    `).run(alertId, title?.substring(0, 200) || '', hostname?.substring(0, 100) || '');
+    deviceAssociationsRepo.recordUnmatched(alertId, title, hostname);
   }
 }
 

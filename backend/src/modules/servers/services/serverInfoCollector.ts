@@ -1,5 +1,5 @@
 import type { Client } from 'ssh2';
-import db from '../../../models/database';
+import { serversRepo } from '../../../repositories/serverRepository';
 import { sshPool } from './sshService';
 import { logger } from '../../../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
@@ -55,7 +55,8 @@ class ServerInfoCollector {
   private static readonly CONNECT_TIMEOUT = 10000;
 
   async collectServerInfo(serverId: string): Promise<ServerInfoResult> {
-    const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(serverId) as ServerInfo | undefined;
+    const serverRecord = serversRepo.getById(serverId);
+    const server = serverRecord as ServerInfo | undefined;
 
     if (!server?.enabled) {
       return { success: false, error: 'Server not found or disabled' };
@@ -98,7 +99,7 @@ class ServerInfoCollector {
             logger.info(`Detected OS for ${server.name}: ${detectedOS}`);
 
             // 更新服务器的 os_type 字段
-            db.prepare('UPDATE servers SET os_type = ? WHERE id = ?').run(detectedOS, serverId);
+            serversRepo.updateOsType(serverId, detectedOS);
 
             // 使用对应系统的模板命令采集信息
             const templates = getCommandTemplates(detectedOS);
@@ -125,12 +126,15 @@ class ServerInfoCollector {
                   private_ip: results.private_ip.trim()
                 };
 
-                db.prepare(`
-                  UPDATE servers 
-                  SET os = ?, cpu_cores = ?, memory_gb = ?, disk_gb = ?, 
-                      ip_address = ?, private_ip = ?, os_type = ?, updated_at = datetime('now','localtime')
-                  WHERE id = ?
-                `).run(data.os, data.cpu_cores, data.memory_gb, data.disk_gb, data.ip_address, data.private_ip, detectedOS, serverId);
+                serversRepo.updateSystemInfo(serverId, {
+                  os: data.os,
+                  cpu_cores: data.cpu_cores,
+                  memory_gb: data.memory_gb,
+                  disk_gb: data.disk_gb,
+                  ip_address: data.ip_address,
+                  private_ip: data.private_ip,
+                  os_type: detectedOS,
+                });
 
                 logger.info(`Server info collected for ${server.name} (${serverId}), OS: ${detectedOS}`);
                 safeResolve({ success: true, data });
@@ -173,7 +177,7 @@ class ServerInfoCollector {
     failed: number;
     errors: Array<{ serverId: string; serverName: string; error: string }>;
   }> {
-    const servers = db.prepare('SELECT id, name FROM servers WHERE enabled = 1').all() as { id: string; name: string }[];
+    const servers = serversRepo.listEnabled().map(s => ({ id: s.id, name: s.name }));
     
     const errors: Array<{ serverId: string; serverName: string; error: string }> = [];
     let success = 0;
@@ -191,7 +195,8 @@ class ServerInfoCollector {
   }
 
   async collectServerMetrics(serverId: string): Promise<ServerMetricsResult> {
-    const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(serverId) as ServerInfo & { os_type?: string } | undefined;
+    const serverRecord = serversRepo.getById(serverId);
+    const server = serverRecord as (ServerInfo & { os_type?: string }) | undefined;
 
     if (!server?.enabled) {
       return { success: false, error: 'Server not found or disabled' };
@@ -235,29 +240,23 @@ class ServerInfoCollector {
             try {
               const data = this.parseMetricsResults(results);
 
-              db.prepare(`
-                INSERT INTO server_metrics (
-                  id, server_id, cpu_usage, memory_usage, memory_total_gb, memory_used_gb,
-                  disk_usage, disk_total_gb, disk_used_gb, network_in_mbps, network_out_mbps,
-                  load_1min, load_5min, load_15min, uptime_seconds, collected_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
-              `).run(
-                uuidv4(),
-                serverId,
-                data.cpu_usage,
-                data.memory_usage,
-                data.memory_total_gb,
-                data.memory_used_gb,
-                data.disk_usage,
-                data.disk_total_gb,
-                data.disk_used_gb,
-                data.network_in_mbps,
-                data.network_out_mbps,
-                data.load_1min,
-                data.load_5min,
-                data.load_15min,
-                data.uptime_seconds
-              );
+              serversRepo.insertMetrics({
+                id: uuidv4(),
+                server_id: serverId,
+                cpu_usage: data.cpu_usage,
+                memory_usage: data.memory_usage,
+                memory_total_gb: data.memory_total_gb,
+                memory_used_gb: data.memory_used_gb,
+                disk_usage: data.disk_usage,
+                disk_total_gb: data.disk_total_gb,
+                disk_used_gb: data.disk_used_gb,
+                network_in_mbps: data.network_in_mbps,
+                network_out_mbps: data.network_out_mbps,
+                load_1min: data.load_1min,
+                load_5min: data.load_5min,
+                load_15min: data.load_15min,
+                uptime_seconds: data.uptime_seconds
+              });
 
               logger.info(`Server metrics collected for ${server.name} (${serverId}): CPU=${data.cpu_usage?.toFixed(1)}%, OS: ${osType}`);
               safeResolve({ success: true, data });
@@ -386,7 +385,7 @@ class ServerInfoCollector {
     failed: number;
     errors: Array<{ serverId: string; serverName: string; error: string }>;
   }> {
-    const servers = db.prepare('SELECT id, name FROM servers WHERE enabled = 1').all() as { id: string; name: string }[];
+    const servers = serversRepo.listEnabled().map(s => ({ id: s.id, name: s.name }));
     
     const errors: Array<{ serverId: string; serverName: string; error: string }> = [];
     let success = 0;

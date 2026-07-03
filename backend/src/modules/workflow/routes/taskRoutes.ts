@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
-import db from '../../../models/database';
+import { workflowRepository } from '../../../repositories';
 import { executeWorkflow } from '../services/workflowExecutor';
 import type { WorkflowParsed } from '../../../types';
 
@@ -10,22 +10,10 @@ const router = Router();
 router.get('/', (req: Request, res: Response) => {
   try {
     const { status, limit } = req.query;
-    let query = 'SELECT * FROM tasks';
-    const params: unknown[] = [];
-    
-    if (status) {
-      query += ' WHERE status = ?';
-      params.push(status);
-    }
-    
-    query += ' ORDER BY created_at DESC';
-    
-    if (limit) {
-      query += ' LIMIT ?';
-      params.push(parseInt(limit as string));
-    }
-    
-    const tasks = db.prepare(query).all(...params) as Array<{ node_results?: string; logs?: string; metrics?: string; context?: string; execution_order?: string; [key: string]: unknown }>;
+    const tasks = workflowRepository.tasks.list({
+      status: status as string | undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
+    }) as Array<{ node_results?: string; logs?: string; metrics?: string; context?: string; execution_order?: string; [key: string]: unknown }>;
     tasks.forEach((t) => {
       if (t.node_results) t.node_results = JSON.parse(t.node_results);
       if (t.logs) t.logs = JSON.parse(t.logs);
@@ -41,7 +29,7 @@ router.get('/', (req: Request, res: Response) => {
 
 router.get('/:id', (req: Request, res: Response) => {
   try {
-    const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+    const task = workflowRepository.tasks.getById(req.params.id);
     if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
@@ -60,33 +48,35 @@ router.get('/:id', (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const { workflow_id, name, input, context } = req.body;
-    
-    const workflow = db.prepare('SELECT * FROM workflows WHERE id = ?').get(workflow_id) as Record<string, unknown> | undefined;
+
+    const workflow = workflowRepository.workflows.getById(workflow_id);
     if (!workflow) {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
-    
+
     const taskId = randomUUID();
-    
-    db.prepare(`
-      INSERT INTO tasks (id, workflow_id, name, status, context)
-      VALUES (?, ?, ?, 'pending', ?)
-    `).run(taskId, workflow_id, name || 'Task', JSON.stringify(context || {}));
-    
+
+    workflowRepository.tasks.create({
+      id: taskId,
+      workflow_id,
+      name: name || 'Task',
+      context: JSON.stringify(context || {})
+    });
+
     const parsedWorkflow: WorkflowParsed = {
-      id: workflow.id as string,
-      name: workflow.name as string,
-      description: workflow.description as string,
+      id: workflow.id,
+      name: workflow.name,
+      description: workflow.description ?? undefined,
       nodes: JSON.parse((workflow.nodes as string) || '[]'),
       edges: JSON.parse((workflow.edges as string) || '[]'),
       agent_configs: JSON.parse((workflow.agent_configs as string) || '{}'),
-      is_template: workflow.is_template as number,
-      created_at: workflow.created_at as string,
-      updated_at: workflow.updated_at as string
+      is_template: workflow.is_template,
+      created_at: workflow.created_at,
+      updated_at: workflow.updated_at
     };
-    
+
     executeWorkflow(taskId, parsedWorkflow, input, context);
-    
+
     res.status(201).json({ success: true, data: { taskId, status: 'started' } });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to start task' });
@@ -95,12 +85,12 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.put('/:id/pause', (req: Request, res: Response) => {
   try {
-    const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+    const task = workflowRepository.tasks.getById(req.params.id);
     if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
-    
-    db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run('paused', req.params.id);
+
+    workflowRepository.tasks.updateStatus(req.params.id, 'paused');
     res.json({ success: true, message: 'Task paused' });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to pause task' });
@@ -109,12 +99,12 @@ router.put('/:id/pause', (req: Request, res: Response) => {
 
 router.put('/:id/resume', (req: Request, res: Response) => {
   try {
-    const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+    const task = workflowRepository.tasks.getById(req.params.id);
     if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
-    
-    db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run('running', req.params.id);
+
+    workflowRepository.tasks.updateStatus(req.params.id, 'running');
     res.json({ success: true, message: 'Task resumed' });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to resume task' });
@@ -123,12 +113,12 @@ router.put('/:id/resume', (req: Request, res: Response) => {
 
 router.put('/:id/cancel', (req: Request, res: Response) => {
   try {
-    const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+    const task = workflowRepository.tasks.getById(req.params.id);
     if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
-    
-    db.prepare('UPDATE tasks SET status = ?, end_time = datetime(\'now\',\'localtime\') WHERE id = ?').run('cancelled', req.params.id);
+
+    workflowRepository.tasks.updateStatusWithEndTime(req.params.id, 'cancelled');
     res.json({ success: true, message: 'Task cancelled' });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to cancel task' });
@@ -138,30 +128,13 @@ router.put('/:id/cancel', (req: Request, res: Response) => {
 router.put('/:id/intervene', (req: Request, res: Response) => {
   try {
     const { node_id, action, data } = req.body;
-    
+
     if (action === 'skip') {
-      db.prepare(`
-        UPDATE tasks 
-        SET logs = json_insert(IFNULL(logs, '[]'), '$[#]', json_object(
-          'timestamp', datetime('now'),
-          'type', 'intervention',
-          'content', 'Node ' || ? || ' skipped by user'
-        ))
-        WHERE id = ?
-      `).run(node_id, req.params.id);
+      workflowRepository.tasks.appendInterventionSkipLog(req.params.id, node_id);
     } else if (action === 'modify') {
-      db.prepare(`
-        UPDATE tasks 
-        SET logs = json_insert(IFNULL(logs, '[]'), '$[#]', json_object(
-          'timestamp', datetime('now'),
-          'type', 'intervention',
-          'content', 'Node ' || ? || ' modified by user',
-          'data', ?
-        ))
-        WHERE id = ?
-      `).run(node_id, JSON.stringify(data), req.params.id);
+      workflowRepository.tasks.appendInterventionModifyLog(req.params.id, node_id, JSON.stringify(data));
     }
-    
+
     res.json({ success: true, message: 'Intervention recorded' });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to record intervention' });

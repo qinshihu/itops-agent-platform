@@ -12,9 +12,8 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import db from '../../../../models/database';
+import { alertRepository } from '../../../../repositories';
 import { logger } from '../../../../utils/logger';
-import { generateCompletion } from '../../../ai/services/llm/llmService';
 import { deviceProfiler } from './adaptive/deviceProfiler';
 import { sshDiagnosisEngine } from './diagnosis/sshDiagnosisEngine';
 import { snmpDiagnosisEngine } from './diagnosis/snmpDiagnosisEngine';
@@ -30,89 +29,24 @@ import type {
   DeviceRuntimeProfile, AlertResponseLog, ResponseLogStatus,
   SshDiagnosisResult, SnmpDiagnosisResult,
 } from './types';
+import { getErrorMessage } from '../../../../utils/errorHelpers';
 
 class AlertAutoResponseService {
   private processingIds = new Set<string>();
   private initialized = false;
 
-  /** 确保所有需要的表存在 */
-  private ensureTables(): void {
-    try {
-      // 确保基线表存在
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS baseline_metrics (
-          device_id TEXT NOT NULL,
-          metric_name TEXT NOT NULL,
-          sample_value REAL NOT NULL,
-          sampled_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-          PRIMARY KEY (device_id, metric_name, sampled_at)
-        )
-      `);
-
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS aars_response_logs (
-          id TEXT PRIMARY KEY,
-          alert_id TEXT NOT NULL,
-          device_id TEXT,
-          device_type TEXT,
-          access_method TEXT,
-          status TEXT NOT NULL DEFAULT 'identifying',
-          probes_used TEXT,
-          diagnosis_result TEXT,
-          root_cause TEXT,
-          remediation_plan TEXT,
-          verification_result TEXT,
-          execution_status TEXT,
-          approval_status TEXT DEFAULT 'not_needed',
-          notification_sent INTEGER DEFAULT 0,
-          error_message TEXT,
-          started_at TEXT DEFAULT (datetime('now','localtime')),
-          updated_at TEXT DEFAULT (datetime('now','localtime')),
-          completed_at TEXT,
-          FOREIGN KEY (alert_id) REFERENCES alerts(id) ON DELETE CASCADE
-        )
-      `);
-
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS aars_config (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          enabled INTEGER DEFAULT 1,
-          min_severity TEXT DEFAULT 'medium',
-          auto_execute_enabled INTEGER DEFAULT 1,
-          approval_timeout_minutes INTEGER DEFAULT 30,
-          max_concurrent INTEGER DEFAULT 5,
-          ssh_timeout_sec INTEGER DEFAULT 30,
-          verify_interval_sec INTEGER DEFAULT 30,
-          notification_channels TEXT DEFAULT '["wecom","dingtalk","email"]',
-          auto_execute_whitelist TEXT DEFAULT '["systemctl restart","logrotate","rm -rf /tmp/*"]',
-          business_hours TEXT DEFAULT '{"start":"09:00","end":"18:00"}',
-          created_at TEXT DEFAULT (datetime('now','localtime')),
-          updated_at TEXT DEFAULT (datetime('now','localtime'))
-        )
-      `);
-
-      // 插入默认配置
-      const existing = db.prepare('SELECT id FROM aars_config LIMIT 1').get();
-      if (!existing) {
-        db.prepare(`INSERT INTO aars_config DEFAULT VALUES`).run();
-      }
-    } catch (err: any) {
-      logger.warn(`[AARS] Failed to ensure tables: ${err.message}`);
-    }
-  }
-
   /**
    * 启动服务（仅加载子引擎，不再独立轮询 — 统一由 AlertProcessor 触发）
+   *
+   * 注意：表结构由 migration v018 + v042 维护，本服务不再 ensureTables。
    */
   start(): void {
     if (this.initialized) return;
     this.initialized = true;
-    this.ensureTables();
 
     logger.info('🤖 [AARS v2] 告警自适应智能响应服务已启动（纯执行引擎模式，由 AlertProcessor 统一触发）');
 
     // 启动子引擎
-    escalationEngine.ensureTable();
     escalationEngine.start();
 
     // 不再启动独立轮询 — AlertProcessor 统一决定何时调用 AARS
@@ -127,23 +61,7 @@ class AlertAutoResponseService {
     logger.info('⏹ [AARS v2] 服务已停止');
   }
 
-  // @deprecated 已由 AlertProcessor 统一接管的旧轮询逻辑
-  // ===== 以下 poll / fetchPendingAlerts / isAlreadyProcessedByAnalyzer 保留供参考 =====
-
-  /** 检查告警是否已被AutoAnalyzer处理 */
-  private isAlreadyProcessedByAnalyzer(alertId: string): boolean {
-    try {
-      const record = db.prepare(`
-        SELECT 1 FROM alert_auto_analysis 
-        WHERE alert_id = ? 
-        AND status NOT IN ('pending', 'running')
-        LIMIT 1
-      `).get(alertId);
-      return !!record;
-    } catch {
-      return false;
-    }
-  }
+  // @deprecated 以下旧轮询逻辑已由 AlertProcessor 统一接管，仅保留 processAlert 供 AlertProcessor 调用
 
   /**
    * 处理单个告警的主流程
@@ -153,20 +71,13 @@ class AlertAutoResponseService {
       logger.debug(`[AARS] Alert ${alertId} already being processed`);
       return;
     }
-    
-    // 检查是否已被AutoAnalyzer处理过
-    if (this.isAlreadyProcessedByAnalyzer(alertId)) {
-      logger.debug(`[AARS] Alert ${alertId} already processed by AutoAnalyzer, skipping`);
-      return;
-    }
 
     this.processingIds.add(alertId);
     const logId = uuidv4();
     const startTime = Date.now();
 
     try {
-      const alert = db.prepare('SELECT id, title, content, severity, source, metadata FROM alerts WHERE id = ?')
-        .get(alertId) as { id: string; title: string; content: string; severity: string; source: string; metadata: string } | undefined;
+      const alert = alertRepository.getEssentialById(alertId);
 
       if (!alert) {
         logger.warn(`[AARS] Alert ${alertId} not found`);
@@ -176,7 +87,6 @@ class AlertAutoResponseService {
       logger.info(`[AARS] Processing alert ${alertId}: "${alert.title.substring(0, 60)}" (severity=${alert.severity})`);
 
       // ── 启动渐进式升级追踪 ──
-      escalationEngine.ensureTable();
       escalationEngine.track(alertId, alert.title, alert.severity, null);
 
       // ── 基线异常检测 ──
@@ -317,8 +227,8 @@ class AlertAutoResponseService {
             overallSuccess: execResult.success,
             executionCommands: sshResult.remediationPlan.commands.map(c => c.command),
             durationMs: Date.now() - startTime,
-          }).catch((err: any) => {
-            logger.warn(`[AARS] Feedback loop error: ${err.message}`);
+          }).catch((err: unknown) => {
+            logger.warn(`[AARS] Feedback loop error: ${getErrorMessage(err)}`);
           });
         }
 
@@ -369,13 +279,13 @@ class AlertAutoResponseService {
         baselineAnomalyDetector.updateBaseline(device.deviceId, {});
       }
 
-    } catch (err: any) {
-      logger.error(`[AARS] Error processing alert ${alertId}: ${err.message}`, err);
+    } catch (err: unknown) {
+      logger.error(`[AARS] Error processing alert ${alertId}: ${getErrorMessage(err)}`, err);
 
       escalationEngine.fail(alertId);
 
       await this.saveLog(logId, alertId, null, 'failed', {
-        error_message: err.message,
+        error_message: getErrorMessage(err),
       }).catch(() => {});
 
     } finally {
@@ -387,10 +297,10 @@ class AlertAutoResponseService {
 
   private getConfig(): { enabled: boolean; minSeverity: string } {
     try {
-      const config = db.prepare('SELECT enabled, min_severity FROM aars_config LIMIT 1').get() as any;
+      const config = alertRepository.getAarsConfig();
       return {
-        enabled: config?.enabled === 1,
-        minSeverity: config?.min_severity || 'medium',
+        enabled: (config?.enabled as number) === 1,
+        minSeverity: (config?.min_severity as string) || 'medium',
       };
     } catch {
       return { enabled: true, minSeverity: 'medium' };
@@ -404,22 +314,7 @@ class AlertAutoResponseService {
 
     const minLevel = severityOrder[minSeverity] || 3;
 
-    const rows = db.prepare(`
-      SELECT a.id, a.severity
-      FROM alerts a
-      WHERE a.status = 'new'
-        AND a.severity IN ('critical', 'high', 'medium', 'low')
-        AND NOT EXISTS (SELECT 1 FROM aars_response_logs l WHERE l.alert_id = a.id)
-      ORDER BY
-        CASE a.severity
-          WHEN 'critical' THEN 1
-          WHEN 'high' THEN 2
-          WHEN 'medium' THEN 3
-          ELSE 4
-        END ASC,
-        a.created_at ASC
-      LIMIT 10
-    `).all() as Array<{ id: string; severity: string }>;
+    const rows = alertRepository.listPendingForAARS();
 
     return rows.filter(r => {
       const level = severityOrder[r.severity] || 10;
@@ -434,11 +329,13 @@ class AlertAutoResponseService {
     return 'low';
   }
 
-  private extractIp(title: string, content: string, metadata: Record<string, any>): string | null {
+  private extractIp(title: string, content: string, metadata: Record<string, unknown>): string | null {
     // 优先从 metadata 中取
     if (metadata.host && typeof metadata.host === 'string') return metadata.host;
-    if (metadata.labels?.instance) return metadata.labels.instance;
-    if (metadata.annotations?.instance) return metadata.annotations.instance;
+    const labels = metadata.labels as Record<string, unknown> | undefined;
+    if (labels?.instance) return labels.instance as string;
+    const annotations = metadata.annotations as Record<string, unknown> | undefined;
+    if (annotations?.instance) return annotations.instance as string;
 
     // 从标题/内容中正则提取
     const text = `${title} ${content || ''}`;
@@ -453,54 +350,39 @@ class AlertAutoResponseService {
     return null;
   }
 
-  private safeParseJson(str: string | null | undefined, fallback: any = {}): any {
+  private safeParseJson(str: string | null | undefined, fallback: Record<string, unknown> = {}): Record<string, unknown> {
     if (!str) return fallback;
-    try { return JSON.parse(str); } catch { return fallback; }
+    try { return JSON.parse(str) as Record<string, unknown>; } catch { return fallback; }
   }
 
   private async saveLog(
     id: string, alertId: string, device: DeviceRuntimeProfile | null,
-    status: ResponseLogStatus, extra?: Record<string, any>
+    status: ResponseLogStatus, extra?: Record<string, unknown>
   ): Promise<void> {
     try {
-      const now = new Date().toISOString();
-      db.prepare(`
-        INSERT OR REPLACE INTO aars_response_logs
-          (id, alert_id, device_id, device_type, access_method, status,
-           diagnosis_result, root_cause, remediation_plan, verification_result,
-           execution_status, approval_status, error_message,
-           started_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        id, alertId,
-        device?.deviceId || extra?.device_id || null,
-        device?.type || extra?.device_type || null,
-        device?.accessMethod || extra?.access_method || null,
+      alertRepository.aarsLogs.save({
+        id, alert_id: alertId,
+        device_id: device?.deviceId || (extra?.device_id as string) || null,
+        device_type: device?.type || (extra?.device_type as string) || null,
+        access_method: device?.accessMethod || (extra?.access_method as string) || null,
         status,
-        extra?.diagnosis_result || null,
-        extra?.root_cause || null,
-        extra?.remediation_plan || null,
-        extra?.verification_result || null,
-        extra?.execution_status || null,
-        extra?.approval_status || 'not_needed',
-        extra?.error_message || null,
-        new Date().toISOString(),
-        now
-      );
-    } catch (err: any) {
-      logger.warn(`[AARS] Failed to save log: ${err.message}`);
+        diagnosis_result: (extra?.diagnosis_result as string) || null,
+        root_cause: (extra?.root_cause as string) || null,
+        remediation_plan: (extra?.remediation_plan as string) || null,
+        verification_result: (extra?.verification_result as string) || null,
+        execution_status: (extra?.execution_status as string) || null,
+        approval_status: (extra?.approval_status as string) || 'not_needed',
+        error_message: (extra?.error_message as string) || null,
+      });
+    } catch (err: unknown) {
+      logger.warn(`[AARS] Failed to save log: ${getErrorMessage(err)}`);
     }
   }
 
-  private async updateLogCompleted(id: string, durationMs: number): Promise<void> {
+  private async updateLogCompleted(id: string, _durationMs: number): Promise<void> {
     try {
-      db.prepare(`
-        UPDATE aars_response_logs SET
-          completed_at = datetime('now','localtime'),
-          updated_at = datetime('now','localtime')
-        WHERE id = ?
-      `).run(id);
-    } catch {}
+      alertRepository.aarsLogs.updateCompleted(id);
+    } catch { /* ignore */ }
   }
 
   // ══════════════════ 对外接口 ══════════════════
@@ -512,16 +394,12 @@ class AlertAutoResponseService {
 
   /** 获取执行日志 */
   getLogs(limit = 50): AlertResponseLog[] {
-    return db.prepare(`
-      SELECT * FROM aars_response_logs ORDER BY started_at DESC LIMIT ?
-    `).all(limit) as AlertResponseLog[];
+    return alertRepository.aarsLogs.list(limit) as unknown as AlertResponseLog[];
   }
 
   /** 获取特定告警的日志 */
   getLogByAlertId(alertId: string): AlertResponseLog | undefined {
-    return db.prepare(
-      'SELECT * FROM aars_response_logs WHERE alert_id = ? ORDER BY created_at DESC LIMIT 1'
-    ).get(alertId) as AlertResponseLog | undefined;
+    return alertRepository.aarsLogs.getByAlertId(alertId) as unknown as AlertResponseLog | undefined;
   }
 
   /** 统一接口: 获取特定告警的日志 */
@@ -536,22 +414,18 @@ class AlertAutoResponseService {
     failed: number;
     pendingApproval: number;
     escalated: number;
-    scheduler: any;
-    trust: any;
+    scheduler: Record<string, unknown>;
+    trust: Record<string, unknown>;
   } {
     try {
-      const total = (db.prepare('SELECT COUNT(*) as c FROM aars_response_logs').get() as any)?.c || 0;
-      const autoResolved = (db.prepare("SELECT COUNT(*) as c FROM aars_response_logs WHERE status = 'resolved' AND execution_status = 'success'").get() as any)?.c || 0;
-      const failed = (db.prepare("SELECT COUNT(*) as c FROM aars_response_logs WHERE status = 'failed'").get() as any)?.c || 0;
-      const pending = (db.prepare("SELECT COUNT(*) as c FROM aars_response_logs WHERE status = 'pending_approval'").get() as any)?.c || 0;
-      const escalated = (db.prepare("SELECT COUNT(*) as c FROM aars_response_logs WHERE status = 'escalated'").get() as any)?.c || 0;
+      const stats = alertRepository.aarsLogs.getStats();
 
       return {
-        totalProcessed: total,
-        autoResolved,
-        failed,
-        pendingApproval: pending,
-        escalated,
+        totalProcessed: stats.total,
+        autoResolved: stats.success,
+        failed: stats.failed,
+        pendingApproval: stats.pendingApproval,
+        escalated: stats.escalated,
         scheduler: resourceAwareScheduler.getStats(),
         trust: adaptiveAutomationEngine.getTrustStats(),
       };

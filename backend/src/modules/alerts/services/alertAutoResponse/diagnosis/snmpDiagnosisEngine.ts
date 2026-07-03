@@ -11,12 +11,13 @@
  */
 
 import { generateCompletion } from '../../../../ai/services/llm/llmService';
-import db from '../../../../../models/database';
+import { snmpInspectionRepo } from '../../../../../repositories';
 import { logger } from '../../../../../utils/logger';
 import { strategyRecommender } from '../adaptive/strategyRecommender';
 import { probeExecutor } from './probeExecutor';
 import { PROBE_INDEX } from '../probeUnit';
 import type { ProbeUnit, ProbeResult, DeviceRuntimeProfile } from '../types';
+import { getErrorMessage } from '../../../../../utils/errorHelpers';
 
 export interface SnmpDiagnosisResult {
   probeResults: ProbeResult[];
@@ -111,12 +112,7 @@ class SnmpDiagnosisEngine {
       const parts: string[] = [];
 
       // 从巡检历史取
-      const inspections = db.prepare(`
-        SELECT inspection_type, status, summary, created_at
-        FROM network_inspection_history
-        WHERE device_id = ?
-        ORDER BY created_at DESC LIMIT 3
-      `).all(deviceId) as Array<{ inspection_type: string; status: string; summary: string; created_at: string }>;
+      const inspections = snmpInspectionRepo.listRecentByDeviceId(deviceId, 3);
 
       if (inspections.length > 0) {
         parts.push('【最近巡检记录】');
@@ -126,12 +122,7 @@ class SnmpDiagnosisEngine {
       }
 
       // 从接口指标取
-      const metrics = db.prepare(`
-        SELECT interface_name, if_oper_status, if_in_errors, if_out_errors, sampled_at
-        FROM snmp_interface_metrics
-        WHERE device_id = ?
-        ORDER BY sampled_at DESC LIMIT 10
-      `).all(deviceId) as Array<{ interface_name: string; if_oper_status: number; if_in_errors: number; if_out_errors: number; sampled_at: string }>;
+      const metrics = snmpInspectionRepo.listRecentInterfaceMetrics(deviceId, 10);
 
       if (metrics.length > 0) {
         parts.push('【最近接口指标】');
@@ -218,10 +209,10 @@ ${rawOutput.substring(0, 8000)}
         findings: parsed.findings || [],
         recommendations: parsed.recommendations || [],
       };
-    } catch (err: any) {
-      logger.error(`[SNMPDiagnosis] AI analysis failed: ${err.message}`);
+    } catch (err: unknown) {
+      logger.error(`[SNMPDiagnosis] AI analysis failed: ${getErrorMessage(err)}`);
       return {
-        diagnosis: `❌ AI 分析失败: ${err.message}`,
+        diagnosis: `❌ AI 分析失败: ${getErrorMessage(err)}`,
         summary: 'AI 分析不可用',
         rootCause: '无法确定根因',
         findings: ['AI分析不可用'],

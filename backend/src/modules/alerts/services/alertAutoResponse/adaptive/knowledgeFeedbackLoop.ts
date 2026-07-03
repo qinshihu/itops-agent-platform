@@ -10,12 +10,13 @@
  * =============================================================================
  */
 
-import db from '../../../../../models/database';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID as uuidv4 } from 'crypto';
 import { logger } from '../../../../../utils/logger';
+import { knowledgeRepository, settingsRepository } from '../../../../../repositories';
 import { strategyRecommender } from './strategyRecommender';
 import { adaptiveAutomationEngine } from './adaptiveAutomation';
 import type { DeviceRuntimeProfile, ProbeResult, VerificationChainResult, RemediationPlan } from '../types';
+import { getErrorMessage } from '../../../../../utils/errorHelpers';
 
 class KnowledgeFeedbackLoop {
   /**
@@ -86,51 +87,45 @@ class KnowledgeFeedbackLoop {
   }): Promise<void> {
     try {
       // 检查是否已存在相似案例（基于告警标题去重）
-      const existing = db.prepare(`
-        SELECT id FROM knowledge_base
-        WHERE title LIKE ? AND category = 'auto_remediation'
-        LIMIT 1
-      `).get(`%${params.alertTitle.substring(0, 50)}%`) as { id: string } | undefined;
+      const existingId = knowledgeRepository.findIdByTitleAndCategory(
+        params.alertTitle.substring(0, 50),
+        'auto_remediation'
+      );
 
-      if (existing) {
+      if (existingId) {
         // 更新已有案例（增加引用次数）
-        db.prepare(`
-          UPDATE knowledge_base
-          SET usage_count = usage_count + 1,
-              content = ?,
-              updated_at = datetime('now','localtime')
-          WHERE id = ?
-        `).run(
-          this.buildCaseContent(params),
-          existing.id
-        );
-        logger.info(`[Feedback] Updated existing knowledge case: ${existing.id}`);
+        knowledgeRepository.incrementUsageAndReplaceContent(existingId, this.buildCaseContent(params));
+        logger.info(`[Feedback] Updated existing knowledge case: ${existingId}`);
         return;
       }
 
       // 写入新案例
       const id = uuidv4();
-      db.prepare(`
-        INSERT INTO knowledge_base (id, title, category, content, tags, solutions, usage_count, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now','localtime'), datetime('now','localtime'))
-      `).run(
+      knowledgeRepository.create({
         id,
-        `AARS: ${params.alertTitle.substring(0, 200)}`,
-        'auto_remediation',
-        this.buildCaseContent(params),
-        JSON.stringify(['auto_remediation', 'aars', params.device.type, params.alertSource]),
-        JSON.stringify({
+        title: `AARS: ${params.alertTitle.substring(0, 200)}`,
+        category: 'auto_remediation',
+        content: this.buildCaseContent(params),
+        tags: JSON.stringify(['auto_remediation', 'aars', params.device.type, params.alertSource]),
+        solutions: JSON.stringify({
           rootCause: params.rootCause,
           commands: params.remediationPlan.commands.map(c => c.command),
           rollbackCommands: params.remediationPlan.rollbackCommands.map(c => c.command),
           verificationResult: params.verificationResult.result,
           success: params.overallSuccess,
         }),
-      );
+        source: null,
+        alert_id: null,
+        workflow_id: null,
+        task_id: null,
+        server_id: null,
+        success_rating: null,
+        duration_ms: null,
+      });
 
       logger.info(`[Feedback] Written new knowledge case: ${id} - ${params.alertTitle.substring(0, 50)}`);
-    } catch (err: any) {
-      logger.warn(`[Feedback] Failed to write knowledge case: ${err.message}`);
+    } catch (err: unknown) {
+      logger.warn(`[Feedback] Failed to write knowledge case: ${getErrorMessage(err)}`);
     }
   }
 
@@ -176,10 +171,7 @@ class KnowledgeFeedbackLoop {
     if (!success) return;
     try {
       // 记录到 settings 表作为基线参考点
-      db.prepare(`
-        INSERT OR REPLACE INTO settings (key, value)
-        VALUES (?, ?)
-      `).run(
+      settingsRepository.upsert(
         `aars_baseline:${device.deviceId}:last_success`,
         new Date().toISOString()
       );

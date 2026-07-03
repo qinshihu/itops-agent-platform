@@ -103,8 +103,10 @@ function evaluateSimpleCompare(resolvedExpr: string, variables: Record<string, u
       const trimmedOp = op.trim();
       switch (trimmedOp) {
         case '===': return left === right;
+        // eslint-disable-next-line eqeqeq
         case '==': return left == right;
         case '!==': return left !== right;
+        // eslint-disable-next-line eqeqeq
         case '!=': return left != right;
         case '>': return Number(left) > Number(right);
         case '<': return Number(left) < Number(right);

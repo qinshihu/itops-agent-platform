@@ -1,6 +1,5 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { randomUUID } from 'crypto';
 import { requireRole } from '../../../middleware/auth';
 import * as aiModelService from '../services/models/aiModelService';
 
@@ -18,7 +17,7 @@ router.get('/', (req: Request, res: Response) => {
     }
     
     res.json({ success: true, data: models });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to fetch models' });
   }
 });
@@ -26,13 +25,13 @@ router.get('/', (req: Request, res: Response) => {
 router.get('/default', (req: Request, res: Response) => {
   try {
     const defaultModel = aiModelService.getDefaultModel();
-    
+
     if (!defaultModel) {
       return res.status(404).json({ success: false, error: 'No default model found' });
     }
-    
+
     res.json({ success: true, data: defaultModel });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to fetch default model' });
   }
 });
@@ -40,13 +39,13 @@ router.get('/default', (req: Request, res: Response) => {
 router.get('/:id', (req: Request, res: Response) => {
   try {
     const model = aiModelService.getModelById(req.params.id);
-    
+
     if (!model) {
       return res.status(404).json({ success: false, error: 'Model not found' });
     }
-    
+
     res.json({ success: true, data: model });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to fetch model' });
   }
 });

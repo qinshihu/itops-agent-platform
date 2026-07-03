@@ -1,7 +1,8 @@
 import Docker from 'dockerode';
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
-import { db } from '../../../models/database';
+import db from '../../../models/database';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 interface DockerEndpoint {
   id: string;
@@ -27,40 +28,15 @@ class MultiHostDockerService {
   private endpoints: Map<string, Docker> = new Map();
 
   constructor() {
-    // Tables and endpoints initialized via ensureTables() called from app.ts after DB ready
+    // 表结构由 migration v046 维护；本服务的运行时端点加载由 initialize() 负责。
   }
 
-  ensureTables() {
-    this.initTables();
+  /**
+   * 启动时加载已激活的 Docker 端点客户端
+   * （原 ensureTables() 的运行时部分，schema 已下沉到 migration v046）
+   */
+  initialize() {
     this.loadEndpoints();
-  }
-
-  private initTables() {
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS docker_endpoints (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          host TEXT NOT NULL,
-          port INTEGER DEFAULT 2375,
-          protocol TEXT DEFAULT 'socket',
-          tls_ca TEXT,
-          tls_cert TEXT,
-          tls_key TEXT,
-          status TEXT DEFAULT 'inactive',
-          error_message TEXT,
-          containers_running INTEGER DEFAULT 0,
-          containers_total INTEGER DEFAULT 0,
-          images INTEGER DEFAULT 0,
-          cpu_count INTEGER DEFAULT 0,
-          memory_limit INTEGER DEFAULT 0,
-          created_at TEXT DEFAULT (datetime('now','localtime')),
-          updated_at TEXT DEFAULT (datetime('now','localtime'))
-        )
-      `);
-    } catch (err) {
-      logger.error('Failed to create docker_endpoints table:', err);
-    }
   }
 
   private loadEndpoints() {
@@ -122,8 +98,8 @@ class MultiHostDockerService {
       await docker.ping();
       const info = await docker.info();
       return { success: true, message: `Docker ${info.ServerVersion} on ${info.OperatingSystem}` };
-    } catch (err: any) {
-      return { success: false, message: err.message };
+    } catch (err: unknown) {
+      return { success: false, message: getErrorMessage(err) };
     }
   }
 
@@ -209,10 +185,10 @@ class MultiHostDockerService {
             updated_at=datetime('now','localtime')
         WHERE id=?
       `).run(info.ContainersRunning, info.Containers, info.Images, info.NCPU, info.MemTotal, endpointId);
-    } catch (err: any) {
+    } catch (err: unknown) {
       db.prepare(`
         UPDATE docker_endpoints SET status='error', error_message=?, updated_at=datetime('now','localtime') WHERE id=?
-      `).run(err.message, endpointId);
+      `).run(getErrorMessage(err), endpointId);
     }
   }
 }

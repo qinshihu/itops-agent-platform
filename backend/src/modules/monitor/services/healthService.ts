@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
-import { getIOInstance } from '../../../models/database';
+import { getIOInstance } from '../../../shared/websocket/io';
 import { alertService } from '../../alerts/services/alertService';
 
 export interface SystemHealth {
@@ -234,7 +234,7 @@ export class HealthService {
       metrics.cpu_percent = cpuUsageCheck.observedValue;
     }
 
-    const dbCheck = health.checks.find(c => c.name === 'database');
+    const _dbCheck = health.checks.find(c => c.name === 'database');
     if (health.database.latencyMs > 0) {
       metrics.db_latency = health.database.latencyMs;
     }
@@ -319,7 +319,7 @@ export class HealthService {
         status: backupStatus.config.enabled ? 'healthy' : 'degraded',
         message: `Last backup: ${backupStatus.lastBackup?.createdAt || 'never'}`
       });
-    } catch (error) {
+    } catch (_error) {
       services.push({
         name: 'backup',
         status: 'unhealthy',
@@ -334,7 +334,7 @@ export class HealthService {
         status: schedulerService ? 'healthy' : 'degraded',
         message: 'Scheduler service running'
       });
-    } catch (error) {
+    } catch (_error) {
       services.push({
         name: 'scheduler',
         status: 'unhealthy',
@@ -360,7 +360,7 @@ export class HealthService {
           message: 'Self-monitor not yet collected first report'
         });
       }
-    } catch (error) {
+    } catch (_error) {
       services.push({
         name: 'self-monitor',
         status: 'healthy',
@@ -377,7 +377,7 @@ export class HealthService {
         status: queueStats.stalled > 0 ? 'degraded' : queueStats.failed24h > 50 ? 'degraded' : 'healthy',
         message: `Pending: ${queueStats.pending}, Running: ${queueStats.running}, Failed(24h): ${queueStats.failed24h}`
       });
-    } catch (error) {
+    } catch (_error) {
       services.push({
         name: 'queue',
         status: 'healthy',
@@ -414,7 +414,7 @@ export class HealthService {
         const stats = fs.statSync(filePath);
         return total + stats.size;
       }, 0);
-    } catch (error) {
+    } catch (_error) {
       return 0;
     }
   }
@@ -431,7 +431,7 @@ export class HealthService {
         const stats = fs.statSync(filePath);
         return total + stats.size;
       }, 0);
-    } catch (error) {
+    } catch (_error) {
       return 0;
     }
   }

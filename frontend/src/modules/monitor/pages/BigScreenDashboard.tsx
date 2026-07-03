@@ -809,10 +809,10 @@ export default function BigScreenDashboard() {
                 )}
               </h2>
               <div className="grid grid-cols-2 gap-3 mb-4">
-                <CircularProgress value={aggregatedMetrics.cpu != null && Number.isFinite(aggregatedMetrics.cpu) ? aggregatedMetrics.cpu : 0} color="#3b82f6" size={80} strokeWidth={8} label="CPU" />
-                <CircularProgress value={aggregatedMetrics.memory != null && Number.isFinite(aggregatedMetrics.memory) ? aggregatedMetrics.memory : 0} color="#8b5cf6" size={80} strokeWidth={8} label="内存" />
+                <CircularProgress value={aggregatedMetrics.cpu !== null && aggregatedMetrics.cpu !== undefined && Number.isFinite(aggregatedMetrics.cpu) ? aggregatedMetrics.cpu : 0} color="#3b82f6" size={80} strokeWidth={8} label="CPU" />
+                <CircularProgress value={aggregatedMetrics.memory !== null && aggregatedMetrics.memory !== undefined && Number.isFinite(aggregatedMetrics.memory) ? aggregatedMetrics.memory : 0} color="#8b5cf6" size={80} strokeWidth={8} label="内存" />
                 <CircularProgress value={(aggregatedMetrics.networkIn ?? 0) + (aggregatedMetrics.networkOut ?? 0)} color="#06b6d4" size={80} strokeWidth={8} label="网络" />
-                <CircularProgress value={aggregatedMetrics.disk != null && Number.isFinite(aggregatedMetrics.disk) ? aggregatedMetrics.disk : 0} color="#f59e0b" size={80} strokeWidth={8} label="磁盘" />
+                <CircularProgress value={aggregatedMetrics.disk !== null && aggregatedMetrics.disk !== undefined && Number.isFinite(aggregatedMetrics.disk) ? aggregatedMetrics.disk : 0} color="#f59e0b" size={80} strokeWidth={8} label="磁盘" />
               </div>
               <div className="space-y-3">
                 <div className="space-y-2">

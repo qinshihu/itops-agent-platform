@@ -10,10 +10,11 @@
  * =============================================================================
  */
 
-import db from '../../../../../models/database';
 import { logger } from '../../../../../utils/logger';
-import { PROBE_CATALOG, PROBE_INDEX, findProbesByAlertText } from '../probeUnit';
+import { PROBE_CATALOG } from '../probeUnit';
 import type { ProbeUnit, DeviceRuntimeProfile } from '../types';
+import { getErrorMessage } from '../../../../../utils/errorHelpers';
+import { probeStatsRepo } from '../../../../../repositories';
 
 // 探针历史准确率缓存（从知识库/探针日志表加载）
 interface ProbeHistory {
@@ -29,21 +30,7 @@ class StrategyRecommender {
 
   /** 持久化探针使用历史表 */
   private ensureProbeStatsTable(): void {
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS probe_execution_stats (
-          probe_id TEXT PRIMARY KEY,
-          total_uses INTEGER DEFAULT 0,
-          successful_diagnoses INTEGER DEFAULT 0,
-          total_duration_ms INTEGER DEFAULT 0,
-          last_used_at TEXT,
-          device_id TEXT,
-          alert_type TEXT
-        )
-      `);
-    } catch (err: any) {
-      logger.warn(`Failed to create probe_stats table: ${err.message}`);
-    }
+    probeStatsRepo.ensureTable();
   }
 
   /** 从数据库加载探针历史 */
@@ -51,9 +38,7 @@ class StrategyRecommender {
     if (Date.now() - this.lastLoadTime < this.LOAD_INTERVAL_MS) return;
     this.lastLoadTime = Date.now();
     try {
-      const rows = db.prepare(`
-        SELECT probe_id, total_uses, successful_diagnoses FROM probe_execution_stats
-      `).all() as Array<{ probe_id: string; total_uses: number; successful_diagnoses: number }>;
+      const rows = probeStatsRepo.listAll();
 
       for (const row of rows) {
         const total = row.total_uses || 1;
@@ -232,23 +217,9 @@ class StrategyRecommender {
       this.probeHistory.set(probeId, history);
 
       // 持久化
-      db.prepare(`
-        INSERT INTO probe_execution_stats (probe_id, total_uses, successful_diagnoses, total_duration_ms, last_used_at, device_id, alert_type)
-        VALUES (?, ?, ?, ?, datetime('now','localtime'), ?, ?)
-        ON CONFLICT(probe_id) DO UPDATE SET
-          total_uses = total_uses + ?,
-          successful_diagnoses = successful_diagnoses + ?,
-          total_duration_ms = total_duration_ms + ?,
-          last_used_at = datetime('now','localtime'),
-          device_id = excluded.device_id,
-          alert_type = COALESCE(excluded.alert_type, alert_type)
-      `).run(
-        probeId, 1, success ? 1 : 0, durationMs, deviceId || null, alertType || null,
-        // ON CONFLICT 增量
-        1, success ? 1 : 0, durationMs
-      );
-    } catch (err: any) {
-      logger.warn(`Failed to record probe result for ${probeId}: ${err.message}`);
+      probeStatsRepo.recordResult(probeId, success, durationMs, deviceId, alertType);
+    } catch (err: unknown) {
+      logger.warn(`Failed to record probe result for ${probeId}: ${getErrorMessage(err)}`);
     }
   }
 }

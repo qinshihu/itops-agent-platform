@@ -20,7 +20,7 @@ interface EnvConfig {
   LOCAL_AI_API_KEY?: string;
   LOCAL_AI_API_BASE?: string;
   LOCAL_AI_MODEL?: string;
-  WEBHOOK_VERIFY_ENABLED?: boolean;
+  WEBHOOK_VERIFY_ENABLED: 'true' | 'false' | 'warn';
   WEBHOOK_SECRET?: string;
   WEBHOOK_IP_WHITELIST?: string;
   ALERT_WEBHOOK_URL?: string;
@@ -53,6 +53,14 @@ function getEnvAsNumber(key: string, defaultValue: number): number {
   return defaultValue;
 }
 
+function parseWebhookVerifyMode(value: string | undefined): 'true' | 'false' | 'warn' {
+  if (value === undefined || value === '') return 'true';
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'false' || normalized === '0' || normalized === 'off' || normalized === 'no') return 'false';
+  if (normalized === 'warn') return 'warn';
+  return 'true';
+}
+
 function validateEnv(): EnvConfig {
   const warnings: string[] = [];
   const errors: string[] = [];
@@ -66,12 +74,26 @@ function validateEnv(): EnvConfig {
     warnings.push('Missing recommended environment variable: JWT_SECRET (using insecure default, DO NOT use in production)');
   }
 
-  if (jwtSecret && jwtSecret === 'itops-agent-platform-secret-key-change-in-production') {
+  const PLACEHOLDER_SECRETS = new Set([
+    'itops-agent-platform-secret-key-change-in-production',
+    'your-production-secret-key-change-me-32-chars',
+    'please_change_this_to_a_random_64_char_string',
+    'change-me',
+    'secret',
+    'jwt-secret',
+  ]);
+
+  if (jwtSecret && PLACEHOLDER_SECRETS.has(jwtSecret.trim().toLowerCase())) {
     if (isProduction) {
-      throw new Error('Cannot use default JWT_SECRET in production! Please set a secure secret.');
+      throw new Error('Cannot use placeholder JWT_SECRET in production! Please set a secure random secret (openssl rand -hex 32).');
     } else {
-      console.warn('⚠️ WARNING: Using default JWT secret. This is INSECURE and should ONLY be used for development!');
+      console.warn('⚠️ WARNING: Using placeholder JWT secret. This is INSECURE and should ONLY be used for development!');
     }
+  }
+
+  // 生产环境密钥长度校验
+  if (isProduction && jwtSecret && jwtSecret.length < 32) {
+    throw new Error('JWT_SECRET must be at least 32 characters in production. Generate with: openssl rand -hex 32');
   }
 
   if (warnings.length > 0) {
@@ -114,7 +136,7 @@ function validateEnv(): EnvConfig {
     LOCAL_AI_API_KEY: process.env.LOCAL_AI_API_KEY,
     LOCAL_AI_API_BASE: process.env.LOCAL_AI_API_BASE,
     LOCAL_AI_MODEL: process.env.LOCAL_AI_MODEL,
-    WEBHOOK_VERIFY_ENABLED: process.env.WEBHOOK_VERIFY_ENABLED !== 'false',
+    WEBHOOK_VERIFY_ENABLED: parseWebhookVerifyMode(process.env.WEBHOOK_VERIFY_ENABLED),
     WEBHOOK_SECRET: process.env.WEBHOOK_SECRET,
     ALERT_WEBHOOK_URL: process.env.ALERT_WEBHOOK_URL,
     ALERT_EMAIL_HOST: process.env.ALERT_EMAIL_HOST,

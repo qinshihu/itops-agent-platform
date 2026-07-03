@@ -1,3 +1,4 @@
+import os from 'os';
 import { logger } from '../../../../utils/logger';
 import type {
   HostInfo,
@@ -55,16 +56,16 @@ export class SystemCollector {
   async getHostInfo(): Promise<HostInfo> {
     // 这里使用简化的实现，实际项目可以使用 systeminformation 库
     return {
-      hostname: require('os').hostname(),
-      os: require('os').type(),
-      osVersion: require('os').release(),
-      arch: require('os').arch(),
-      cpuCount: require('os').cpus().length,
-      totalMemory: require('os').totalmem(),
+      hostname: os.hostname(),
+      os: os.type(),
+      osVersion: os.release(),
+      arch: os.arch(),
+      cpuCount: os.cpus().length,
+      totalMemory: os.totalmem(),
       totalDisk: 1000000000000, // 1TB 占位
       ipAddresses: this.getIPAddresses(),
-      uptime: Math.floor(require('os').uptime()),
-      bootTime: Math.floor(Date.now() / 1000 - require('os').uptime())
+      uptime: Math.floor(os.uptime()),
+      bootTime: Math.floor(Date.now() / 1000 - os.uptime())
     };
   }
 
@@ -72,7 +73,6 @@ export class SystemCollector {
    * 获取主机负载
    */
   async getHostLoad(): Promise<HostLoad> {
-    const os = require('os');
     const now = Date.now();
     const timestamp = Math.floor(now / 1000);
 
@@ -129,7 +129,7 @@ export class SystemCollector {
   /**
    * 获取进程列表
    */
-  async getProcessList(topN = 20, sortBy = 'cpu'): Promise<ProcessListResponse> {
+  async getProcessList(_topN = 20, _sortBy = 'cpu'): Promise<ProcessListResponse> {
     // 简化实现，返回空列表
     return {
       sampledAt: Math.floor(Date.now() / 1000),
@@ -163,11 +163,12 @@ export class SystemCollector {
    * 获取 IP 地址
    */
   private getIPAddresses(): string[] {
-    const interfaces = require('os').networkInterfaces();
+    const interfaces = os.networkInterfaces();
     const addresses: string[] = [];
 
     for (const name in interfaces) {
       const iface = interfaces[name];
+      if (!iface) continue;
       for (const alias of iface) {
         if (alias.family === 'IPv4' && alias.address !== '127.0.0.1') {
           addresses.push(alias.address);

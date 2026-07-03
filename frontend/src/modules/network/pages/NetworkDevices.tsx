@@ -38,6 +38,25 @@ interface NetworkDevice {
   snmp_credential_name?: string;
 }
 
+interface InspectionResultData {
+  _deviceName?: string;
+  [key: string]: unknown;
+}
+
+interface TimelineItem {
+  id?: string;
+  device_id?: string;
+  source?: string;
+  created_at?: string;
+  [key: string]: unknown;
+}
+
+interface DeviceTimelineEntry {
+  lastAnalysis?: TimelineItem;
+  lastInspection?: TimelineItem;
+  lastExecution?: TimelineItem;
+}
+
 export default function NetworkDevices() {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -45,8 +64,8 @@ export default function NetworkDevices() {
   const [editingDevice, setEditingDevice] = useState<NetworkDevice | null>(null);
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [inspectionResult, setInspectionResult] = useState<any>(null);
-  const [snmpInspectionResult, setSnmpInspectionResult] = useState<any>(null);
+  const [inspectionResult, setInspectionResult] = useState<InspectionResultData | null>(null);
+  const [snmpInspectionResult, setSnmpInspectionResult] = useState<InspectionResultData | null>(null);
   const [showInspectionModal, setShowInspectionModal] = useState(false);
   const [inspectingDevice, setInspectingDevice] = useState<NetworkDevice | null>(null);
   const [inspectionType, setInspectionType] = useState<'standard' | 'custom' | 'full'>('standard');
@@ -110,8 +129,8 @@ export default function NetworkDevices() {
       data._deviceName = device.name;
       setSnmpInspectionResult(data);
       queryClient.invalidateQueries({ queryKey: ['network-devices'] });
-    } catch (error: any) {
-      toast.error('SNMP 巡检失败: ' + (error.response?.data?.error || error.message));
+    } catch (error) {
+      toast.error('SNMP 巡检失败: ' + ((error as { response?: { data?: { error?: string } }; message?: string }).response?.data?.error || (error as { message?: string }).message || '未知错误'));
     }
   };
 
@@ -129,8 +148,8 @@ export default function NetworkDevices() {
       } else {
         toast.error('SNMP 连接失败: ' + (response.data.message || ''));
       }
-    } catch (error: any) {
-      toast.error('SNMP 测试失败: ' + (error.response?.data?.message || error.message));
+    } catch (error) {
+      toast.error('SNMP 测试失败: ' + (((error as { response?: { data?: { message?: string } } }).response?.data?.message || (error as { message?: string }).message) || ''));
     }
   };
 
@@ -145,7 +164,7 @@ export default function NetworkDevices() {
       } else {
         toast.error(`连接失败: ${result.data.message}`);
       }
-    } catch (error: any) {
+    } catch (error) {
       toast.error('测试连接失败');
     }
   };
@@ -214,8 +233,8 @@ export default function NetworkDevices() {
       queryClient.invalidateQueries({ queryKey: ['network-devices'] });
       setSelectedDevices(new Set());
       setShowBatchModal(false);
-    } catch (error: any) {
-      toast.error('批量巡检失败: ' + (error.response?.data?.error || error.message));
+    } catch (error) {
+      toast.error('批量巡检失败: ' + ((error as { response?: { data?: { error?: string } }; message?: string }).response?.data?.error || (error as { message?: string }).message || '未知错误'));
     } finally {
       setIsBatchInspecting(false);
     }
@@ -247,14 +266,14 @@ export default function NetworkDevices() {
   });
 
   // 收集各设备最近活动时间轴
-  const { data: deviceTimeline = {} } = useQuery({
+  const { data: deviceTimeline = {} as Record<string, DeviceTimelineEntry> } = useQuery({
     queryKey: ['device-timeline'],
     queryFn: async () => {
       const res = await api.get('/api/inspection-center?limit=300');
       const items = (res.data.data || []) as any[];
       // 按 device_id 分组，取最新一条 per source
-      const map: Record<string, { lastAnalysis?: any; lastInspection?: any; lastExecution?: any }> = {};
-      items.forEach((item: any) => {
+      const map: Record<string, DeviceTimelineEntry> = {};
+      items.forEach((item: TimelineItem) => {
         if (!map[item.device_id]) map[item.device_id] = {};
         if (item.source === 'analysis' && !map[item.device_id].lastAnalysis) map[item.device_id].lastAnalysis = item;
         if (item.source === 'inspection' && !map[item.device_id].lastInspection) map[item.device_id].lastInspection = item;
@@ -416,9 +435,9 @@ export default function NetworkDevices() {
                     onHistory={handleHistory}
                   />
                   {/* 设备状态栏 */}
-                  {(deviceTimeline as any)[device.id] && (
+                  {deviceTimeline[device.id] && (
                     <div className="flex items-center gap-3 px-4 py-2 mt-0.5 bg-background/40 border border-border/50 rounded-lg">
-                      {(deviceTimeline as any)[device.id].lastAnalysis && (
+                      {deviceTimeline[device.id].lastAnalysis && (
                         <button
                           onClick={() => navigate(`/alert-auto-analysis?deviceId=${device.id}`)}
                           className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
@@ -426,24 +445,11 @@ export default function NetworkDevices() {
                           <Zap className="w-3 h-3" />
                           分析:{' '}
                           {(() => {
-                            const a = (deviceTimeline as any)[device.id].lastAnalysis; try { const d = new Date(a.created_at); const n = new Date(); const m = Math.floor((n.getTime() - d.getTime()) / 60000); return m < 60 ? `${m}分前` : `${Math.floor(m / 60)}h前`; } catch { return ''; }
+                            const a = deviceTimeline[device.id].lastAnalysis!; try { const d = new Date(a.created_at!); const n = new Date(); const m = Math.floor((n.getTime() - d.getTime()) / 60000); return m < 60 ? `${m}分前` : `${Math.floor(m / 60)}h前`; } catch { return ''; }
                           })()}
                         </button>
                       )}
-                      {(deviceTimeline as any)[device.id].lastInspection && (
-                        <button
-                          onClick={() => navigate(`/inspection-center?deviceId=${device.id}`)}
-                          className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                        >
-                          <ClipboardCheck className="w-3 h-3" />
-                          巡检:{' '}
-                          {(() => {
-                            const i = (deviceTimeline as any)[device.id].lastInspection; try { const d = new Date(i.created_at); const n = new Date(); const m = Math.floor((n.getTime() - d.getTime()) / 60000); return m < 60 ? `${m}分前` : `${Math.floor(m / 60)}h前`; } catch { return ''; }
-                          })()}
-                        </button>
-                      )}
-                    </div>
-                  )}
+
                 </div>
               ))}
             </div>

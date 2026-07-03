@@ -1,14 +1,11 @@
 import { randomUUID } from 'crypto';
-import { logger } from '../../../../utils/logger';
+import { generateCompletion } from '../llm/llmService';
 import type {
   SpecialistDomain,
   AgentCapability,
   TaskContext,
   ExecutionResult,
   SpecialistRegistryEntry} from './types';
-import {
-  TaskStatus
-} from './types';
 
 /**
  * Specialist 基类
@@ -105,6 +102,35 @@ export abstract class SpecialistBase {
       confidence: options?.confidence,
       nextActions: options?.nextActions
     };
+  }
+
+  /**
+   * 使用 LLM 执行任务的通用模板方法
+   * 子类可直接调用此方法避免重复代码
+   */
+  protected async executeWithLLM(context: TaskContext): Promise<ExecutionResult> {
+    const startTime = Date.now();
+    try {
+      const response = await generateCompletion(
+        context.input,
+        this.systemPrompt,
+        this.temperature,
+        undefined,
+        context.taskId,
+        this.name
+      );
+
+      return this.buildResult(true, response, {
+        duration: Date.now() - startTime,
+        confidence: 0.8,
+        metadata: { taskId: context.taskId }
+      });
+    } catch (error) {
+      return this.buildResult(false, '', {
+        error: error instanceof Error ? error.message : String(error),
+        duration: Date.now() - startTime
+      });
+    }
   }
 
   /**

@@ -1,44 +1,33 @@
 /**
  * 模块路由自动注册器
  *
- * 新增模块只需：
- * 1. 在模块目录下创建 routes.ts（导出 Router）
- * 2. 在此文件中添加一行配置
- *
- * 无需手动修改 app.ts
+ * 约定：每个模块的 routes.ts 导出 default router（主受保护路由）
+ * 以及 named exports（需要不同中间件的特殊路由：public/webhook/special）。
+ * _registry.ts 仅 import 各模块的 routes.ts，不直接钻 routes/ 子文件。
  */
 
-import { Express, Router } from 'express';
+import type { Express, Router } from 'express';
 import { rateLimiter } from '../middleware/rateLimiter';
 import { webhookIpFilter } from '../middleware/rateLimiter';
 import { authenticateToken, requirePasswordChange } from '../middleware/auth';
+import { errorHandler, notFoundHandler } from '../middleware/errorHandler';
 
-// === 模块路由导入 ===
+// === 模块路由导入（仅从各模块的 routes.ts 导入）===
 import aiRoutes from './ai/routes';
-import alertRoutes from './alerts/routes';
+import alertRoutes, { alertAutoRouter, alertCorrelationRouter } from './alerts/routes';
 import autoRoutes from './auto/routes';
 import containerRoutes from './containers/routes';
 import databaseRoutes from './database/routes';
 import dcRoutes from './dc/routes';
-import infraRoutes from './infra/routes';
+import infraRoutes, { linkageRouter, webhookRouter } from './infra/routes';
 import kubernetesRoutes from './kubernetes/routes';
 import monitorRoutes from './monitor/routes';
-import networkRoutes from './network/routes';
+import networkRoutes, { networkDiscoveryRouter } from './network/routes';
 import serverRoutes from './servers/routes';
 import workflowRoutes from './workflow/routes';
 
 // === Auth 模块：auth 路由公开，user 路由受保护 ===
-import authOnlyRoutes from './auth/routes/authRoutes';
-import userRoutes from './auth/routes/userRoutes';
-
-// === 特殊路由：挂载在 /api 根路径下 ===
-import alertAutoRouter from './alerts/routes/alertAutoRoutes';
-import linkageRouter from './infra/routes/linkageRoutes';
-import networkDiscoveryRouter from './network/routes/networkDiscoveryRoutes';
-import alertCorrelationRouter from './alerts/routes/alertCorrelationRoutes';
-
-// === Webhook 路由：公开且 IP 过滤 ===
-import webhookRoutes from './infra/routes/webhookRoutes';
+import { authOnlyRouter, userRouter } from './auth/routes';
 
 interface ModuleConfig {
   path: string;
@@ -51,8 +40,8 @@ interface ModuleConfig {
  */
 const modules: ModuleConfig[] = [
   // === 公开路由：auth + webhook ===
-  { path: '/api/auth', router: authOnlyRoutes, options: { public: true } },
-  { path: '/api/webhooks', router: webhookRoutes, options: { webhook: true } },
+  { path: '/api/auth', router: authOnlyRouter, options: { public: true } },
+  { path: '/api/webhooks', router: webhookRouter, options: { webhook: true } },
 
   // === 受保护路由（需要认证） ===
   { path: '/api', router: aiRoutes },
@@ -67,7 +56,7 @@ const modules: ModuleConfig[] = [
   { path: '/api', router: networkRoutes },
   { path: '/api', router: serverRoutes },
   { path: '/api', router: workflowRoutes },
-  { path: '/api/users', router: userRoutes },
+  { path: '/api/users', router: userRouter },
 
   // === 受保护特殊路由 ===
   { path: '/api', router: alertAutoRouter },
@@ -78,10 +67,10 @@ const modules: ModuleConfig[] = [
 
 /**
  * 注册所有模块路由到 Express 应用
- * 正确顺序：先公开路由，再加认证，再加受保护路由！
+ * 正确顺序：先公开路由，再加认证，再加受保护路由，最后挂载 errorHandler
  */
 export function registerAllModules(app: Express): void {
-  // 1. 注册公开/ webhook 路由，无需认证！
+  // 1. 注册公开/webhook 路由，无需认证！
   for (const mod of modules) {
     if (mod.options?.webhook) {
       app.use(mod.path, webhookIpFilter, rateLimiter, mod.router);
@@ -106,4 +95,8 @@ export function registerAllModules(app: Express): void {
       }
     }
   }
+
+  // 5. 全局错误处理中间件（必须在所有路由之后）
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 }

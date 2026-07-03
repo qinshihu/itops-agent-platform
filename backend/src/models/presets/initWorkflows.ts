@@ -1,4 +1,4 @@
-import { db } from '../database';
+import db from '../database';
 import { randomUUID } from 'crypto';
 import { logger } from '../../utils/logger';
 
@@ -157,7 +157,7 @@ export function initializePresetWorkflows() {
   ];
 
   const insertWorkflow = db.prepare(`
-    INSERT INTO workflows (id, name, description, nodes, edges, is_template)
+    INSERT OR IGNORE INTO workflows (id, name, description, nodes, edges, is_template)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
 

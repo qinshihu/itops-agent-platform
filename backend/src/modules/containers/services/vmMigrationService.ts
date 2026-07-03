@@ -1,6 +1,6 @@
 import { logger } from '../../../utils/logger';
 import { randomUUID } from 'crypto';
-import { db } from '../../../models/database';
+import db from '../../../models/database';
 import { vmManagementService } from '../../containers/services/vmManagement';
 
 interface MigrationTask {
@@ -24,28 +24,7 @@ class VmMigrationService {
   private progressIntervals: Map<string, NodeJS.Timeout> = new Map();
 
   constructor() {
-    // Tables initialized via ensureTables() called from app.ts after DB ready
-  }
-
-  ensureTables() {
-    this.initTables();
-  }
-
-  private initTables() {
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS vm_migrations (
-          id TEXT PRIMARY KEY, vm_id TEXT NOT NULL, vm_name TEXT,
-          source_host TEXT, target_host TEXT NOT NULL, platform_id TEXT NOT NULL,
-          status TEXT DEFAULT 'pending', progress INTEGER DEFAULT 0,
-          reason TEXT, error_message TEXT,
-          started_at TEXT, completed_at TEXT,
-          created_at TEXT DEFAULT (datetime('now','localtime'))
-        )
-      `);
-    } catch (err) {
-      logger.error('Failed to create vm_migrations table:', err);
-    }
+    // 表结构由 migration v049 维护，本服务不再 ensureTables。
   }
 
   async startMigration(platformId: string, vmId: string, targetHost: string, reason?: string): Promise<MigrationTask> {

@@ -24,6 +24,7 @@ import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
 import { env } from '../../../utils/env';
 import { randomUUID } from 'crypto';
+import { tasksRepo, alertRepository } from '../../../repositories';
 
 // ====================== 接口定义 ======================
 
@@ -224,17 +225,14 @@ export class SelfMonitorService {
             `).get(`自监控: ${key} 异常`);
 
             if (!existing) {
-              db.prepare(`
-                INSERT INTO alerts (id, source, severity, title, content, metadata, status)
-                VALUES (?, ?, ?, ?, ?, ?, 'new')
-              `).run(
-                randomUUID(),
-                'self_monitor',
-                'high',
-                `自监控: ${key} 异常`,
-                check.message,
-                JSON.stringify({ check, timestamp: report.timestamp })
-              );
+              alertRepository.createSimple({
+                id: randomUUID(),
+                title: `自监控: ${key} 异常`,
+                severity: 'high',
+                content: check.message,
+                source: 'self_monitor',
+                status: 'new',
+              });
               logger.warn(`🔄 [SelfMonitor] Created alert for: ${key}`);
             }
           }
@@ -358,7 +356,7 @@ export class SelfMonitorService {
     try {
       // 检查数据目录
       const dataDir = path.dirname(env.DATABASE_PATH);
-      const baseDir = path.resolve(process.cwd());
+      const _baseDir = path.resolve(process.cwd());
 
       // 尝试获取目录的磁盘信息
       const stats = fs.statfsSync(dataDir);
@@ -423,8 +421,8 @@ export class SelfMonitorService {
       const systemUsedPercent = ((totalMem - freeMem) / totalMem) * 100;
 
       // 检查 Node 进程内存
-      const heapUsedMb = memUsage.heapUsed / 1024 / 1024;
-      const heapTotalMb = memUsage.heapTotal / 1024 / 1024;
+      const _heapUsedMb = memUsage.heapUsed / 1024 / 1024;
+      const _heapTotalMb = memUsage.heapTotal / 1024 / 1024;
       const rssMb = memUsage.rss / 1024 / 1024;
 
       // 系统内存检查

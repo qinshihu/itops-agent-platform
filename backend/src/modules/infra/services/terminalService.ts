@@ -1,6 +1,6 @@
 import type { ClientChannel } from 'ssh2';
 import { Client } from 'ssh2';
-import db from '../../../models/database';
+import { serversRepo } from '../../../repositories';
 import { decrypt } from '../../auth/services/encryptionService';
 import { logger } from '../../../utils/logger';
 import { checkCommandSafety } from '../../../middleware/commandFilter';
@@ -72,7 +72,7 @@ export class TerminalService {
     cols: number,
     rows: number
   ): Promise<{ sessionId: string; shell: ClientChannel; error?: string }> {
-    const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(serverId) as ServerInfo | undefined;
+    const server = serversRepo.getById(serverId);
 
     if (!server) {
       return { sessionId: '', shell: null as unknown as ClientChannel, error: 'Server not found' };

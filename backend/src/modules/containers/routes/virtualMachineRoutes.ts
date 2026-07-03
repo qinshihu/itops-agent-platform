@@ -1,9 +1,14 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { db } from '../../../models/database';
+import { virtualMachineRepository } from '../../../repositories';
 import crypto from 'crypto';
 import { requireRole } from '../../../middleware/auth';
 import { vmManagementService } from '../services/vmManagement';
+import { getErrorMessage } from '../../../utils/errorHelpers';
+
+interface AuthenticatedRequest extends Request {
+  user?: { id: string; username: string };
+}
 
 const router = Router();
 
@@ -19,11 +24,11 @@ function getPlatformId(req: Request): string {
 }
 
 function getUserId(req: Request): string | undefined {
-  return (req as any).user?.id;
+  return (req as AuthenticatedRequest).user?.id;
 }
 
 function getUsername(req: Request): string | undefined {
-  return (req as any).user?.username;
+  return (req as AuthenticatedRequest).user?.username;
 }
 
 // ==================== 平台管理 ====================
@@ -33,8 +38,8 @@ router.get('/platforms', (req: Request, res: Response) => {
   try {
     const platforms = vmManagementService.listPlatformConfigs();
     res.json({ success: true, data: platforms });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -57,8 +62,8 @@ router.post('/platforms', requireRole('admin'), async (req: Request, res: Respon
       tags: tags || [],
     });
     return res.json({ success: true, data: platform });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -67,8 +72,8 @@ router.delete('/platforms/:id', requireRole('admin'), async (req: Request, res: 
   try {
     await vmManagementService.deletePlatform(req.params.id);
     res.json({ success: true, message: '平台已删除' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -77,8 +82,8 @@ router.post('/platforms/:id/test', requireRole('admin'), async (req: Request, re
   try {
     const result = await vmManagementService.testPlatformConnection(req.params.id);
     res.json({ success: result.success, data: result, message: result.message });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -89,7 +94,7 @@ router.get('/stats', async (req: Request, res: Response) => {
   try {
     // 聚合所有平台的 VM 统计
     const platforms = vmManagementService.listPlatformConfigs();
-    const platformStats: any[] = [];
+    const platformStats: Array<Record<string, unknown>> = [];
 
     for (const p of platforms) {
       try {
@@ -98,9 +103,9 @@ router.get('/stats', async (req: Request, res: Response) => {
           platformId: p.id,
           platformName: p.name,
           total: vms.length,
-          running: vms.filter((v: any) => v.powerState === 'poweredOn').length,
-          stopped: vms.filter((v: any) => v.powerState === 'poweredOff').length,
-          suspended: vms.filter((v: any) => v.powerState === 'suspended').length,
+          running: vms.filter((v: Record<string, unknown>) => v.powerState === 'poweredOn').length,
+          stopped: vms.filter((v: Record<string, unknown>) => v.powerState === 'poweredOff').length,
+          suspended: vms.filter((v: Record<string, unknown>) => v.powerState === 'suspended').length,
         });
       } catch {
         platformStats.push({
@@ -115,8 +120,8 @@ router.get('/stats', async (req: Request, res: Response) => {
     const totalRunning = platformStats.reduce((sum, s) => sum + (s.running || 0), 0);
 
     // 后备：从 SQLite 获取
-    const sqliteTotal = (db.prepare('SELECT COUNT(*) as count FROM virtual_machines').get() as any)?.count || 0;
-    const byStatus = db.prepare('SELECT status, COUNT(*) as count FROM virtual_machines GROUP BY status').all();
+    const sqliteTotal = virtualMachineRepository.countAll();
+    const byStatus = virtualMachineRepository.countByStatus();
 
     res.json({
       success: true,
@@ -126,8 +131,8 @@ router.get('/stats', async (req: Request, res: Response) => {
         sqliteFallback: { total: sqliteTotal, byStatus },
       },
     });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -178,17 +183,11 @@ router.get('/', async (req: Request, res: Response) => {
     }
 
     // 后备：SQLite 查询
-    let where = 'WHERE 1=1';
-    const params: any[] = [];
-    if (status) { where += ' AND status = ?'; params.push(status); }
-    if (hypervisor) { where += ' AND hypervisor = ?'; params.push(hypervisor); }
-    if (search) { where += ' AND (name LIKE ? OR host LIKE ? OR ip_address LIKE ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
-
-    const total = (db.prepare(`SELECT COUNT(*) as count FROM virtual_machines ${where}`).get(...params) as any)?.count || 0;
-    const data = db.prepare(`SELECT * FROM virtual_machines ${where} ORDER BY updated_at DESC LIMIT ? OFFSET ?`).all(...params, pageSize, offset);
+    const total = virtualMachineRepository.count({ status, hypervisor, search });
+    const data = virtualMachineRepository.list({ status, hypervisor, search, limit: pageSize, offset });
     res.json({ success: true, data, total, source: 'sqlite' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -209,11 +208,11 @@ router.get('/:id', async (req: Request, res: Response) => {
       }
     }
 
-    const item = db.prepare('SELECT * FROM virtual_machines WHERE id = ?').get(req.params.id);
+    const item = virtualMachineRepository.getById(req.params.id);
     if (!item) return res.status(404).json({ success: false, message: '未找到' });
     res.json({ success: true, data: item, source: 'sqlite' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -248,13 +247,25 @@ router.post('/', requireRole('admin', 'operator'), async (req: Request, res: Res
 
     // 后备：SQLite 插入
     const id = crypto.randomUUID();
-    db.prepare(`
-      INSERT INTO virtual_machines (id, name, host, status, os, cpu_cores, memory_mb, disk_gb, ip_address, hypervisor, agent_id, server_id, tags, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, name || '', host || '', 'stopped', os || '', cpu_cores || 0, memory_mb || 0, disk_gb || 0, ip_address || '', hypervisor || '', agent_id || '', server_id || '', JSON.stringify(tags || []), notes || '');
+    virtualMachineRepository.insert({
+      id,
+      name: name || '',
+      host: host || '',
+      status: 'stopped',
+      os: os || '',
+      cpu_cores: cpu_cores || 0,
+      memory_mb: memory_mb || 0,
+      disk_gb: disk_gb || 0,
+      ip_address: ip_address || '',
+      hypervisor: hypervisor || '',
+      agent_id: agent_id || '',
+      server_id: server_id || '',
+      tags: JSON.stringify(tags || []),
+      notes: notes || '',
+    });
     res.json({ success: true, data: { id }, source: 'sqlite' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -262,12 +273,22 @@ router.post('/', requireRole('admin', 'operator'), async (req: Request, res: Res
 router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { name, host, status, os, cpu_cores, memory_mb, disk_gb, ip_address, hypervisor, tags, notes } = req.body;
-    db.prepare(`
-      UPDATE virtual_machines SET name=?, host=?, status=?, os=?, cpu_cores=?, memory_mb=?, disk_gb=?, ip_address=?, hypervisor=?, tags=?, notes=?, updated_at=datetime('now','localtime') WHERE id=?
-    `).run(name || '', host || '', status || '', os || '', cpu_cores || 0, memory_mb || 0, disk_gb || 0, ip_address || '', hypervisor || '', JSON.stringify(tags || []), notes || '', req.params.id);
+    virtualMachineRepository.update(req.params.id, {
+      name: name || '',
+      host: host || '',
+      status: status || '',
+      os: os || '',
+      cpu_cores: cpu_cores || 0,
+      memory_mb: memory_mb || 0,
+      disk_gb: disk_gb || 0,
+      ip_address: ip_address || '',
+      hypervisor: hypervisor || '',
+      tags: JSON.stringify(tags || []),
+      notes: notes || '',
+    });
     res.json({ success: true, data: { id: req.params.id } });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -286,10 +307,10 @@ router.delete('/:id', requireRole('admin', 'operator'), async (req: Request, res
     }
 
     // 删除 SQLite 记录
-    db.prepare('DELETE FROM virtual_machines WHERE id = ?').run(req.params.id);
+    virtualMachineRepository.deleteById(req.params.id);
     res.json({ success: true, message: '虚拟机已删除' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -305,11 +326,11 @@ router.post('/:id/start', requireRole('admin', 'operator'), async (req: Request,
     await vmManagementService.powerOnVM(platformId, req.params.id, userId, username);
 
     // 同步更新 SQLite 状态
-    db.prepare("UPDATE virtual_machines SET status='running', updated_at=datetime('now','localtime') WHERE id=?").run(req.params.id);
+    virtualMachineRepository.updateStatus(req.params.id, 'running');
 
     res.json({ success: true, message: '虚拟机已开机' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -322,11 +343,11 @@ router.post('/:id/stop', requireRole('admin', 'operator'), async (req: Request, 
 
     await vmManagementService.powerOffVM(platformId, req.params.id, userId, username);
 
-    db.prepare("UPDATE virtual_machines SET status='stopped', updated_at=datetime('now','localtime') WHERE id=?").run(req.params.id);
+    virtualMachineRepository.updateStatus(req.params.id, 'stopped');
 
     res.json({ success: true, message: '虚拟机已关机' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -339,11 +360,11 @@ router.post('/:id/restart', requireRole('admin', 'operator'), async (req: Reques
 
     await vmManagementService.restartVM(platformId, req.params.id, userId, username);
 
-    db.prepare("UPDATE virtual_machines SET status='running', updated_at=datetime('now','localtime') WHERE id=?").run(req.params.id);
+    virtualMachineRepository.updateStatus(req.params.id, 'running');
 
     res.json({ success: true, message: '虚拟机已重启' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -355,15 +376,6 @@ router.post('/sync', requireRole('admin', 'operator'), async (req: Request, res:
     const platformId = getPlatformId(req);
 
     const vms = await vmManagementService.listVMs(platformId);
-    const upsert = db.prepare(`
-      INSERT INTO virtual_machines (id, name, host, status, os, cpu_cores, memory_mb, disk_gb, ip_address, hypervisor, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
-      ON CONFLICT(id) DO UPDATE SET
-        name = excluded.name, host = excluded.host, status = excluded.status,
-        os = excluded.os, cpu_cores = excluded.cpu_cores, memory_mb = excluded.memory_mb,
-        disk_gb = excluded.disk_gb, ip_address = excluded.ip_address,
-        hypervisor = excluded.hypervisor, updated_at = datetime('now','localtime')
-    `);
 
     let synced = 0;
     for (const vm of vms) {
@@ -372,17 +384,24 @@ router.post('/sync', requireRole('admin', 'operator'), async (req: Request, res:
         : vm.powerState === 'suspended' ? 'suspended'
         : 'stopped';
 
-      upsert.run(
-        vm.id, vm.name, vm.hostName || '',
-        status, vm.guestOs || '', vm.numCPUs || 0, vm.memoryMB || 0,
-        totalDiskGB, vm.ipAddress || '', vm.hypervisorType || '',
-      );
+      virtualMachineRepository.upsertFromHypervisor({
+        id: vm.id,
+        name: vm.name,
+        host: vm.hostName || '',
+        status,
+        os: vm.guestOs || '',
+        cpu_cores: vm.numCPUs || 0,
+        memory_mb: vm.memoryMB || 0,
+        disk_gb: totalDiskGB,
+        ip_address: vm.ipAddress || '',
+        hypervisor: vm.hypervisorType || '',
+      });
       synced++;
     }
 
     res.json({ success: true, data: { synced, platformId, total: vms.length } });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -394,8 +413,8 @@ router.get('/:id/snapshots', async (req: Request, res: Response) => {
     const platformId = getPlatformId(req);
     const snapshots = await vmManagementService.listSnapshots(platformId, req.params.id);
     res.json({ success: true, data: snapshots });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -419,8 +438,8 @@ router.post('/:id/snapshots', requireRole('admin', 'operator'), async (req: Requ
     }, userId, username);
 
     res.json({ success: true, data: snapshot });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -437,8 +456,8 @@ router.post('/:id/snapshots/:snapshotId/restore', requireRole('admin', 'operator
     }, userId, username);
 
     res.json({ success: true, message: '快照已恢复' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -452,8 +471,8 @@ router.delete('/:id/snapshots/:snapshotId', requireRole('admin', 'operator'), as
     await vmManagementService.deleteSnapshot(platformId, req.params.snapshotId, req.params.id, userId, username);
 
     res.json({ success: true, message: '快照已删除' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -465,8 +484,8 @@ router.get('/:id/stats', async (req: Request, res: Response) => {
     const platformId = getPlatformId(req);
     const stats = await vmManagementService.getVMStats(platformId, req.params.id);
     res.json({ success: true, data: stats });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -478,8 +497,8 @@ router.get('/:id/templates', async (req: Request, res: Response) => {
     const platformId = getPlatformId(req);
     const templates = await vmManagementService.listTemplates(platformId);
     res.json({ success: true, data: templates });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -505,20 +524,23 @@ router.post('/:id/clone', requireRole('admin', 'operator'), async (req: Request,
     }, userId, username);
 
     // 同步到 SQLite
-    const totalDiskGB = (cloned.disks || []).reduce((sum: number, d: any) => sum + (d.sizeGB || 0), 0);
-    db.prepare(`
-      INSERT OR REPLACE INTO virtual_machines (id, name, host, status, os, cpu_cores, memory_mb, disk_gb, ip_address, hypervisor, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
-    `).run(
-      cloned.id, cloned.name, cloned.hostName || '',
-      cloned.powerState === 'poweredOn' ? 'running' : 'stopped',
-      cloned.guestOs || '', cloned.numCPUs || 0, cloned.memoryMB || 0,
-      totalDiskGB, cloned.ipAddress || '', cloned.hypervisorType || '',
-    );
+    const totalDiskGB = (cloned.disks || []).reduce((sum: number, d: Record<string, unknown>) => sum + ((d.sizeGB as number) || 0), 0);
+    virtualMachineRepository.insertOrReplace({
+      id: cloned.id,
+      name: cloned.name,
+      host: cloned.hostName || '',
+      status: cloned.powerState === 'poweredOn' ? 'running' : 'stopped',
+      os: cloned.guestOs || '',
+      cpu_cores: cloned.numCPUs || 0,
+      memory_mb: cloned.memoryMB || 0,
+      disk_gb: totalDiskGB,
+      ip_address: cloned.ipAddress || '',
+      hypervisor: cloned.hypervisorType || '',
+    });
 
     res.json({ success: true, data: cloned });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 

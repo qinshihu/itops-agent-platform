@@ -1,4 +1,5 @@
 import db from '../../../../models/database';
+import { remediationPolicyRepository } from '../../../../repositories';
 import { logger } from '../../../../utils/logger';
 import type { RemediationPolicy } from '../../../../types';
 
@@ -102,21 +103,8 @@ export const policyEngineMixin = {
     });
   },
 
-  getCatchAllPolicies(source: string): RemediationPolicy[] {
-    return db.prepare(`
-      SELECT * FROM remediation_policies
-      WHERE enabled = 1 AND alert_source = '*'
-      ORDER BY
-        CASE alert_severity
-          WHEN 'disaster' THEN 1
-          WHEN 'critical' THEN 2
-          WHEN 'high' THEN 3
-          WHEN 'warning' THEN 4
-          WHEN 'medium' THEN 4
-          WHEN 'average' THEN 4
-          ELSE 5
-        END
-    `).all() as RemediationPolicy[];
+  getCatchAllPolicies(_source: string): RemediationPolicy[] {
+    return remediationPolicyRepository.findCatchAll() as RemediationPolicy[];
   },
 
   isInCooldown(policy: RemediationPolicy, alert: { id: string }): boolean {

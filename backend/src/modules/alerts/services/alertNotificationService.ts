@@ -1,6 +1,6 @@
-import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
 import { env } from '../../../utils/env';
+import { alertConfigsRepo } from '../../../repositories';
 import { credentialService } from '../../auth/services/credentialService';
 
 export type AlertLevel = 'info' | 'warning' | 'critical';
@@ -83,13 +83,17 @@ export class AlertNotificationService {
 
     try {
       for (const alert of DEFAULT_ALERTS) {
-        const existing = db.prepare('SELECT id FROM alert_configs WHERE name = ?').get(alert.name);
+        const existing = alertConfigsRepo.getIdByName(alert.name);
         if (!existing) {
           const id = `alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          db.prepare(`
-            INSERT INTO alert_configs (id, name, level, enabled, channels, rate_limit_minutes, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))
-          `).run(id, alert.name, alert.level, Number(alert.enabled), JSON.stringify(alert.channels), alert.rateLimitMinutes);
+          alertConfigsRepo.create({
+            id,
+            name: alert.name,
+            level: alert.level,
+            enabled: Number(alert.enabled),
+            channels: JSON.stringify(alert.channels),
+            rate_limit_minutes: alert.rateLimitMinutes,
+          });
         }
       }
       this.isInitialized = true;
@@ -101,20 +105,11 @@ export class AlertNotificationService {
 
   getConfigs(): AlertConfig[] {
     try {
-      const rows = db.prepare('SELECT * FROM alert_configs ORDER BY created_at DESC').all() as Array<{
-        id: string;
-        name: string;
-        level: AlertLevel;
-        enabled: number;
-        channels: string;
-        webhook_url?: string;
-        email_recipients?: string;
-        rate_limit_minutes: number;
-      }>;
+      const rows = alertConfigsRepo.list();
 
       return rows.map(row => {
         // Try to get webhook URL from credential service if not set in row
-        let webhookUrl = row.webhook_url;
+        let webhookUrl = row.webhook_url ?? undefined;
         if (!webhookUrl) {
           const credWebhook = credentialService.getCredential('alert_webhook');
           if (credWebhook) {
@@ -142,7 +137,7 @@ export class AlertNotificationService {
         return {
           id: row.id,
           name: row.name,
-          level: row.level,
+          level: row.level as AlertLevel,
           enabled: Boolean(row.enabled),
           channels: JSON.parse(row.channels || '[]'),
           webhookUrl,
@@ -162,12 +157,12 @@ export class AlertNotificationService {
       if (!config) return null;
 
       const updated = { ...config, ...updates };
-      
+
       // If webhook URL is provided, store it in credential service (encrypted)
       if (updates.webhookUrl) {
         credentialService.setCredential('alert_webhook', updates.webhookUrl);
       }
-      
+
       // If email recipients are provided, store them in credential service (encrypted)
       if (updates.emailRecipients && updates.emailRecipients.length > 0) {
         const existingEmailCredStr = credentialService.getCredential('alert_email');
@@ -182,19 +177,14 @@ export class AlertNotificationService {
         emailConfig.to = updates.emailRecipients.join(',');
         credentialService.setCredential('alert_email', JSON.stringify(emailConfig));
       }
-      
-      db.prepare(`
-        UPDATE alert_configs
-        SET enabled = ?, channels = ?, webhook_url = ?, email_recipients = ?, rate_limit_minutes = ?, updated_at = datetime('now','localtime')
-        WHERE id = ?
-      `).run(
-        Number(updated.enabled),
-        JSON.stringify(updated.channels),
-        updated.webhookUrl || null,
-        updated.emailRecipients ? JSON.stringify(updated.emailRecipients) : null,
-        updated.rateLimitMinutes,
-        id
-      );
+
+      alertConfigsRepo.update(id, {
+        enabled: Number(updated.enabled),
+        channels: JSON.stringify(updated.channels),
+        webhook_url: updated.webhookUrl || null,
+        email_recipients: updated.emailRecipients ? JSON.stringify(updated.emailRecipients) : null,
+        rate_limit_minutes: updated.rateLimitMinutes,
+      });
 
       logger.info('Alert config updated', { id, name: updated.name });
       return updated;
@@ -218,7 +208,7 @@ export class AlertNotificationService {
 
       const lastTriggered = this.lastTriggered.get(config.id) || 0;
       const rateLimitMs = config.rateLimitMinutes * 60 * 1000;
-      
+
       if (Date.now() - lastTriggered < rateLimitMs) {
         logger.debug('Alert rate limited', { alertName });
         return null;
@@ -272,15 +262,16 @@ export class AlertNotificationService {
         this.saveNotification(notification);
         break;
 
-      case 'webhook':
+      case 'webhook': {
         // Use config.webhookUrl or fall back to credential service
         const webhookUrl = config.webhookUrl || credentialService.getCredential('alert_webhook');
         if (webhookUrl) {
           await this.sendWebhook(webhookUrl, notification);
         }
         break;
+      }
 
-      case 'email':
+      case 'email': {
         // Use config.emailRecipients or fall back to credential service
         let recipients = config.emailRecipients;
         if (!recipients || recipients.length === 0) {
@@ -296,11 +287,12 @@ export class AlertNotificationService {
             }
           }
         }
-        
+
         if (recipients && recipients.length > 0) {
           await this.sendEmail(recipients, notification);
         }
         break;
+      }
     }
   }
 
@@ -333,25 +325,25 @@ export class AlertNotificationService {
     const emailCredStr = credentialService.getCredential('alert_email');
     let smtpHost = '';
     let smtpUser = '';
-    let smtpPass = '';
+    let _smtpPass = '';
 
     if (emailCredStr) {
       try {
         const emailCred = JSON.parse(emailCredStr);
         smtpHost = emailCred.host || '';
         smtpUser = emailCred.user || '';
-        smtpPass = emailCred.pass || '';
+        _smtpPass = emailCred.pass || '';
       } catch {
         // Use env vars as fallback
         smtpHost = env.ALERT_EMAIL_HOST || '';
         smtpUser = env.ALERT_EMAIL_USER || '';
-        smtpPass = env.ALERT_EMAIL_PASS || '';
+        _smtpPass = env.ALERT_EMAIL_PASS || '';
       }
     } else {
       // Fall back to environment variables
       smtpHost = env.ALERT_EMAIL_HOST || '';
       smtpUser = env.ALERT_EMAIL_USER || '';
-      smtpPass = env.ALERT_EMAIL_PASS || '';
+      _smtpPass = env.ALERT_EMAIL_PASS || '';
     }
 
     if (smtpHost && smtpUser) {
@@ -371,20 +363,17 @@ export class AlertNotificationService {
 
   private saveNotification(notification: AlertNotification): void {
     try {
-      db.prepare(`
-        INSERT INTO alert_notifications (id, config_id, level, title, message, metadata, channels, status, triggered_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        notification.id,
-        notification.configId,
-        notification.level,
-        notification.title,
-        notification.message,
-        notification.metadata ? JSON.stringify(notification.metadata) : null,
-        JSON.stringify(notification.channels),
-        notification.status,
-        notification.triggeredAt
-      );
+      alertConfigsRepo.saveNotification({
+        id: notification.id,
+        config_id: notification.configId,
+        level: notification.level,
+        title: notification.title,
+        message: notification.message,
+        metadata: notification.metadata ? JSON.stringify(notification.metadata) : null,
+        channels: JSON.stringify(notification.channels),
+        status: notification.status,
+        triggered_at: notification.triggeredAt,
+      });
     } catch (error) {
       logger.error('Failed to save notification', error as Error);
     }
@@ -392,26 +381,12 @@ export class AlertNotificationService {
 
   getNotifications(limit = 50): AlertNotification[] {
     try {
-      const rows = db.prepare(`
-        SELECT * FROM alert_notifications
-        ORDER BY triggered_at DESC
-        LIMIT ?
-      `).all(limit) as Array<{
-        id: string;
-        config_id: string;
-        level: AlertLevel;
-        title: string;
-        message: string;
-        metadata?: string;
-        channels: string;
-        status: string;
-        triggered_at: string;
-      }>;
+      const rows = alertConfigsRepo.listNotifications(limit);
 
       return rows.map(row => ({
         id: row.id,
         configId: row.config_id,
-        level: row.level,
+        level: row.level as AlertLevel,
         title: row.title,
         message: row.message,
         metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
@@ -427,12 +402,7 @@ export class AlertNotificationService {
 
   clearOldNotifications(olderThanDays = 30): number {
     try {
-      const result = db.prepare(`
-        DELETE FROM alert_notifications
-        WHERE triggered_at < datetime('now', '-' || ? || ' days')
-      `).run(olderThanDays);
-      
-      const deleted = Number(result.changes || 0);
+      const deleted = alertConfigsRepo.clearOldNotifications(olderThanDays);
       if (deleted > 0) {
         logger.info(`Cleared ${deleted} old notifications`);
       }

@@ -1,4 +1,4 @@
-import { db } from '../database';
+import db from '../database';
 import { randomUUID } from 'crypto';
 import { logger } from '../../utils/logger';
 
@@ -399,18 +399,21 @@ export function initializeEnhancedWorkflows() {
     }
   ];
 
+  // 幂等保护：仅插入不存在的记录，重启不会重复插入或 PK 冲突
   const insertWorkflow = db.prepare(`
-    INSERT INTO workflows (id, name, description, nodes, edges, is_template)
+    INSERT OR IGNORE INTO workflows (id, name, description, nodes, edges, is_template)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
 
+  let insertedCount = 0;
   enhancedWorkflows.forEach(workflow => {
     try {
-      insertWorkflow.run(workflow.id, workflow.name, workflow.description, workflow.nodes, workflow.edges, workflow.is_template);
+      const result = insertWorkflow.run(workflow.id, workflow.name, workflow.description, workflow.nodes, workflow.edges, workflow.is_template);
+      if (result.changes > 0) insertedCount++;
     } catch (error) {
       logger.error(`Failed to insert enhanced workflow: ${workflow.name}`, error);
     }
   });
 
-  logger.info(`✅ 成功创建 ${enhancedWorkflows.length} 个增强型工作流模板`);
+  logger.info(`✅ 增强型工作流模板处理完成（新增 ${insertedCount}/${enhancedWorkflows.length}，其余已存在跳过）`);
 }

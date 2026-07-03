@@ -16,10 +16,10 @@
  */
 
 import { Client } from 'ssh2';
-import db from '../../../../../models/database';
+import { networkDeviceRepository, serversRepo } from '../../../../../repositories';
 import { decrypt } from '../../../../auth/services/encryptionService';
-import { logger } from '../../../../../utils/logger';
 import type { DeviceRuntimeProfile, RemediationPlan, VerificationChainResult, VerificationStage, ProbeResult } from '../types';
+import { getErrorMessage } from '../../../../../utils/errorHelpers';
 
 class VerificationGates {
   private readonly STAGES: Array<{
@@ -64,8 +64,8 @@ class VerificationGates {
           detail = result.detail;
 
           if (passed) break; // 本级通过，进入下一级
-        } catch (err: any) {
-          detail = `Check error: ${err.message}`;
+        } catch (err: unknown) {
+          detail = `Check error: ${getErrorMessage(err)}`;
           passed = false;
         }
       }
@@ -178,8 +178,8 @@ class VerificationGates {
    */
   private async checkMetricRecovery(
     device: DeviceRuntimeProfile,
-    previousProbes: ProbeResult[],
-    alertTitle: string
+    _previousProbes: ProbeResult[],
+    _alertTitle: string
   ): Promise<{ passed: boolean; detail: string }> {
     try {
       const output = await this.sshExec(device, 'uptime && free -m | grep Mem && df -h / | tail -1');
@@ -217,8 +217,8 @@ class VerificationGates {
           ? `Still elevated: ${issues.join(', ')}`
           : `All metrics normal: load=${loadMatch?.[1] || 'N/A'}, mem=${memMatch ? ((parseInt(memMatch[2])/parseInt(memMatch[1]))*100).toFixed(0)+'%' : 'N/A'}, disk=${diskMatch?.[1]||'N/A'}%`,
       };
-    } catch (err: any) {
-      return { passed: false, detail: `Metric check failed: ${err.message}` };
+    } catch (err: unknown) {
+      return { passed: false, detail: `Metric check failed: ${getErrorMessage(err)}` };
     }
   }
 
@@ -259,7 +259,7 @@ class VerificationGates {
   /**
    * Stage 5: 影响评估
    */
-  private async checkImpact(device: DeviceRuntimeProfile, previousProbes: ProbeResult[]): Promise<{ passed: boolean; detail: string }> {
+  private async checkImpact(device: DeviceRuntimeProfile, _previousProbes: ProbeResult[]): Promise<{ passed: boolean; detail: string }> {
     try {
       // 检查关键进程是否仍然运行、网络连接是否正常
       const output = await this.sshExec(device, 'ps aux --sort=-%cpu | head -5 && echo "---" && ss -tlnp 2>/dev/null | head -10');
@@ -270,8 +270,8 @@ class VerificationGates {
         passed: hasProcesses,
         detail: hasProcesses ? 'System running normally' : 'Suspicious: no process output',
       };
-    } catch (err: any) {
-      return { passed: false, detail: `Impact check failed: ${err.message}` };
+    } catch (err: unknown) {
+      return { passed: false, detail: `Impact check failed: ${getErrorMessage(err)}` };
     }
   }
 
@@ -326,7 +326,7 @@ class VerificationGates {
           password: creds.password,
           readyTimeout: 10000,
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         reject(err);
       }
     });
@@ -335,13 +335,13 @@ class VerificationGates {
   private getCreds(device: DeviceRuntimeProfile): { username?: string; password?: string; port?: number } {
     try {
       if (device.type === 'server') {
-        const sv = db.prepare('SELECT username, password, port FROM servers WHERE id = ?').get(device.deviceId) as any;
+        const sv = serversRepo.getById(device.deviceId);
         if (sv) return { username: sv.username, password: sv.password ? decrypt(sv.password) : undefined, port: sv.port || 22 };
       } else {
-        const nd = db.prepare('SELECT username, password, ssh_port FROM network_devices WHERE id = ?').get(device.deviceId) as any;
+        const nd = networkDeviceRepository.getSshCredentials(device.deviceId);
         if (nd?.username) return { username: nd.username, password: nd.password ? decrypt(nd.password) : undefined, port: nd.ssh_port || 22 };
       }
-    } catch {}
+    } catch { /* ignore */ }
     return { username: 'root' };
   }
 

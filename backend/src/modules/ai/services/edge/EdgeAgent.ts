@@ -13,16 +13,7 @@ import type {
   PluginHealth,
   PromSample
 } from './types';
-import {
-  EdgeAgentStatus,
-  AgentCommand,
-  AgentCommandType,
-  HeartbeatResponse,
-  RegisterAgentRequest,
-  RegisterAgentResponse,
-  TunnelEvent,
-  SkillExecutionRequest
-} from './types';
+import { EdgeAgentStatus } from './types';
 
 // 系统指标收集器
 interface Collector {

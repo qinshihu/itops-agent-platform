@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { networkDiscoveryService } from '../services/networkDiscoveryService';
 import { requireRole } from '../../../middleware/auth';
 import { logger } from '../../../utils/logger';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -13,9 +14,9 @@ router.get('/network-discovery/jobs', (_req: Request, res: Response) => {
   try {
     const jobs = networkDiscoveryService.getJobs();
     res.json({ success: true, data: jobs });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to get discovery jobs:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 
@@ -25,9 +26,9 @@ router.get('/network-discovery/jobs/:id', (req: Request, res: Response) => {
     const job = networkDiscoveryService.getJob(req.params.id);
     if (!job) return res.status(404).json({ success: false, error: '任务不存在' });
     res.json({ success: true, data: job });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to get discovery job:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 
@@ -47,9 +48,9 @@ router.post('/network-discovery/jobs', requireRole('admin'), async (req: Request
     });
 
     res.json({ success: true, data: job });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to create discovery job:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 
@@ -58,9 +59,9 @@ router.post('/network-discovery/jobs/:id/cancel', requireRole('admin'), (req: Re
   try {
     networkDiscoveryService.cancelJob(req.params.id);
     res.json({ success: true, message: '任务已取消' });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to cancel discovery job:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 
@@ -69,9 +70,9 @@ router.delete('/network-discovery/jobs/:id', requireRole('admin'), (req: Request
   try {
     networkDiscoveryService.deleteJob(req.params.id);
     res.json({ success: true, message: '任务已删除' });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to delete discovery job:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 
@@ -87,9 +88,9 @@ router.get('/network-discovery/results', (req: Request, res: Response) => {
 
     const { results, total } = networkDiscoveryService.getResults({ jobId, status, limit, offset });
     res.json({ success: true, data: results, total });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to get discovery results:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 
@@ -103,9 +104,9 @@ router.post('/network-discovery/import', requireRole('admin'), (req: Request, re
 
     const result = networkDiscoveryService.importToDevices(result_ids, ssh_username, ssh_password, ssh_port);
     res.json({ success: true, data: result });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to import discovery results:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 

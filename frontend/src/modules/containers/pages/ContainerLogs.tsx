@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Select, Button, Switch, Input, Space, message, Tooltip, InputNumber } from 'antd';
 import { Play, Square, Search, Download, Trash2, ArrowDown } from 'lucide-react';
 import api from '../../../lib/api';
-import io, { Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
+import io from 'socket.io-client';
 
 interface Container {
   id: string;

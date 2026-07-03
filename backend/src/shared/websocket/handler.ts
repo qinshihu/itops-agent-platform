@@ -209,13 +209,7 @@ export function setupWebSocket(io: SocketIOServer) {
     });
   });
 
-  process.on('SIGTERM', () => {
-    logger.info('🔌 WebSocket server shutting down (SIGTERM)');
-  });
-
-  process.on('SIGINT', () => {
-    logger.info('🔌 WebSocket server shutting down (SIGINT)');
-  });
+  // Graceful shutdown 由 app.ts 统一管理（调用 io.close() + shutdownAllServices）
 }
 
 export function emitToTask(io: SocketIOServer, taskId: string, event: string, data: Record<string, unknown>) {

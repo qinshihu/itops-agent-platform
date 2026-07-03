@@ -32,7 +32,7 @@ export default function SlotsPanel({ rack, slots, onSelectSlot, onAddDevice }: P
   for (let u = totalU; u >= 1; u--) {
     const slot = slots.find((s) => s.start_u <= u && s.end_u >= u && s.device_id);
 
-    if (slot && slot.start_u === u) {
+    if (slot?.start_u === u) {
       // 合并行
       const height = slot.end_u - slot.start_u + 1;
       const bgColor =

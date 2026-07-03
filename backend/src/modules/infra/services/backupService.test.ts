@@ -4,6 +4,25 @@ import { encryptBackupFile, decryptBackupFile, isEncryptedBackup, shouldEncryptB
 
 describe('backupService', () => {
   beforeEach(() => { vi.clearAllMocks(); });
-  it("should be defined", () => { expect(encryptBackupFile).toBeDefined(); });
 
+  it("should be defined", () => { expect(backupService).toBeDefined(); });
+
+  it('isEncryptedBackup returns false for non-existent files', () => {
+    expect(isEncryptedBackup('/tmp/nonexistent-backup.sql')).toBe(false);
+  });
+
+  it('shouldEncryptBackup returns a boolean', () => {
+    const result = shouldEncryptBackup();
+    expect(typeof result).toBe('boolean');
+  });
+
+  it('backupService has init and stopAutoBackup methods', () => {
+    expect(typeof backupService.init).toBe('function');
+    expect(typeof backupService.stopAutoBackup).toBe('function');
+  });
+
+  it('encryptBackupFile and decryptBackupFile are async functions', () => {
+    expect(typeof encryptBackupFile).toBe('function');
+    expect(typeof decryptBackupFile).toBe('function');
+  });
 });

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import db from '../../../models/database';
+import { serverRepository } from '../../../repositories';
 import { decrypt, encrypt } from '../../auth/services/encryptionService';
 import { logger } from '../../../utils/logger';
 
@@ -8,7 +8,7 @@ const router = Router();
 // 获取服务器 VNC 配置
 router.get('/config/:serverId', (req, res) => {
   try {
-    const server = db.prepare('SELECT hostname, vnc_port, vnc_password FROM servers WHERE id = ?').get(req.params.serverId) as any;
+    const server = serverRepository.servers.getVncConfig(req.params.serverId);
 
     if (!server) {
       return res.status(404).json({ success: false, error: 'Server not found' });
@@ -19,7 +19,7 @@ router.get('/config/:serverId', (req, res) => {
     if (server.vnc_password) {
       try {
         decryptedPassword = decrypt(server.vnc_password);
-      } catch (err) {
+      } catch (_err) {
         logger.warn('Failed to decrypt VNC password');
       }
     }
@@ -32,7 +32,7 @@ router.get('/config/:serverId', (req, res) => {
         vnc_password: decryptedPassword
       }
     });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to get VNC config' });
   }
 });
@@ -43,8 +43,7 @@ router.put('/config/:serverId', (req, res) => {
     const { vnc_port, vnc_password } = req.body as { vnc_port?: number; vnc_password?: string };
 
     // 检查服务器是否存在
-    const existingServer = db.prepare('SELECT id FROM servers WHERE id = ?').get(req.params.serverId);
-    if (!existingServer) {
+    if (!serverRepository.servers.existsById(req.params.serverId)) {
       return res.status(404).json({ success: false, error: 'Server not found' });
     }
 
@@ -58,19 +57,19 @@ router.put('/config/:serverId', (req, res) => {
 
     // 更新配置
     if (vnc_port !== undefined && encryptedPassword !== undefined) {
-      db.prepare('UPDATE servers SET vnc_port = ?, vnc_password = ?, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?')
-        .run(vnc_port, encryptedPassword, req.params.serverId);
+      serverRepository.servers.updateVncConfig(req.params.serverId, {
+        vnc_port,
+        vnc_password: encryptedPassword,
+      });
     } else if (vnc_port !== undefined) {
-      db.prepare('UPDATE servers SET vnc_port = ?, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?')
-        .run(vnc_port, req.params.serverId);
+      serverRepository.servers.updateVncConfig(req.params.serverId, { vnc_port });
     } else if (encryptedPassword !== undefined) {
-      db.prepare('UPDATE servers SET vnc_password = ?, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?')
-        .run(encryptedPassword, req.params.serverId);
+      serverRepository.servers.updateVncConfig(req.params.serverId, { vnc_password: encryptedPassword });
     }
 
     logger.info(`VNC config updated for server ${req.params.serverId}`);
     res.json({ success: true, message: 'VNC config updated successfully' });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to update VNC config' });
   }
 });

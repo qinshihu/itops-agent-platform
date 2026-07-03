@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { logger } from '../../../../utils/logger';
-import { callDoubaoAPI } from '../llm/llmService';
+import { generateCompletion } from '../llm/llmService';
 import type { SpecialistBase } from './SpecialistBase';
 import { specialistRegistry } from './SpecialistRegistry';
 import { agentMcpAdapter } from '../agents/agentMcpAdapter';
@@ -152,9 +152,9 @@ ${input}
 如果任务很简单，只需要一个子任务即可。`;
 
     try {
-      const llmResponse = await callDoubaoAPI(prompt, this.systemPrompt, this.name, 0.3);
+      const llmResponse = await generateCompletion(prompt, this.systemPrompt, 0.3, undefined, this.id, this.name);
       return this.parseDecompositionResponse(llmResponse, input);
-    } catch (error) {
+    } catch (_error) {
       logger.warn('LLM 任务分解失败，使用简单分解策略');
       return this.fallbackDecomposition(input);
     }
@@ -265,7 +265,7 @@ ${input}
   /**
    * 处理简单任务
    */
-  private async handleSimpleTask(context: TaskContext, subtask: SubTask): Promise<AgentResponse> {
+  private async handleSimpleTask(context: TaskContext, _subtask: SubTask): Promise<AgentResponse> {
     const specialist = specialistRegistry.selectBestSpecialistForTask(context.input);
 
     if (!specialist) {
@@ -430,7 +430,7 @@ ${input}
     context: TaskContext,
     decomposition: TaskDecomposition,
     results: Map<string, ExecutionResult>,
-    subtaskContexts: Map<string, TaskContext>
+    _subtaskContexts: Map<string, TaskContext>
   ): Promise<ExecutionResult> {
     const startTime = Date.now();
 
@@ -456,11 +456,13 @@ ${Array.from(results.entries()).map(([subtaskId, result]) => `
 4. 建议的后续行动`;
 
     try {
-      const integratedSummary = await callDoubaoAPI(
+      const integratedSummary = await generateCompletion(
         summaryPrompt,
         this.systemPrompt,
-        this.name,
-        0.5
+        0.5,
+        undefined,
+        this.id,
+        this.name
       );
 
       return {
@@ -475,7 +477,7 @@ ${Array.from(results.entries()).map(([subtaskId, result]) => `
         duration: Date.now() - startTime,
         confidence: successCount / totalCount
       };
-    } catch (error) {
+    } catch (_error) {
       // LLM 整合失败，使用简单总结
       return this.fallbackIntegration(startTime, decomposition, results);
     }

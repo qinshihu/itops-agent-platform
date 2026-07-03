@@ -313,7 +313,7 @@ export default function Kubernetes() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['kubernetes-contexts'] });
-      if (deleteContextTarget && selectedContext === deleteContextTarget.id) {
+      if (selectedContext === deleteContextTarget?.id) {
         setSelectedContext('');
       }
       setDeleteContextTarget(null);

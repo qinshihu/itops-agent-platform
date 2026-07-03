@@ -6,7 +6,7 @@
 
 import { randomUUID } from 'crypto';
 import { logger } from '../../../../utils/logger';
-import { db } from '../../../../models/database';
+import db from '../../../../models/database';
 import type {
   VirtualMachine,
   VMStats,
@@ -21,16 +21,45 @@ import type {
   CreateSnapshotRequest,
   RestoreSnapshotRequest,
   HypervisorType} from '../../../../types/vmManagement';
-import {
-  ResourcePool,
-  MigrateVMRequest,
-  ReconfigureVMRequest
-} from '../../../../types/vmManagement';
 import type { VMAdapter } from './vmAdapter';
 import { VMwareAdapter } from './vmwareAdapter';
 import { KVMAdapter } from './kvmAdapter';
 import { ProxmoxAdapter } from './proxmoxAdapter';
 import { credentialService } from '../../../auth/services/credentialService';
+
+interface VmPlatformRow {
+  id: string;
+  name: string;
+  hypervisor_type: string;
+  host: string;
+  port: number | null;
+  username: string | null;
+  encrypted_password: string;
+  encrypted_password_iv: string | null;
+  config: string | null;
+  status: string;
+  last_connected: string | null;
+  error_message: string | null;
+  tags: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface VmAuditLogRow {
+  id: string;
+  platform_id: string;
+  vm_id: string | null;
+  vm_name: string | null;
+  operation: string;
+  user_id: string | null;
+  username: string | null;
+  parameters: string | null;
+  result: string | null;
+  status: string;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+}
 
 export class VMManagementService {
   private adapters: Map<string, VMAdapter> = new Map();
@@ -70,7 +99,7 @@ export class VMManagementService {
           if (row.encrypted_password && row.encrypted_password_iv) {
             try {
               password = credentialService.decryptCredential(row.encrypted_password, row.encrypted_password_iv);
-            } catch (e) {
+            } catch (_e) {
               logger.warn('⚠️ 无法解密平台密码');
             }
           }
@@ -240,7 +269,7 @@ export class VMManagementService {
         this.adapters.delete(platformId);
       }
       
-      const updatedConfig = { ...existing, ...updates, updatedAt: now };
+      const _updatedConfig = { ...existing, ...updates, updatedAt: now };
       
       const adapterConfig = updates.config || {};
       adapterConfig.host = updates.host || existing.host;
@@ -311,7 +340,7 @@ export class VMManagementService {
 
   listPlatformConfigs(): VMPlatformConfig[] {
     try {
-      const rows = db.prepare('SELECT * FROM vm_platforms ORDER BY name').all() as any[];
+      const rows = db.prepare('SELECT * FROM vm_platforms ORDER BY name').all() as VmPlatformRow[];
       return rows.map(row => ({
         id: row.id,
         name: row.name,
@@ -403,7 +432,7 @@ export class VMManagementService {
   getAuditLogs(platformId?: string, vmId?: string, limit = 100): any[] {
     try {
       let query = 'SELECT * FROM vm_audit_logs';
-      const params: any[] = [];
+      const params: unknown[] = [];
       
       if (platformId) {
         query += ' WHERE platform_id = ?';
@@ -420,7 +449,7 @@ export class VMManagementService {
       query += ' ORDER BY started_at DESC LIMIT ?';
       params.push(limit);
       
-      const rows = db.prepare(query).all(...params) as any[];
+      const rows = db.prepare(query).all(...params) as VmAuditLogRow[];
       return rows.map(row => ({
         id: row.id,
         platformId: row.platform_id,

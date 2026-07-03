@@ -12,7 +12,8 @@
  */
 
 import { randomUUID } from 'crypto';
-import db from '../../../models/database';
+import { alertRepository, networkDeviceRepository, serversRepo } from '../../../repositories';
+import type { AlertCorrelationGroupRecord } from '../../../repositories';
 import { logger } from '../../../utils/logger';
 
 // ====================== 接口定义 ======================
@@ -46,13 +47,25 @@ export interface CorrelationMember {
   created_at: string;
 }
 
+/** 关联计算用的告警类型（含 device_id） */
+interface CorrelationAlert {
+  id: string;
+  title: string;
+  content?: string;
+  severity: string;
+  source?: string;
+  status?: string;
+  created_at: string;
+  device_id?: string;
+}
+
 // ====================== 关联规则 ======================
 
-interface CorrelationRule {
+interface _CorrelationRule {
   name: string;
   description: string;
   weight: number;             // 权重，越高越优先
-  check: (alerts: any[]) => boolean;
+  check: (alerts: CorrelationAlert[]) => boolean;
 }
 
 // ====================== 服务实现 ======================
@@ -101,28 +114,12 @@ class AlertCorrelationService {
   async autoCorrelate(): Promise<number> {
     try {
       // 获取未关联的高级别告警
-      const ungroupedAlerts = db.prepare(`
-        SELECT a.id, a.title, a.content, a.severity, a.source, a.status, a.created_at,
-               COALESCE(ada.device_id, '') as device_id
-        FROM alerts a
-        LEFT JOIN alert_device_associations ada ON a.id = ada.alert_id
-        WHERE a.status IN ('new', 'acknowledged')
-          AND a.severity IN ('critical', 'high', 'medium')
-          AND a.id NOT IN (
-            SELECT alert_id FROM alert_correlation_members
-          )
-        ORDER BY a.created_at DESC
-        LIMIT 50
-      `).all() as any[];
+      const ungroupedAlerts = alertRepository.correlations.listUngroupedAlertsForCorrelation();
 
       if (ungroupedAlerts.length === 0) return 0;
 
       let grouped = 0;
-      const existingGroups = db.prepare(`
-        SELECT * FROM alert_correlation_groups
-        WHERE status = 'open'
-        ORDER BY created_at DESC
-      `).all() as CorrelationGroup[];
+      const existingGroups = alertRepository.correlations.listOpenGroups() as CorrelationGroup[];
 
       for (const alert of ungroupedAlerts) {
         // 尝试匹配到已有组
@@ -144,7 +141,7 @@ class AlertCorrelationService {
 
           if (companions.length >= 1) {
             // 创建新组
-            const group = this.createGroup(alert, companions);
+            const _group = this.createGroup(alert, companions);
             grouped += 1 + companions.length;
           }
         }
@@ -164,7 +161,7 @@ class AlertCorrelationService {
   /**
    * 计算两条告警的关联分数
    */
-  private calculateCorrelationScore(a: any, b: any): number {
+  private calculateCorrelationScore(a: CorrelationAlert, b: CorrelationAlert): number {
     let score = 0;
     let sameDevice = false;
 
@@ -212,14 +209,9 @@ class AlertCorrelationService {
   /**
    * 判断告警是否能匹配到已有组
    */
-  private matchAlertToGroup(alert: any, group: CorrelationGroup): boolean {
+  private matchAlertToGroup(alert: CorrelationAlert, group: CorrelationGroup): boolean {
     // 获取组成员
-    const members = db.prepare(`
-      SELECT acm.*, a.title, a.severity, a.created_at
-      FROM alert_correlation_members acm
-      LEFT JOIN alerts a ON acm.alert_id = a.id
-      WHERE acm.group_id = ?
-    `).all(group.id) as any[];
+    const members = alertRepository.correlations.listMembersWithAlert(group.id);
 
     if (members.length >= this.MAX_GROUP_ALERTS) return false;
 
@@ -227,7 +219,16 @@ class AlertCorrelationService {
     const minScore = this.MIN_CORRELATION_SCORE;
 
     for (const member of members) {
-      const score = this.calculateCorrelationScore(alert, member);
+      const memberAlert: CorrelationAlert = {
+        id: member.alert_id,
+        title: member.title,
+        content: member.content,
+        severity: member.severity,
+        source: member.source,
+        created_at: member.created_at,
+        device_id: member.device_id,
+      };
+      const score = this.calculateCorrelationScore(alert, memberAlert);
       if (score >= minScore) return true;
     }
 
@@ -237,7 +238,7 @@ class AlertCorrelationService {
   /**
    * 创建告警关联组
    */
-  private createGroup(root: any, companions: any[]): CorrelationGroup {
+  private createGroup(root: CorrelationAlert, companions: CorrelationAlert[]): CorrelationGroup {
     const groupId = randomUUID();
     const deviceIds = [root.device_id, ...companions.map(c => c.device_id)]
       .filter(Boolean)
@@ -254,6 +255,7 @@ class AlertCorrelationService {
     // 生成组标题
     const title = this.generateGroupTitle(root, companions);
 
+    const now = new Date().toISOString();
     const group: CorrelationGroup = {
       id: groupId,
       title,
@@ -263,14 +265,17 @@ class AlertCorrelationService {
       device_ids: deviceIds,
       severity: topSeverity,
       auto_detected: 1,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: now,
+      updated_at: now,
     };
 
-    db.prepare(`
-      INSERT INTO alert_correlation_groups (id, title, status, root_alert_id, alert_count, device_ids, severity, auto_detected, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(group.id, group.title, group.status, group.root_alert_id, group.alert_count, group.device_ids, group.severity, group.auto_detected, group.created_at, group.updated_at);
+    alertRepository.correlations.createGroup({
+      id: group.id, title: group.title, status: group.status,
+      root_alert_id: group.root_alert_id ?? '',
+      alert_count: group.alert_count,
+      device_ids: group.device_ids, severity: group.severity,
+      auto_detected: group.auto_detected, created_at: group.created_at, updated_at: group.updated_at,
+    });
 
     // 添加组成员
     this.addToGroup(groupId, root, true);
@@ -284,22 +289,16 @@ class AlertCorrelationService {
   /**
    * 将告警添加到组
    */
-  private addToGroup(groupId: string, alert: any, isRoot = false): void {
+  private addToGroup(groupId: string, alert: CorrelationAlert, isRoot = false): void {
     try {
       const memberId = randomUUID();
-      db.prepare(`
-        INSERT OR IGNORE INTO alert_correlation_members (id, group_id, alert_id, is_root, created_at)
-        VALUES (?, ?, ?, ?, datetime('now','localtime'))
-      `).run(memberId, groupId, alert.id, isRoot ? 1 : 0);
+      alertRepository.correlations.addMember({
+        id: memberId, group_id: groupId, alert_id: alert.id, is_root: isRoot ? 1 : 0,
+      });
 
       // 更新组的告警计数和时间
-      db.prepare(`
-        UPDATE alert_correlation_groups
-        SET alert_count = (SELECT COUNT(*) FROM alert_correlation_members WHERE group_id = ?),
-            updated_at = datetime('now','localtime')
-        WHERE id = ?
-      `).run(groupId, groupId);
-    } catch (err) {
+      alertRepository.correlations.refreshGroupCount(groupId);
+    } catch (_err) {
       // 可能已存在，忽略
     }
   }
@@ -335,7 +334,7 @@ class AlertCorrelationService {
   /**
    * 生成组标题
    */
-  private generateGroupTitle(root: any, companions: any[]): string {
+  private generateGroupTitle(root: CorrelationAlert, companions: CorrelationAlert[]): string {
     const rootTitle = root.title || root.content || '未知告警';
 
     // 提取公共关键词
@@ -351,9 +350,9 @@ class AlertCorrelationService {
     const rawDeviceId = root.device_id || (companions.find(c => c.device_id)?.device_id) || '';
     if (rawDeviceId) {
       // 取设备友号名称
-      const nd = db.prepare('SELECT name FROM network_devices WHERE id = ?').get(rawDeviceId) as any;
-      const sv = !nd ? db.prepare('SELECT name FROM servers WHERE id = ?').get(rawDeviceId) as any : null;
-      deviceName = (nd || sv)?.name || rawDeviceId.slice(0, 12);
+      const ndName = networkDeviceRepository.getName(rawDeviceId);
+      const svName = !ndName ? serversRepo.getById(rawDeviceId)?.name : undefined;
+      deviceName = ndName || svName || rawDeviceId.slice(0, 12);
     }
     const deviceLabel = deviceName ? ` [${deviceName}]` : '';
 
@@ -369,46 +368,24 @@ class AlertCorrelationService {
   /**
    * 获取所有关联组
    */
-  getGroups(options: { status?: string; limit?: number; offset?: number }): { groups: any[]; total: number } {
-    let sql = `
-      SELECT g.*,
-        (SELECT COUNT(*) FROM alert_correlation_members WHERE group_id = g.id) as member_count
-      FROM alert_correlation_groups g
-      WHERE 1=1
-    `;
-    const params: any[] = [];
-
-    if (options.status && options.status !== 'all') {
-      sql += ' AND g.status = ?';
-      params.push(options.status);
-    }
-
-    const countResult = db.prepare(sql.replace(/SELECT.*?FROM/, 'SELECT COUNT(*) as total FROM').replace(/,.*?member_count/, '')).get(...params) as any;
-    const total = countResult?.total || 0;
-
-    sql += ' ORDER BY g.created_at DESC LIMIT ? OFFSET ?';
-    params.push(options.limit || 50, options.offset || 0);
-
-    const groups = db.prepare(sql).all(...params) as any[];
+  getGroups(options: { status?: string; limit?: number; offset?: number }): { groups: AlertCorrelationGroupRecord[]; total: number } {
+    const filters = {
+      status: options.status && options.status !== 'all' ? options.status : undefined,
+      limit: options.limit || 50,
+      offset: options.offset || 0,
+    };
+    const groups = alertRepository.correlations.listGroups(filters);
+    const total = alertRepository.correlations.countGroups(filters);
     return { groups, total };
   }
 
   /**
    * 获取单个组详情（含成员）
    */
-  getGroupDetail(groupId: string): { group: any; members: any[] } | null {
-    const group = db.prepare('SELECT * FROM alert_correlation_groups WHERE id = ?').get(groupId) as any;
-    if (!group) return null;
-
-    const members = db.prepare(`
-      SELECT acm.*, a.title, a.content, a.severity, a.source, a.status, a.created_at as alert_created_at
-      FROM alert_correlation_members acm
-      LEFT JOIN alerts a ON acm.alert_id = a.id
-      WHERE acm.group_id = ?
-      ORDER BY acm.is_root DESC, a.created_at ASC
-    `).all(groupId) as any[];
-
-    return { group, members };
+  getGroupDetail(groupId: string): { group: AlertCorrelationGroupRecord; members: Array<Record<string, unknown>> } | null {
+    const result = alertRepository.correlations.getGroupDetail(groupId);
+    if (!result.group) return null;
+    return { group: result.group, members: result.members };
   }
 
   /**
@@ -416,9 +393,7 @@ class AlertCorrelationService {
    */
   createManualGroup(alertIds: string[], title?: string): CorrelationGroup {
     const groupId = randomUUID();
-    const alerts = db.prepare(
-      `SELECT * FROM alerts WHERE id IN (${alertIds.map(() => '?').join(',')})`
-    ).all(...alertIds) as any[];
+    const alerts = alertRepository.getAlertsByIds(alertIds) as CorrelationAlert[];
 
     if (alerts.length === 0) throw new Error('No valid alerts found');
 
@@ -428,8 +403,9 @@ class AlertCorrelationService {
       (severityLevels[a] || 0) > (severityLevels[b] || 0) ? a : b
     );
 
-    const deviceIds = alerts.map(a => a.device_id || '').filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(',');
+    const deviceIds = alerts.map(a => (a as CorrelationAlert).device_id || '').filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(',');
 
+    const now = new Date().toISOString();
     const group: CorrelationGroup = {
       id: groupId,
       title: title || `手动关联组 (${alerts.length}条告警)`,
@@ -439,14 +415,17 @@ class AlertCorrelationService {
       device_ids: deviceIds,
       severity: topSeverity,
       auto_detected: 0,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: now,
+      updated_at: now,
     };
 
-    db.prepare(`
-      INSERT INTO alert_correlation_groups (id, title, status, root_alert_id, alert_count, device_ids, severity, auto_detected, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(group.id, group.title, group.status, group.root_alert_id, group.alert_count, group.device_ids, group.severity, group.auto_detected, group.created_at, group.updated_at);
+    alertRepository.correlations.createGroup({
+      id: group.id, title: group.title, status: group.status,
+      root_alert_id: group.root_alert_id ?? '',
+      alert_count: group.alert_count,
+      device_ids: group.device_ids, severity: group.severity,
+      auto_detected: group.auto_detected, created_at: group.created_at, updated_at: group.updated_at,
+    });
 
     alerts.forEach((alert, idx) => {
       this.addToGroup(groupId, alert, idx === 0);
@@ -459,32 +438,36 @@ class AlertCorrelationService {
    * 将告警手动加入已有组
    */
   addAlertToGroup(groupId: string, alertId: string): void {
-    const group = db.prepare('SELECT * FROM alert_correlation_groups WHERE id = ?').get(groupId) as any;
-    if (!group) throw new Error('Group not found');
+    const result = alertRepository.correlations.getGroupDetail(groupId);
+    if (!result.group) throw new Error('Group not found');
 
-    const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(alertId) as any;
+    const alert = alertRepository.getById(alertId);
     if (!alert) throw new Error('Alert not found');
 
-    const member = db.prepare('SELECT id FROM alert_correlation_members WHERE group_id = ? AND alert_id = ?').get(groupId, alertId) as any;
+    const member = alertRepository.correlations.getMember(groupId, alertId);
     if (member) throw new Error('Alert already in group');
 
-    this.addToGroup(groupId, alert, false);
+    const alertData: CorrelationAlert = {
+      id: alert.id,
+      title: alert.title,
+      content: alert.content,
+      severity: alert.severity,
+      source: alert.source,
+      created_at: alert.created_at,
+    };
+    this.addToGroup(groupId, alertData, false);
   }
 
   /**
    * 从组中移除告警
    */
   removeAlertFromGroup(groupId: string, alertId: string): void {
-    db.prepare('DELETE FROM alert_correlation_members WHERE group_id = ? AND alert_id = ?').run(groupId, alertId);
-    const remaining = db.prepare('SELECT COUNT(*) as count FROM alert_correlation_members WHERE group_id = ?').get(groupId) as any;
-    if (remaining?.count === 0) {
-      db.prepare('DELETE FROM alert_correlation_groups WHERE id = ?').run(groupId);
+    alertRepository.correlations.removeMember(groupId, alertId);
+    const remaining = alertRepository.correlations.countMembers(groupId);
+    if (remaining === 0) {
+      alertRepository.correlations.deleteGroup(groupId);
     } else {
-      db.prepare(`
-        UPDATE alert_correlation_groups
-        SET alert_count = ?, updated_at = datetime('now','localtime')
-        WHERE id = ?
-      `).run(remaining.count, groupId);
+      alertRepository.correlations.setGroupCount(groupId, remaining);
     }
   }
 
@@ -492,49 +475,35 @@ class AlertCorrelationService {
    * 解决/关闭关联组
    */
   resolveGroup(groupId: string, rootCause?: string): void {
-    db.prepare(`
-      UPDATE alert_correlation_groups
-      SET status = 'resolved', root_cause = ?, resolved_at = datetime('now','localtime'), updated_at = datetime('now','localtime')
-      WHERE id = ?
-    `).run(rootCause || null, groupId);
+    alertRepository.correlations.resolveGroup(groupId, rootCause);
   }
 
   /**
    * 删除关联组
    */
   deleteGroup(groupId: string): void {
-    db.prepare('DELETE FROM alert_correlation_members WHERE group_id = ?').run(groupId);
-    db.prepare('DELETE FROM alert_correlation_groups WHERE id = ?').run(groupId);
+    alertRepository.correlations.deleteGroup(groupId);
   }
 
   /**
    * 获取告警所在的关联组
    */
   getAlertGroup(alertId: string): CorrelationGroup | null {
-    const member = db.prepare(`
-      SELECT g.* FROM alert_correlation_groups g
-      JOIN alert_correlation_members m ON g.id = m.group_id
-      WHERE m.alert_id = ?
-    `).get(alertId) as any;
-    return member || null;
+    const member = alertRepository.correlations.getAlertGroup(alertId);
+    return (member as CorrelationGroup) || null;
   }
 
   /**
    * 获取关联统计
    */
-  getStats(): any {
-    const total = db.prepare('SELECT COUNT(*) as count FROM alert_correlation_groups').get() as any;
-    const open = db.prepare("SELECT COUNT(*) as count FROM alert_correlation_groups WHERE status = 'open'").get() as any;
-    const resolved = db.prepare("SELECT COUNT(*) as count FROM alert_correlation_groups WHERE status = 'resolved'").get() as any;
-    const avgSize = db.prepare('SELECT AVG(alert_count) as avg FROM alert_correlation_groups').get() as any;
-    const auto = db.prepare('SELECT COUNT(*) as count FROM alert_correlation_groups WHERE auto_detected = 1').get() as any;
-
+  getStats(): { total_groups: number; open_groups: number; resolved_groups: number; avg_group_size: number; auto_detected: number } {
+    const stats = alertRepository.correlations.getStats();
     return {
-      total_groups: total?.count || 0,
-      open_groups: open?.count || 0,
-      resolved_groups: resolved?.count || 0,
-      avg_group_size: Math.round((avgSize?.avg || 0) * 10) / 10,
-      auto_detected: auto?.count || 0,
+      total_groups: stats.total,
+      open_groups: stats.open,
+      resolved_groups: stats.resolved,
+      avg_group_size: Math.round(stats.avgAlertCount * 10) / 10,
+      auto_detected: stats.autoDetected,
     };
   }
 }

@@ -41,6 +41,7 @@ const migration: Migration = {
       VALUES (?, ?, ?, ?, ?, ?, ?, 1)
     `);
 
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { randomUUID } = require('crypto');
     for (const tool of presets) {
       insertStmt.run(randomUUID(), tool.name, tool.url, tool.icon, tool.category, tool.description, tool.sort_order);

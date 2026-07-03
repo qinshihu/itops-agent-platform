@@ -1,5 +1,5 @@
 import { logger } from '../../../utils/logger';
-import db from '../../../models/database';
+import { workflowMappingsRepo, workflowsRepo, tasksRepo } from '../../../repositories';
 import { executeWorkflow } from '../../workflow/services/workflowExecutor';
 import { randomUUID } from 'crypto';
 
@@ -27,13 +27,7 @@ class AlertWorkflowMappingService {
       logger.info(`[AlertWorkflowMapping] 尝试匹配告警: alertId=${alert.id}, source=${alert.source}, severity=${alert.severity}`);
 
       // 查询所有启用的映射，按规则优先级排序（source精确匹配 > severity匹配 > title_pattern匹配）
-      const mappings = db.prepare(`
-        SELECT * FROM alert_workflow_mappings
-        WHERE enabled = 1
-        ORDER BY 
-          CASE WHEN alert_source = ? THEN 0 ELSE 1 END, 
-          CASE WHEN alert_source = '*' THEN 2 ELSE 3 END
-      `).all(alert.source) as Array<any>;
+      const mappings = workflowMappingsRepo.findMatching(alert.source);
 
       // 遍历所有映射规则，找到第一个匹配的
       for (const mapping of mappings) {
@@ -44,7 +38,7 @@ class AlertWorkflowMappingService {
           return {
             mappingId: mapping.id,
             workflowId: mapping.workflow_id,
-            workflowName: mapping.workflow_name || 'Mapped Workflow',
+            workflowName: (mapping as any).workflow_name || 'Mapped Workflow',
             taskId: taskId
           };
         }
@@ -93,22 +87,19 @@ class AlertWorkflowMappingService {
 
   /** 执行映射的工作流 */
   private executeMappedWorkflow(alert: AlertContext, mapping: any): string {
-    const workflow = db.prepare('SELECT * FROM workflows WHERE id = ?').get(mapping.workflow_id) as any;
+    const workflow = workflowsRepo.getById(mapping.workflow_id);
     if (!workflow) {
       throw new Error(`Workflow not found: ${mapping.workflow_id}`);
     }
 
     // 创建任务记录
     const taskId = randomUUID();
-    db.prepare(`
-      INSERT INTO tasks (id, workflow_id, name, status, context, created_at)
-      VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))
-    `).run(
-      taskId,
-      mapping.workflow_id,
-      `Alert-triggered: ${alert.title}`,
-      'pending',
-      JSON.stringify({
+    tasksRepo.createWithStatus({
+      id: taskId,
+      workflow_id: mapping.workflow_id,
+      name: `Alert-triggered: ${alert.title}`,
+      status: 'pending',
+      context: JSON.stringify({
         alert_id: alert.id,
         alert_title: alert.title,
         alert_content: alert.content,
@@ -116,13 +107,13 @@ class AlertWorkflowMappingService {
         alert_severity: alert.severity,
         mapping_id: mapping.id
       })
-    );
+    });
 
     // 异步执行工作流
     const workflowParsed = {
       id: workflow.id,
       name: workflow.name,
-      description: workflow.description,
+      description: workflow.description ?? undefined,
       nodes: JSON.parse(workflow.nodes || '[]'),
       edges: JSON.parse(workflow.edges || '[]'),
       agent_configs: JSON.parse(workflow.agent_configs || '{}'),

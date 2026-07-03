@@ -13,11 +13,12 @@
  */
 
 import { randomUUID } from 'crypto';
-import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { decrypt } from '../../auth/services/encryptionService';
+import { getErrorMessage } from '../../../utils/errorHelpers';
+import { networkDeviceRepository, snmpCredentialsRepo } from '../../../repositories';
 
 const execAsync = promisify(exec);
 const isWindows = process.platform === 'win32';
@@ -108,10 +109,19 @@ class NetworkDiscoveryService {
       created_at: new Date().toISOString(),
     };
 
-    db.prepare(`
-      INSERT INTO network_discovery_jobs (id, name, start_ip, end_ip, status, progress, total_hosts, scanned_hosts, found_devices, credential_ids, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(job.id, job.name, job.start_ip, job.end_ip, job.status, job.progress, job.total_hosts, job.scanned_hosts, job.found_devices, job.credential_ids, job.created_at);
+    networkDeviceRepository.createDiscoveryJob({
+      id: job.id,
+      name: job.name,
+      start_ip: job.start_ip,
+      end_ip: job.end_ip,
+      status: job.status,
+      progress: job.progress,
+      total_hosts: job.total_hosts,
+      scanned_hosts: job.scanned_hosts,
+      found_devices: job.found_devices,
+      credential_ids: job.credential_ids,
+      created_at: job.created_at,
+    });
 
     logger.info(`📡 Discovery job created: ${name} (${startIp} - ${endIp}, ${totalHosts} hosts)`);
     return job;
@@ -121,13 +131,13 @@ class NetworkDiscoveryService {
    * 启动扫描任务
    */
   async startJob(jobId: string): Promise<void> {
-    const job = db.prepare('SELECT * FROM network_discovery_jobs WHERE id = ?').get(jobId) as DiscoveryJob | undefined;
+    const job = networkDeviceRepository.getDiscoveryJob(jobId) as DiscoveryJob | undefined;
     if (!job) throw new Error(`Job ${jobId} not found`);
     if (job.status !== 'pending' && job.status !== 'completed') throw new Error(`Job ${jobId} is ${job.status}, cannot start`);
 
     // 更新状态
-    db.prepare('UPDATE network_discovery_jobs SET status = ?, started_at = datetime(\'now\',\'localtime\') WHERE id = ?').run('running', jobId);
-    db.prepare('DELETE FROM network_discovery_results WHERE job_id = ?').run(jobId);
+    networkDeviceRepository.updateDiscoveryJobStatus(jobId, 'running');
+    networkDeviceRepository.deleteDiscoveryResultsByJob(jobId);
 
     const abortController = new AbortController();
     this.activeJobs.set(jobId, abortController);
@@ -135,7 +145,7 @@ class NetworkDiscoveryService {
     const ips = this.generateIpList(job.start_ip, job.end_ip);
     const credentialIds: string[] = JSON.parse(job.credential_ids || '[]');
     const credentials = credentialIds.map(id => {
-      const cred = db.prepare('SELECT * FROM snmp_credentials WHERE id = ?').get(id) as any;
+      const cred = snmpCredentialsRepo.getById(id);
       if (!cred) return null;
       // 解密凭证字段，否则 SNMP 认证会用密文必然失败
       return {
@@ -155,7 +165,7 @@ class NetworkDiscoveryService {
 
     for (let i = 0; i < ips.length; i += BATCH_SIZE) {
       if (abortController.signal.aborted) {
-        db.prepare('UPDATE network_discovery_jobs SET status = ?, completed_at = datetime(\'now\',\'localtime\') WHERE id = ?').run('cancelled', jobId);
+        networkDeviceRepository.finishDiscoveryJob(jobId, 'cancelled');
         logger.info(`📡 Scan job ${jobId} cancelled`);
         return;
       }
@@ -174,14 +184,13 @@ class NetworkDiscoveryService {
       scanned += batch.length;
       const progress = Math.round((scanned / ips.length) * 100);
 
-      db.prepare('UPDATE network_discovery_jobs SET progress = ?, scanned_hosts = ?, found_devices = ? WHERE id = ?')
-        .run(progress, scanned, foundDevices, jobId);
+      networkDeviceRepository.updateDiscoveryJobProgress(jobId, progress, scanned, foundDevices);
 
       // 小延迟防止扫描过快
       await new Promise(r => setTimeout(r, 100));
     }
 
-    db.prepare('UPDATE network_discovery_jobs SET status = ?, progress = 100, completed_at = datetime(\'now\',\'localtime\') WHERE id = ?').run('completed', jobId);
+    networkDeviceRepository.finishDiscoveryJob(jobId, 'completed');
     this.activeJobs.delete(jobId);
     logger.info(`📡 Scan job ${jobId} completed: ${foundDevices} devices found`);
   }
@@ -206,10 +215,7 @@ class NetworkDiscoveryService {
     const responseTimeMs = Date.now() - startTime;
 
     if (!isOnline) {
-      db.prepare(`
-        INSERT OR IGNORE INTO network_discovery_results (id, job_id, ip_address, status, response_time_ms, created_at)
-        VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))
-      `).run(randomUUID(), jobId, ip, 'offline', responseTimeMs);
+      networkDeviceRepository.insertDiscoveryResultOffline(randomUUID(), jobId, ip, responseTimeMs);
       return false;
     }
 
@@ -234,24 +240,22 @@ class NetworkDiscoveryService {
 
     // 保存结果
     const resultId = randomUUID();
-    db.prepare(`
-      INSERT INTO network_discovery_results (id, job_id, ip_address, status, sys_name, sys_descr, sys_location, sys_object_id,
-        snmp_version, community, interface_count, vendor, model, response_time_ms, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
-    `).run(
-      resultId, jobId, ip,
-      snmpResult ? 'snmp_ok' : 'online',
-      snmpResult?.sysName || null,
-      snmpResult?.sysDescr || null,
-      snmpResult?.sysLocation || null,
-      snmpResult?.sysObjectID || null,
-      usedCredential?.snmp_version || null,
-      usedCredential?.community || null,
-      snmpResult?.interfaceCount || null,
-      snmpResult?.vendor || null,
-      snmpResult?.model || null,
-      responseTimeMs,
-    );
+    networkDeviceRepository.insertDiscoveryResultOnline({
+      id: resultId,
+      job_id: jobId,
+      ip_address: ip,
+      status: snmpResult ? 'snmp_ok' : 'online',
+      sys_name: snmpResult?.sysName || null,
+      sys_descr: snmpResult?.sysDescr || null,
+      sys_location: snmpResult?.sysLocation || null,
+      sys_object_id: snmpResult?.sysObjectID || null,
+      snmp_version: usedCredential?.snmp_version || null,
+      community: usedCredential?.community || null,
+      interface_count: snmpResult?.interfaceCount || null,
+      vendor: snmpResult?.vendor || null,
+      model: snmpResult?.model || null,
+      response_time_ms: responseTimeMs,
+    });
 
     return !!snmpResult;
   }
@@ -259,8 +263,9 @@ class NetworkDiscoveryService {
   /**
    * 尝试 SNMP 连接并获取设备信息
    */
-  private async trySnmpConnect(ip: string, cred: any): Promise<any | null> {
+  private async trySnmpConnect(ip: string, cred: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     // 使用内置的 snmp 测试逻辑
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const snmp = require('net-snmp');
 
     const options: any = {
@@ -290,7 +295,7 @@ class NetworkDiscoveryService {
 
     return new Promise(resolve => {
       const results: Record<string, any> = {};
-      const pending = 3;
+      const _pending = 3;
 
       const oids = [
         '1.3.6.1.2.1.1.1.0',   // sysDescr
@@ -300,7 +305,7 @@ class NetworkDiscoveryService {
         '1.3.6.1.2.1.2.1.0',   // ifNumber
       ];
 
-      session.get(oids, (error: any, varbinds: any[]) => {
+      session.get(oids, (error: Error | null, varbinds: unknown[]) => {
         session.close();
 
         if (error) {
@@ -375,43 +380,22 @@ class NetworkDiscoveryService {
    * 获取扫描结果（支持分页和按 job_id 过滤）
    */
   getResults(options: { jobId?: string; limit?: number; offset?: number; status?: string }): { results: DiscoveryResult[]; total: number } {
-    let sql = 'SELECT * FROM network_discovery_results WHERE 1=1';
-    const params: any[] = [];
-
-    if (options.jobId) {
-      sql += ' AND job_id = ?';
-      params.push(options.jobId);
-    }
-    if (options.status) {
-      sql += ' AND status = ?';
-      params.push(options.status);
-    }
-
-    const countResult = db.prepare(sql.replace('*', 'COUNT(*) as total')).get(...params) as any;
-    const total = countResult?.total || 0;
-
-    sql += ' ORDER BY status ASC, response_time_ms ASC';
-    sql += ' LIMIT ? OFFSET ?';
-    params.push(options.limit || 100, options.offset || 0);
-
-    const results = db.prepare(sql).all(...params) as DiscoveryResult[];
-    return { results, total };
+    const result = networkDeviceRepository.listDiscoveryResults(options);
+    return { results: result.results as DiscoveryResult[], total: result.total };
   }
 
   /**
    * 获取所有扫描任务
    */
   getJobs(): DiscoveryJob[] {
-    return db.prepare(
-      'SELECT * FROM network_discovery_jobs ORDER BY created_at DESC'
-    ).all() as DiscoveryJob[];
+    return networkDeviceRepository.listDiscoveryJobs() as DiscoveryJob[];
   }
 
   /**
    * 获取单个任务
    */
   getJob(jobId: string): DiscoveryJob | undefined {
-    return db.prepare('SELECT * FROM network_discovery_jobs WHERE id = ?').get(jobId) as DiscoveryJob | undefined;
+    return networkDeviceRepository.getDiscoveryJob(jobId) as DiscoveryJob | undefined;
   }
 
   /**
@@ -423,8 +407,7 @@ class NetworkDiscoveryService {
       controller.abort();
       this.activeJobs.delete(jobId);
     }
-    db.prepare('UPDATE network_discovery_jobs SET status = ?, completed_at = datetime(\'now\',\'localtime\') WHERE id = ? AND status = ?')
-      .run('cancelled', jobId, 'running');
+    networkDeviceRepository.cancelDiscoveryJob(jobId);
   }
 
   /**
@@ -432,8 +415,7 @@ class NetworkDiscoveryService {
    */
   deleteJob(jobId: string): void {
     this.cancelJob(jobId);
-    db.prepare('DELETE FROM network_discovery_results WHERE job_id = ?').run(jobId);
-    db.prepare('DELETE FROM network_discovery_jobs WHERE id = ?').run(jobId);
+    networkDeviceRepository.deleteDiscoveryJob(jobId);
   }
 
   /**
@@ -445,14 +427,14 @@ class NetworkDiscoveryService {
 
     for (const resultId of resultIds) {
       try {
-        const result = db.prepare('SELECT * FROM network_discovery_results WHERE id = ?').get(resultId) as DiscoveryResult | undefined;
+        const result = networkDeviceRepository.getDiscoveryResult(resultId) as DiscoveryResult | undefined;
         if (!result) {
           errors.push(`Result ${resultId} not found`);
           continue;
         }
 
         // 检查是否已存在（按 IP 去重）
-        const existing = db.prepare('SELECT id FROM network_devices WHERE ip_address = ?').get(result.ip_address) as any;
+        const existing = networkDeviceRepository.getIdByIp(result.ip_address);
         if (existing) {
           errors.push(`${result.ip_address} 已存在`);
           continue;
@@ -462,24 +444,21 @@ class NetworkDiscoveryService {
         const vendor = result.vendor || 'Unknown';
         const model = result.model || '';
 
-        db.prepare(`
-          INSERT INTO network_devices (id, name, ip_address, vendor, model, username, ssh_port, status, os_version, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
-        `).run(
-          deviceId,
-          result.sys_name || result.ip_address,
-          result.ip_address,
+        networkDeviceRepository.createFromDiscovery({
+          id: deviceId,
+          name: result.sys_name || result.ip_address,
+          ip_address: result.ip_address,
           vendor,
           model,
-          sshUsername || 'admin',
-          sshPort || 22,
-          'unknown',
-          result.sys_descr || null,
-        );
+          username: sshUsername || 'admin',
+          ssh_port: sshPort || 22,
+          status: 'unknown',
+          os_version: result.sys_descr || null,
+        });
 
         imported++;
-      } catch (err: any) {
-        errors.push(`${resultId}: ${err.message}`);
+      } catch (err: unknown) {
+        errors.push(`${resultId}: ${getErrorMessage(err)}`);
       }
     }
 

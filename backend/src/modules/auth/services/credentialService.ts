@@ -1,5 +1,6 @@
 import crypto from 'crypto';
-import db from '../../../models/database';
+import { credentialRepository } from '../../../repositories/credentialRepository';
+import { settingsRepository } from '../../../repositories/settingsRepository';
 import { env } from '../../../utils/env';
 import { logger } from '../../../utils/logger';
 import { maskApiKey } from '../../../utils/sensitiveMask';
@@ -10,7 +11,17 @@ const KEY_LENGTH = 32; // 256 bits
 const IV_LENGTH = 16; // 128 bits
 const PBKDF2_ITERATIONS = 100000;
 const PBKDF2_DIGEST = 'sha512';
-const SALT = 'credential-service-v1-salt'; // Fixed salt for credential key derivation
+
+// Key version constants
+// v1: fixed salt (legacy, kept for decrypting existing credentials only)
+// v2: deployment-specific salt derived from JWT_SECRET (eliminates cross-deployment key reuse)
+const KEY_VERSION_LEGACY = 1;
+const KEY_VERSION_CURRENT = 2;
+const LEGACY_SALT = 'credential-service-v1-salt';
+
+function deriveV2Salt(jwtSecret: string): string {
+  return crypto.createHash('sha256').update(jwtSecret).digest('hex').substring(0, 32);
+}
 
 // In-memory cache TTL (60 seconds)
 const CACHE_TTL_MS = 60_000;
@@ -29,75 +40,86 @@ interface CachedEntry {
 }
 
 export class CredentialService {
-  private masterKey: Buffer | null = null;
+  private keys: Map<number, Buffer> = new Map();
   private cache = new Map<string, CachedEntry>();
   private initialized = false;
 
   /**
-   * Initialize the credential service: derive master key from JWT_SECRET
+   * Initialize the credential service: derive master keys from JWT_SECRET
    */
   init(): void {
     if (this.initialized) return;
-    this.deriveMasterKey();
-    this.ensureTable();
+    this.deriveMasterKeys();
     this.initialized = true;
+    this.rotateLegacyCredentials();
     logger.info('🔐 CredentialService initialized');
   }
 
   /**
-   * Derive the AES-256-GCM master key from JWT_SECRET using PBKDF2
+   * Derive AES-256-GCM master keys from JWT_SECRET using PBKDF2
+   * - v1 key: legacy fixed salt (for decrypting existing v1 credentials)
+   * - v2 key: deployment-specific salt (for new credentials)
    */
-  private deriveMasterKey(): void {
+  private deriveMasterKeys(): void {
     const jwtSecret = env.JWT_SECRET;
     if (!jwtSecret) {
       throw new Error('JWT_SECRET is required for credential encryption');
     }
-    this.masterKey = crypto.pbkdf2Sync(
-      jwtSecret,
-      SALT,
-      PBKDF2_ITERATIONS,
-      KEY_LENGTH,
-      PBKDF2_DIGEST
-    );
-    logger.info('🔑 Credential master key derived from JWT_SECRET');
+    this.keys.set(KEY_VERSION_LEGACY, crypto.pbkdf2Sync(
+      jwtSecret, LEGACY_SALT, PBKDF2_ITERATIONS, KEY_LENGTH, PBKDF2_DIGEST
+    ));
+    this.keys.set(KEY_VERSION_CURRENT, crypto.pbkdf2Sync(
+      jwtSecret, deriveV2Salt(jwtSecret), PBKDF2_ITERATIONS, KEY_LENGTH, PBKDF2_DIGEST
+    ));
+    logger.info('🔑 Credential master keys derived from JWT_SECRET (v1 legacy + v2 current)');
   }
 
-  /**
-   * Ensure the credentials table exists (create if missing)
-   */
-  private ensureTable(): void {
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS credentials (
-          provider TEXT PRIMARY KEY,
-          encrypted_value TEXT NOT NULL,
-          key_version INTEGER DEFAULT 1,
-          created_at DATETIME DEFAULT (datetime('now','localtime')),
-          updated_at DATETIME DEFAULT (datetime('now','localtime'))
-        );
-      `);
-    } catch (error) {
-      logger.warn('Could not ensure credentials table (may already exist via migration)', error as Error);
+  private getKey(version: number): Buffer {
+    const key = this.keys.get(version);
+    if (!key) {
+      throw new Error(`Unknown key version: ${version}`);
     }
+    return key;
   }
 
-  /**
-   * Get the derived master key
-   */
   private getMasterKey(): Buffer {
-    if (!this.masterKey) {
-      this.deriveMasterKey();
-    }
-    return this.masterKey!;
+    return this.getKey(KEY_VERSION_CURRENT);
   }
 
   /**
-   * Encrypt plaintext using AES-256-GCM with the derived master key
+   * Best-effort migration: re-encrypt v1 credentials with v2 key.
+   * Failures are logged but do not block startup (v1 key still available for reads).
+   */
+  private rotateLegacyCredentials(): void {
+    try {
+      const legacy = credentialRepository.listByKeyVersion(KEY_VERSION_LEGACY);
+      if (legacy.length === 0) return;
+
+      logger.info(`🔄 Rotating ${legacy.length} legacy credential(s) to v2 key...`);
+      let rotated = 0;
+      for (const record of legacy) {
+        try {
+          const plaintext = this.decryptWithVersion(record.encrypted_value, KEY_VERSION_LEGACY);
+          const reencrypted = this.encryptWithVersion(plaintext, KEY_VERSION_CURRENT);
+          credentialRepository.updateRotation(record.provider, reencrypted, KEY_VERSION_CURRENT);
+          rotated++;
+        } catch (err) {
+          logger.warn(`Failed to rotate credential for ${record.provider}: ${(err as Error).message}`);
+        }
+      }
+      logger.info(`✅ Rotated ${rotated}/${legacy.length} credential(s) to v2 key`);
+    } catch (err) {
+      logger.warn(`Legacy credential rotation skipped: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Encrypt plaintext using AES-256-GCM with the specified key version
    * Returns format: iv:authTag:ciphertext (all base64)
    */
-  private encrypt(plaintext: string): string {
+  private encryptWithVersion(plaintext: string, version: number): string {
     if (!plaintext) return '';
-    const key = this.getMasterKey();
+    const key = this.getKey(version);
     const iv = crypto.randomBytes(IV_LENGTH);
     const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
     let encrypted = cipher.update(plaintext, 'utf8', 'base64');
@@ -106,28 +128,41 @@ export class CredentialService {
     return `${iv.toString('base64')}:${authTag.toString('base64')}:${encrypted}`;
   }
 
+  private encrypt(plaintext: string): string {
+    return this.encryptWithVersion(plaintext, KEY_VERSION_CURRENT);
+  }
+
   /**
-   * Decrypt ciphertext using AES-256-GCM with the derived master key
+   * Decrypt ciphertext using AES-256-GCM with the specified key version
    */
-  private decrypt(encryptedString: string): string {
+  private decryptWithVersion(encryptedString: string, version: number): string {
     if (!encryptedString) return '';
+    const parts = encryptedString.split(':');
+    if (parts.length !== 3) {
+      throw new Error('Invalid encrypted data format');
+    }
+    const iv = Buffer.from(parts[0], 'base64');
+    const authTag = Buffer.from(parts[1], 'base64');
+    const encryptedData = Buffer.from(parts[2], 'base64');
+    const decipher = crypto.createDecipheriv(ALGORITHM, this.getKey(version), iv);
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(encryptedData);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString('utf8');
+  }
+
+  private decrypt(encryptedString: string): string {
     try {
-      const parts = encryptedString.split(':');
-      if (parts.length !== 3) {
-        throw new Error('Invalid encrypted data format');
-      }
-      const iv = Buffer.from(parts[0], 'base64');
-      const authTag = Buffer.from(parts[1], 'base64');
-      const encryptedData = Buffer.from(parts[2], 'base64');
-      const decipher = crypto.createDecipheriv(ALGORITHM, this.getMasterKey(), iv);
-      decipher.setAuthTag(authTag);
-      let decrypted = decipher.update(encryptedData);
-      decrypted = Buffer.concat([decrypted, decipher.final()]);
-      return decrypted.toString('utf8');
+      return this.decryptWithVersion(encryptedString, KEY_VERSION_CURRENT);
     } catch (error) {
       logger.error('Credential decryption failed', error as Error);
       throw new Error('Failed to decrypt credential');
     }
+  }
+
+  private decryptRecord(record: CredentialRecord): string {
+    const version = record.key_version ?? KEY_VERSION_LEGACY;
+    return this.decryptWithVersion(record.encrypted_value, version);
   }
 
   /**
@@ -154,18 +189,7 @@ export class CredentialService {
     const encrypted = this.encrypt(value);
 
     try {
-      const existing = db.prepare('SELECT provider FROM credentials WHERE provider = ?').get(providerLower) as CredentialRecord | undefined;
-
-      if (existing) {
-        db.prepare(`
-          UPDATE credentials SET encrypted_value = ?, updated_at = datetime('now','localtime') WHERE provider = ?
-        `).run(encrypted, providerLower);
-      } else {
-        db.prepare(`
-          INSERT INTO credentials (provider, encrypted_value) VALUES (?, ?)
-        `).run(providerLower, encrypted);
-      }
-
+      credentialRepository.upsert(providerLower, encrypted, KEY_VERSION_CURRENT);
       this.invalidateCache(providerLower);
       logger.info(`🔐 Credential saved for provider: ${providerLower}`);
     } catch (error) {
@@ -188,10 +212,11 @@ export class CredentialService {
     }
 
     try {
-      const record = db.prepare('SELECT * FROM credentials WHERE provider = ?').get(providerLower) as CredentialRecord | undefined;
+      const record = credentialRepository.getByProvider(providerLower);
       if (!record) return undefined;
 
-      const plaintext = this.decrypt(record.encrypted_value);
+      const version = record.key_version ?? KEY_VERSION_LEGACY;
+      const plaintext = this.decryptWithVersion(record.encrypted_value, version);
 
       // Update cache
       this.cache.set(providerLower, { value: plaintext, fetchedAt: Date.now() });
@@ -211,7 +236,7 @@ export class CredentialService {
     const providerLower = provider.toLowerCase();
 
     try {
-      db.prepare('DELETE FROM credentials WHERE provider = ?').run(providerLower);
+      credentialRepository.deleteByProvider(providerLower);
       this.invalidateCache(providerLower);
       logger.info(`🔐 Credential deleted for provider: ${providerLower}`);
     } catch (error) {
@@ -239,10 +264,16 @@ export class CredentialService {
    * 解密凭证（供 vmManagement 等模块调用）
    * @param encrypted 加密后的完整密文（iv:authTag:ciphertext 格式）
    * @param iv 未使用，保留参数兼容性
+   *
+   * 向后兼容：先尝试 v2 密钥，失败后回退 v1（用于解密迁移前已存储的密文）
    */
-  decryptCredential(encrypted: string, iv?: string): string {
+  decryptCredential(encrypted: string, _iv?: string): string {
     if (!this.initialized) this.init();
-    return this.decrypt(encrypted);
+    try {
+      return this.decryptWithVersion(encrypted, KEY_VERSION_CURRENT);
+    } catch {
+      return this.decryptWithVersion(encrypted, KEY_VERSION_LEGACY);
+    }
   }
 
   /**
@@ -252,7 +283,7 @@ export class CredentialService {
     if (!this.initialized) this.init();
 
     try {
-      const records = db.prepare('SELECT * FROM credentials ORDER BY provider ASC').all() as CredentialRecord[];
+      const records = credentialRepository.listAll();
       const knownProviders = ['doubao', 'openai', 'local_ai', 'alert_email', 'alert_webhook'];
 
       const configuredMap = new Set(records.map(r => r.provider));
@@ -262,7 +293,7 @@ export class CredentialService {
         if (configuredMap.has(provider)) {
           const record = records.find(r => r.provider === provider)!;
           try {
-            const plaintext = this.decrypt(record.encrypted_value);
+            const plaintext = this.decryptRecord(record);
             result.push({
               provider,
               configured: true,
@@ -291,7 +322,7 @@ export class CredentialService {
       for (const record of records) {
         if (!knownProviders.includes(record.provider)) {
           try {
-            const plaintext = this.decrypt(record.encrypted_value);
+            const plaintext = this.decryptRecord(record);
             result.push({
               provider: record.provider,
               configured: true,
@@ -345,19 +376,19 @@ export class CredentialService {
 
     for (const { settingKey, provider, isSensitive } of settingsToProviders) {
       try {
-        const existingCred = db.prepare('SELECT provider FROM credentials WHERE provider = ?').get(provider) as CredentialRecord | undefined;
+        const existingCred = credentialRepository.getByProvider(provider);
         if (existingCred) {
           skipped++;
           continue;
         }
 
-        const settingRecord = db.prepare('SELECT value FROM settings WHERE key = ?').get(settingKey) as { value: string } | undefined;
-        if (!settingRecord?.value) {
+        const settingValue = settingsRepository.getValue(settingKey);
+        if (!settingValue) {
           skipped++;
           continue;
         }
 
-        const value = settingRecord.value;
+        const value = settingValue;
         // Skip placeholder values
         if (value.startsWith('your-') && value.endsWith('-here')) {
           skipped++;
@@ -392,19 +423,20 @@ export class CredentialService {
 
     // Also check notification_settings for email config (JSON blob)
     try {
-      const existingCred = db.prepare('SELECT provider FROM credentials WHERE provider = ?').get('alert_email') as CredentialRecord | undefined;
+      const existingCred = credentialRepository.getByProvider('alert_email');
       if (!existingCred) {
-        const notificationEmailConfig = db.prepare('SELECT value FROM settings WHERE key = ?').get('notification_email_config') as { value: string } | undefined;
-        if (notificationEmailConfig?.value) {
+        const notificationEmailConfig = settingsRepository.getValue('notification_email_config');
+        if (notificationEmailConfig) {
           try {
-            const config = JSON.parse(notificationEmailConfig.value);
+            const config = JSON.parse(notificationEmailConfig);
             if (config.user || config.password) {
-              const alertEmailHost = db.prepare('SELECT value FROM settings WHERE key = ?').get('ALERT_EMAIL_HOST') as { value: string } | undefined;
+              const alertEmailHost = settingsRepository.getValue('ALERT_EMAIL_HOST');
+              const alertEmailTo = settingsRepository.getValue('ALERT_EMAIL_TO');
               const emailConfig = {
-                host: alertEmailHost?.value || config.smtp_host || '',
+                host: alertEmailHost || config.smtp_host || '',
                 user: config.user || '',
                 pass: config.password || '',
-                to: db.prepare('SELECT value FROM settings WHERE key = ?').get('ALERT_EMAIL_TO') as { value: string } | undefined ? (db.prepare('SELECT value FROM settings WHERE key = ?').get('ALERT_EMAIL_TO') as { value: string }).value : ''
+                to: alertEmailTo || ''
               };
               this.setCredential('alert_email', JSON.stringify(emailConfig));
               migrated++;
@@ -427,8 +459,7 @@ export class CredentialService {
 
   private getSettingValue(key: string): string | undefined {
     try {
-      const record = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
-      return record?.value || undefined;
+      return settingsRepository.getValue(key);
     } catch {
       return undefined;
     }
@@ -440,9 +471,9 @@ export class CredentialService {
   health(): { status: string; providers: number } {
     try {
       if (!this.initialized) this.init();
-      const count = (db.prepare('SELECT COUNT(*) as count FROM credentials').get() as { count: number }).count;
+      const count = credentialRepository.countAll();
       return { status: 'ok', providers: count };
-    } catch (error) {
+    } catch (_error) {
       return { status: 'error', providers: 0 };
     }
   }

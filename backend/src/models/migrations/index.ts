@@ -36,10 +36,9 @@ import v016DatabasesTable from './v016_databases_table';
 import v017ApprovalRequests from './v017_approval_requests';
 import v018AlertAutoResponse from './v018_alert_auto_response';
 
-// === 工作流与审批 v019-v021 ===
+// === 工作流与审批 v019-v020 ===
 import v019WorkflowEngineEnhancement from './v019_workflow_engine_enhancement';
 import v020DatabasesTable from './v020_databases_table';
-import v021ApprovalRequests from './v021_approval_requests';
 
 // === 配置与容器 v022-v027 ===
 import v022ConfigTemplates from './v022_config_templates';
@@ -74,6 +73,26 @@ import v040AlertProviderConfigs from './v040_alert_provider_configs';
 
 // === DC 机房能效 v041 ===
 import v041DcRoomEnergy from './v041_dc_room_energy';
+
+// === ensureTables 下沉 v042-v050（阶段3：service 表结构下沉到 migration）===
+import v042BaselineMetrics from './v042_baseline_metrics';
+import v043AlertProcessingRecords from './v043_alert_processing_records';
+import v044ComposeProjects from './v044_compose_projects';
+import v045ImageRegistries from './v045_image_registries';
+import v046DockerEndpoints from './v046_docker_endpoints';
+import v047K8sContexts from './v047_k8s_contexts';
+import v048AutoScaleTables from './v048_auto_scale_tables';
+import v049VmMigrations from './v049_vm_migrations';
+import v050VmSnapshotPolicies from './v050_vm_snapshot_policies';
+
+// === ensureTable 残留清理 v051-v054（阶段3 补遗）===
+import v051AiRemediationsColumns from './v051_ai_remediations_columns';
+import v052KnowledgeBase from './v052_knowledge_base';
+import v053EscalationHistory from './v053_escalation_history';
+import v054AlertAutoAnalysis from './v054_alert_auto_analysis';
+
+// === 运行时建表残留清理 v055 ===
+import v055VmManagementTables from './v055_vm_management_tables';
 
 // Helper: wrap sync up/down into async
 function wrapAsync(fn: (db: any) => void): (db: any) => Promise<void> {
@@ -246,11 +265,6 @@ const v020DatabasesTableMigration: Migration = {
   description: 'Databases table for database connection management',
   up: wrapAsync(v020DatabasesTable.up), down: wrapAsync(v020DatabasesTable.down),
 };
-const v021ApprovalRequestsMigration: Migration = {
-  id: '20250101000021', version: 21, name: 'approval_requests',
-  description: 'Approval requests table',
-  up: wrapAsync(v021ApprovalRequests.up), down: wrapAsync(v021ApprovalRequests.down),
-};
 
 // === 所有迁移按版本号排序 ===
 export const ALL_MIGRATIONS: Migration[] = [
@@ -276,10 +290,9 @@ export const ALL_MIGRATIONS: Migration[] = [
   v016DatabasesTable,
   v017ApprovalRequests,
   v018AlertAutoResponseMigration,
-  // v019-v021: 工作流与审批
+  // v019-v020: 工作流与审批
   v019WorkflowEngineEnhancementMigration,
   v020DatabasesTableMigration,
-  v021ApprovalRequestsMigration,
   // v022-v027: 配置与容器
   v022ConfigTemplatesMigration,
   v023VirtualMachinesMigration,
@@ -307,6 +320,23 @@ export const ALL_MIGRATIONS: Migration[] = [
   v040AlertProviderConfigs,
   // v041: DC 机房能效（PUE/功耗）
   v041DcRoomEnergy,
+  // v042-v050: ensureTables 下沉（阶段3）
+  v042BaselineMetrics,
+  v043AlertProcessingRecords,
+  v044ComposeProjects,
+  v045ImageRegistries,
+  v046DockerEndpoints,
+  v047K8sContexts,
+  v048AutoScaleTables,
+  v049VmMigrations,
+  v050VmSnapshotPolicies,
+  // v051-v054: ensureTable 残留清理（阶段3 补遗）
+  v051AiRemediationsColumns,
+  v052KnowledgeBase,
+  v053EscalationHistory,
+  v054AlertAutoAnalysis,
+  // v055: 运行时建表残留清理（initVMManagement 下沉）
+  v055VmManagementTables,
 ];
 
 export function createMigrationManager(db: any): MigrationManager {

@@ -10,6 +10,25 @@
 
 import { logger } from '../utils/logger';
 
+/**
+ * 服务映射表 - 提供编译期类型安全
+ * 新增服务时在此接口添加对应条目
+ */
+export interface ServiceMap {
+  io: unknown;
+  encryptionMigration: { name: string };
+  credentialService: unknown;
+  alertRepository: unknown;
+  serverRepository: unknown;
+  networkDeviceRepository: unknown;
+  userRepository: unknown;
+  alertProcessor: unknown;
+  alertAutoResponseService: unknown;
+  remediationService: unknown;
+  knowledgeEngine: unknown;
+  [key: string]: unknown;
+}
+
 interface ServiceDescriptor<T = any> {
   name: string;
   factory: (ctx: ServiceContainer) => T | Promise<T>;
@@ -66,8 +85,11 @@ export class ServiceContainer {
 
   /**
    * 获取服务实例（懒加载）
+   * 使用 ServiceMap 约束确保编译期类型安全
    */
-  get<T>(name: string): T {
+  get<K extends keyof ServiceMap>(name: K): ServiceMap[K];
+  get<T>(name: string): T;
+  get(name: string): unknown {
     const entry = this.services.get(name);
     if (!entry) {
       throw new Error(`[ServiceContainer] Service "${name}" not registered`);
@@ -77,18 +99,21 @@ export class ServiceContainer {
       throw new Error(`[ServiceContainer] Service "${name}" not initialized yet. Call initAll() first.`);
     }
 
-    return entry.instance as T;
+    return entry.instance;
   }
 
   /**
    * 安全获取服务实例（可能返回 undefined）
+   * 使用 ServiceMap 约束确保编译期类型安全
    */
-  tryGet<T>(name: string): T | undefined {
+  tryGet<K extends keyof ServiceMap>(name: K): ServiceMap[K] | undefined;
+  tryGet<T>(name: string): T | undefined;
+  tryGet(name: string): unknown {
     const entry = this.services.get(name);
-    if (!entry || !entry.instance) {
+    if (!entry?.instance) {
       return undefined;
     }
-    return entry.instance as T;
+    return entry.instance;
   }
 
   /**
@@ -199,6 +224,26 @@ export class ServiceContainer {
    */
   isInitialized(name: string): boolean {
     return this.services.get(name)?.initialized ?? false;
+  }
+
+  /**
+   * 替换已注册的服务实例（仅供测试使用）
+   *
+   * 与 register() 的"先注册者获胜"不同，replace() 会强制覆盖已有注册，
+   * 并直接注入一个已构造好的实例，跳过工厂调用。
+   * 典型用法：测试中用 mock 替换真实 repository。
+   */
+  replace<T>(name: string, instance: T): void {
+    this.services.set(name, {
+      descriptor: {
+        name,
+        factory: () => instance,
+        dependencies: [],
+      },
+      instance,
+      initialized: true,
+    });
+    logger.debug(`[ServiceContainer] Replaced service: ${name} (test override)`);
   }
 }
 

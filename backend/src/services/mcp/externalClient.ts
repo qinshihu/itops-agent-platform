@@ -24,8 +24,8 @@
  */
 
 import { EventEmitter } from 'events';
-import { ChildProcess, spawn } from 'child_process';
-import { v4 as uuidv4 } from 'uuid';
+import type { ChildProcess} from 'child_process';
+import { spawn } from 'child_process';
 import { logger } from '../../utils/logger';
 import { toolRegistry } from './toolRegistry';
 import {
@@ -112,8 +112,8 @@ interface ExternalToolRef {
 
 class SseTransport extends EventEmitter {
   private eventSource: any = null; // EventSource 或 fetch-based SSE
-  private messageEndpoint: string = '';
-  private baseUrl: string = '';
+  private messageEndpoint = '';
+  private baseUrl = '';
   private headers: Record<string, string> = {};
   private connected = false;
   private reconnectTimer: NodeJS.Timeout | null = null;
@@ -162,6 +162,7 @@ class SseTransport extends EventEmitter {
 
       const readStream = async () => {
         try {
+          // eslint-disable-next-line no-constant-condition
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -173,7 +174,7 @@ class SseTransport extends EventEmitter {
             for (const line of lines) {
               if (line.startsWith('event: endpoint')) continue; // 下一行是 data
               if (line.startsWith('event: ')) {
-                const eventType = line.slice(7).trim();
+                const _eventType = line.slice(7).trim();
                 // 读取下一行的 data
                 continue;
               }
@@ -644,7 +645,7 @@ class ExternalMCPClient extends EventEmitter {
   // ============================================================
 
   private unregisterAllTools(): void {
-    for (const [originalName, ref] of this.tools) {
+    for (const [_originalName, ref] of this.tools) {
       toolRegistry.unregister(ref.namespacedName);
     }
     this.tools.clear();
@@ -658,6 +659,7 @@ class ExternalMCPClient extends EventEmitter {
    * JSON Schema → Zod（简化版，覆盖常见类型）
    */
   private convertJsonSchemaToZod(jsonSchema: Record<string, unknown>): any {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { z } = require('zod');
     const properties = (jsonSchema.properties || {}) as Record<string, any>;
     const required = (jsonSchema.required || []) as string[];

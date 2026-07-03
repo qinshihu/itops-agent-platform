@@ -1,6 +1,6 @@
 import { logger } from '../../../utils/logger';
 import { dockerService } from '../../containers/services/dockerService';
-import { db } from '../../../models/database';
+import { virtualMachineRepository } from '../../../repositories';
 
 interface CostItem {
   id: string;
@@ -66,7 +66,7 @@ class CostAnalysisService {
             monthlyEstimate,
           });
           totalMonthly += monthlyEstimate;
-        } catch {}
+        } catch { /* ignore */ }
       }
 
       return { data: items, totalMonthly };
@@ -78,7 +78,7 @@ class CostAnalysisService {
 
   async getVMCosts(): Promise<{ data: CostItem[]; totalMonthly: number }> {
     try {
-      const rows = db.prepare("SELECT * FROM virtual_machines WHERE status='running'").all() as any[];
+      const rows = virtualMachineRepository.list({ status: 'running' }) as any[];
       const items: CostItem[] = [];
       let totalMonthly = 0;
 

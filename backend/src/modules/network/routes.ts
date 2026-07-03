@@ -5,6 +5,7 @@ import networkAdvancedRoutes from './routes/networkAdvancedRoutes';
 import snmpRoutes from './routes/snmpRoutes';
 import topologyRoutes from './routes/topologyRoutes';
 import networkSubnetRoutes from './routes/networkSubnetRoutes';
+import networkDiscoveryRoutes from './routes/networkDiscoveryRoutes';
 
 const router = Router();
 
@@ -16,3 +17,4 @@ router.use('/topology', topologyRoutes);
 router.use('/network-subnets', networkSubnetRoutes);
 
 export default router;
+export const networkDiscoveryRouter = networkDiscoveryRoutes;
