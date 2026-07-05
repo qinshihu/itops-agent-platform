@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Agent MCP 适配器
  * 
@@ -18,9 +19,16 @@
  *   const result = await agentMcpAdapter.executeTool('alert.list', { severity: 'critical' });
  */
 
-import { toolRegistry } from '../../../../services/mcp/toolRegistry';
-import type { RegisteredTool, ToolCallResult } from '../../../../services/mcp/types';
+import { toolRegistry } from '../../../mcp/services/toolRegistry';
+import type { RegisteredTool, ToolCallResult } from '../../../mcp/services/types';
 import { logger } from '../../../../utils/logger';
+
+// ── 语义化类型别名 ──
+
+/** OpenAI Function Calling 工具参数 Schema */
+type OpenAIToolParameters = Record<string, unknown>;
+/** 工具执行输入参数 */
+type ToolInputArgs = Record<string, unknown>;
 
 // ============================================================
 // 类型定义
@@ -123,7 +131,7 @@ ${props}
     function: {
       name: string;
       description: string;
-      parameters: Record<string, unknown>;
+      parameters: OpenAIToolParameters;
     };
   }> {
     return toolRegistry.toOpenAIToolSpecs();
@@ -143,7 +151,7 @@ ${props}
    */
   async executeTool(
     toolName: string,
-    args: Record<string, unknown>,
+    args: ToolInputArgs,
     context?: { userId?: string; sessionId?: string }
   ): Promise<AgentMcpToolResult> {
     const startTime = Date.now();

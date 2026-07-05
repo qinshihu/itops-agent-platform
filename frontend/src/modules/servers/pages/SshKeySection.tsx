@@ -122,7 +122,7 @@ export function SshKeySection({
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={async () => {
                     try {
-                      const res = await api.get(`/api/ssh-keys/${key.id}`);
+                      const res = await api.get(`/ssh-keys/${key.id}`);
                       onSelectedSshKeyIdChange(key.id);
                       onSshKeySearchQueryChange(`${key.name} (${key.key_type})`);
                       onPrivateKeyChange(res.data.data.private_key);

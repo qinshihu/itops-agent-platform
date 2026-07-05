@@ -2,13 +2,13 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
-  Plus, 
+  _Plus, 
   RefreshCw, 
   Wrench, 
   Bell, 
   MessageSquare, 
   Activity, 
-  Globe,
+  _Globe,
   Search,
   Play,
 } from 'lucide-react';
@@ -19,7 +19,7 @@ interface WorkflowProvider {
   id: string;
   name: string;
   type: string;
-  configSchema: any;
+  configSchema: unknown;
 }
 
 export default function WorkflowProviders() {
@@ -31,7 +31,7 @@ export default function WorkflowProviders() {
     queryKey: ['workflow-providers', selectedType],
     queryFn: async () => {
       const params = selectedType ? { type: selectedType } : undefined;
-      const res = await api.get('/api/workflows/providers/list', { params });
+      const res = await api.get('/workflows/providers/list', { params });
       return res.data.data as WorkflowProvider[];
     },
   });
@@ -146,14 +146,14 @@ export default function WorkflowProviders() {
                   </div>
                 </div>
                 
-                {provider.configSchema && (
+                {provider.configSchema ? (
                   <div className="mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700">
                     <p className="text-xs text-slate-400 mb-1.5">配置 Schema:</p>
                     <pre className="text-xs text-slate-300 overflow-x-auto max-h-32">
-                      {JSON.stringify(provider.configSchema.properties, null, 2)}
+                      {JSON.stringify((provider.configSchema as { properties?: unknown }).properties, null, 2)}
                     </pre>
                   </div>
-                )}
+                ) : null}
               </div>
             );
           })}

@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { aiRemediationService } from '../services/remediation/aiRemediationService';
 import { authenticateToken } from '../../../middleware/auth';
+import { logger } from '../../../utils/logger';
 
 const router = Router();
 
@@ -12,7 +13,7 @@ router.get('/', authenticateToken, (req: Request, res: Response) => {
     const records = aiRemediationService.listRecords(limit);
     res.json({ success: true, data: records });
   } catch (error) {
-    console.error('Failed to list AI remediations:', error);
+    logger.error('Failed to list AI remediations:', error);
     res.status(500).json({ success: false, message: 'Failed to list AI remediations' });
   }
 });
@@ -40,7 +41,7 @@ router.get('/alert/:alertId', authenticateToken, (req: Request, res: Response) =
     }
     res.json({ success: true, data: record });
   } catch (error) {
-    console.error('Failed to get AI remediation by alert:', error);
+    logger.error('Failed to get AI remediation by alert:', error);
     res.status(500).json({ success: false, message: 'Failed to get AI remediation' });
   }
 });

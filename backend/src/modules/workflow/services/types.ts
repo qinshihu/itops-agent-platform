@@ -2,6 +2,8 @@
  * 增强工作流 DSL 类型定义
  */
 
+import type { WorkflowVariables } from './workflowExpressionEvaluator';
+
 // 工作流定义
 export interface WorkflowDefinition {
   id: string;
@@ -20,7 +22,7 @@ export interface TriggerDefinition {
   type: 'alert' | 'schedule' | 'webhook' | 'manual' | 'event';
   name: string;
   description?: string;
-  config: Record<string, unknown>;
+  config: WorkflowVariables;
   filter?: string; // CEL 表达式
 }
 
@@ -32,7 +34,7 @@ export interface StepDefinition {
   type: 'action' | 'condition' | 'parallel' | 'foreach' | 'wait' | 'task';
   provider?: string; // Provider 名称
   method?: string; // Provider 方法
-  params?: Record<string, unknown>;
+  params?: WorkflowVariables;
   condition?: string; // CEL 表达式
   branches?: Record<string, StepDefinition[]>; // 条件分支
   steps?: StepDefinition[]; // 子步骤（并行、循环等）
@@ -84,8 +86,8 @@ export interface WorkflowExecution {
   startedAt: number;
   endedAt?: number;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-  inputs: Record<string, unknown>;
-  outputs?: Record<string, unknown>;
+  inputs: WorkflowVariables;
+  outputs?: WorkflowVariables;
   steps: StepExecution[];
   error?: string;
 }
@@ -107,10 +109,10 @@ export interface StepExecution {
 // 工作流上下文
 export interface WorkflowContext {
   execution: WorkflowExecution;
-  inputs: Record<string, unknown>;
-  outputs: Record<string, unknown>;
+  inputs: WorkflowVariables;
+  outputs: WorkflowVariables;
   steps: Record<string, StepExecution>;
   environment: Record<string, string>;
   secrets: Record<string, string>;
-  vars: Record<string, unknown>;
+  vars: WorkflowVariables;
 }

@@ -38,7 +38,7 @@ export default function ScheduledTasks() {
   const { data: tasksData, isLoading: tasksLoading } = useQuery({
     queryKey: ['scheduledTasks'],
     queryFn: async () => {
-      const res = await api.get('/api/scheduled-tasks');
+      const res = await api.get('/scheduled-tasks');
       return res.data.data as ScheduledTask[];
     },
   });
@@ -46,14 +46,14 @@ export default function ScheduledTasks() {
   const { data: workflowsData } = useQuery({
     queryKey: ['workflows'],
     queryFn: async () => {
-      const res = await api.get('/api/workflows');
+      const res = await api.get('/workflows');
       return res.data.data as Workflow[];
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await api.post('/api/scheduled-tasks', data);
+    mutationFn: async (data: Record<string, unknown>) => {
+      const res = await api.post('/scheduled-tasks', data);
       return res.data;
     },
     onSuccess: () => {
@@ -64,8 +64,8 @@ export default function ScheduledTasks() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const res = await api.put(`/api/scheduled-tasks/${id}`, data);
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      const res = await api.put(`/scheduled-tasks/${id}`, data);
       return res.data;
     },
     onSuccess: () => {
@@ -77,7 +77,7 @@ export default function ScheduledTasks() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.delete(`/api/scheduled-tasks/${id}`);
+      const res = await api.delete(`/scheduled-tasks/${id}`);
       return res.data;
     },
     onSuccess: () => {
@@ -87,7 +87,7 @@ export default function ScheduledTasks() {
 
   const toggleMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.post(`/api/scheduled-tasks/${id}/toggle`);
+      const res = await api.post(`/scheduled-tasks/${id}/toggle`);
       return res.data;
     },
     onSuccess: () => {

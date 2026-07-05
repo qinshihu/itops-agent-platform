@@ -14,7 +14,7 @@ import {
   XCircle,
   RotateCcw,
   AlertCircle,
-  ArrowUp,
+  ArrowUp as _ArrowUp,
   ArrowDown,
 } from 'lucide-react';
 import { formatDistanceToNow, format, parseISO } from 'date-fns';
@@ -43,7 +43,7 @@ interface RemediationStats {
   }>;
 }
 
-interface PolicyWithStats {
+interface _PolicyWithStats {
   id: string;
   name: string;
   enabled: number;
@@ -74,7 +74,7 @@ export default function RemediationDashboard() {
   const { data: remediationStats, isLoading: isLoadingRemediation } = useQuery({
     queryKey: ['remediation-stats'],
     queryFn: async () => {
-      const res = await api.get('/api/dashboard/remediation-stats');
+      const res = await api.get('/dashboard/remediation-stats');
       return res.data.data as RemediationStats;
     },
     refetchInterval: 30000,
@@ -84,7 +84,7 @@ export default function RemediationDashboard() {
   const { data: allPolicies } = useQuery({
     queryKey: ['remediation-policies-all'],
     queryFn: async () => {
-      const res = await api.get('/api/remediation-policies', { params: { limit: 100 } });
+      const res = await api.get('/remediation-policies', { params: { limit: 100 } });
       return res.data.data.policies as Array<{
         id: string;
         name: string;
@@ -103,7 +103,7 @@ export default function RemediationDashboard() {
 
       const statsPromises = allPolicies.slice(0, 10).map(async (policy) => {
         try {
-          const res = await api.get(`/api/remediation-policies/${policy.id}/stats`, {
+          const res = await api.get(`/remediation-policies/${policy.id}/stats`, {
             params: { days: 7 },
           });
           return {
@@ -139,7 +139,7 @@ export default function RemediationDashboard() {
   const { data: alertSourceStats, isLoading: isLoadingSources } = useQuery({
     queryKey: ['alert-source-stats'],
     queryFn: async () => {
-      const res = await api.get('/api/dashboard/alert-source-stats');
+      const res = await api.get('/dashboard/alert-source-stats');
       return res.data.data.source_stats as AlertSourceStats[];
     },
     staleTime: 60000,
@@ -149,7 +149,7 @@ export default function RemediationDashboard() {
     queryKey: ['remediation-trend', trendPeriod],
     queryFn: async () => {
       const hours = trendPeriod === '24h' ? 24 : 168;
-      const res = await api.get('/api/dashboard/task-trends', { params: { hours } });
+      const res = await api.get('/dashboard/task-trends', { params: { hours } });
       return res.data.data as Array<{
         time_bucket: string;
         total: number;

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * =============================================================================
  * AARS v2 — SSH 诊断引擎
@@ -15,10 +16,10 @@ import { generateCompletion } from '../../../../ai/services/llm/llmService';
 import { logger } from '../../../../../utils/logger';
 import { strategyRecommender } from '../adaptive/strategyRecommender';
 import { probeExecutor } from './probeExecutor';
-import { adaptiveAutomationEngine } from '../adaptive/adaptiveAutomation';
 import { riskAssessor } from '../adaptive/riskAssessor';
-import { PROBE_INDEX, findProbesByAlertText } from '../probeUnit';
+import { findProbesByAlertText } from '../probeUnit';
 import type { ProbeUnit, ProbeResult, DeviceRuntimeProfile, RemediationPlan, RiskAssessment } from '../types';
+import { getErrorMessage } from '../../../../../utils/errorHelpers';
 
 export interface SshDiagnosisResult {
   probeResults: ProbeResult[];
@@ -193,10 +194,10 @@ ${rawOutput.substring(0, 10000)}
           requiresApproval: true,
         },
       };
-    } catch (err: any) {
-      logger.error(`[SSHDiagnosis] AI analysis failed: ${err.message}`);
+    } catch (err: unknown) {
+      logger.error(`[SSHDiagnosis] AI analysis failed: ${getErrorMessage(err)}`);
       return {
-        diagnosis: `❌ AI 分析失败: ${err.message}`,
+        diagnosis: `❌ AI 分析失败: ${getErrorMessage(err)}`,
         summary: 'AI分析不可用',
         rootCause: '无法确定根因',
         remediationPlan: {

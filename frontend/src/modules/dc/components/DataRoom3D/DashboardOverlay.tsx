@@ -33,9 +33,9 @@ export default function DashboardOverlay({
   };
 
   const pue = overview?.pue ?? 0;
-  const totalPower = ((overview as any)?.totalPower || 0) / 1000;
-  const coolingPower = ((overview as any)?.coolingPower || 0) / 1000;
-  const itPower = ((overview as any)?.itPower || 0) / 1000;
+  const totalPower = (overview?.totalPower || 0) / 1000;
+  const coolingPower = (overview?.coolingPower || 0) / 1000;
+  const itPower = (overview?.itPower || 0) / 1000;
 
   // 使用真实机柜数据生成左侧机柜状态列表
   const rackStatusList = racks.slice(0, 12).map(r => ({

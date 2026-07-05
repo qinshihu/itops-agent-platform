@@ -1,6 +1,8 @@
 import { randomUUID } from 'crypto';
-import db from '../../../../models/database';
+import { knowledgeRepository } from '../../../../repositories';
+import type { KnowledgeRecord } from '../../../../repositories';
 import { localRuleEngine } from '../rca/localRuleEngine';
+import { logger } from '../../../../utils/logger';
 
 interface KnowledgeItem {
   id: string;
@@ -44,36 +46,18 @@ class EnhancedRAGService {
       minScore = 0.1
     } = options;
 
-    let sql = 'SELECT * FROM knowledge_base WHERE 1=1';
-    const params: unknown[] = [];
+    const rawItems = knowledgeRepository.findRagCandidates(category);
 
-    if (category) {
-      sql += ' AND category = ?';
-      params.push(category);
-    }
-
-    sql += ' ORDER BY usage_count DESC, created_at DESC LIMIT 50';
-
-    const knowledgeItems = db.prepare(sql).all(...params) as Array<{
-      id: string;
-      title: string;
-      content: string;
-      category: string;
-      tags: string;
-      usage_count: number;
-      created_at: string;
-      updated_at: string;
-    }>;
-    
-    if (knowledgeItems.length === 0) {
+    if (rawItems.length === 0) {
       return [];
     }
 
-    const totalDocs = (db.prepare('SELECT COUNT(*) as count FROM knowledge_base').get() as { count: number }).count;
+    const totalDocs = knowledgeRepository.countAll();
 
-    const scoredResults = knowledgeItems.map(item => {
-      const score = this.calculateRelevanceScore(query, item, totalDocs);
-      const highlight = this.generateHighlight(query, item);
+    const scoredResults = rawItems.map(item => {
+      const itemWithContent = { ...item, content: item.content || '' };
+      const score = this.calculateRelevanceScore(query, itemWithContent, totalDocs);
+      const highlight = this.generateHighlight(query, itemWithContent);
       
       return {
         item: this.transformItem(item),
@@ -219,20 +203,11 @@ class EnhancedRAGService {
   /**
    * 转换知识库项目格式
    */
-  private transformItem(item: {
-    id: string;
-    title: string;
-    content: string;
-    category: string;
-    tags: string;
-    usage_count: number;
-    created_at: string;
-    updated_at: string;
-  }): KnowledgeItem {
+  private transformItem(item: KnowledgeRecord): KnowledgeItem {
     return {
       id: item.id,
       title: item.title,
-      content: item.content,
+      content: item.content || '',
       category: item.category || '未分类',
       tags: item.tags ? JSON.parse(item.tags) : [],
       usageCount: item.usage_count || 0,
@@ -274,12 +249,7 @@ class EnhancedRAGService {
 
     for (const result of searchResults) {
       try {
-        db.prepare(`
-          UPDATE knowledge_base 
-          SET usage_count = usage_count + 1, 
-              updated_at = datetime('now','localtime') 
-          WHERE id = ?
-        `).run(result.item.id);
+        knowledgeRepository.incrementUsageCount(result.item.id);
       } catch (error) {
         console.error('Failed to update usage count:', error);
       }
@@ -304,13 +274,8 @@ class EnhancedRAGService {
     knowledgeId: string,
     limit = 5
   ): Promise<KnowledgeItem[]> {
-    const sourceItem = db.prepare('SELECT * FROM knowledge_base WHERE id = ?').get(knowledgeId) as {
-      id: string;
-      title: string;
-      content: string;
-      category: string;
-    } | undefined;
-    
+    const sourceItem = knowledgeRepository.getById(knowledgeId);
+
     if (!sourceItem) {
       return [];
     }
@@ -341,10 +306,13 @@ class EnhancedRAGService {
       ? tags 
       : this.extractKeywords(`${title} ${content}`).slice(0, 10);
 
-    db.prepare(`
-      INSERT INTO knowledge_base (id, title, content, category, tags, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
-    `).run(id, title, content, category, JSON.stringify(autoTags));
+    knowledgeRepository.create({
+      id,
+      title,
+      content,
+      category,
+      tags: JSON.stringify(autoTags),
+    });
 
     return id;
   }
@@ -361,22 +329,20 @@ class EnhancedRAGService {
     let imported = 0;
     let failed = 0;
 
-    db.transaction(() => {
-      for (const item of items) {
-        try {
-          this.addKnowledge(
-            item.title,
-            item.content,
-            item.category || '未分类',
-            item.tags || []
-          );
-          imported++;
-        } catch (error) {
-          console.error('Failed to import knowledge item:', error);
-          failed++;
-        }
+    for (const item of items) {
+      try {
+        this.addKnowledge(
+          item.title,
+          item.content,
+          item.category || '未分类',
+          item.tags || []
+        );
+        imported++;
+      } catch (error) {
+        logger.error('Failed to import knowledge item:', error);
+        failed++;
       }
-    })();
+    }
 
     return { imported, failed };
   }
@@ -385,28 +351,10 @@ class EnhancedRAGService {
    * 获取知识统计
    */
   getStatistics() {
-    const totalItems = (db.prepare('SELECT COUNT(*) as count FROM knowledge_base').get() as { count: number }).count;
-    const categoryStats = db.prepare(`
-      SELECT category, COUNT(*) as count 
-      FROM knowledge_base 
-      GROUP BY category
-      ORDER BY count DESC
-    `).all() as Array<{ category: string; count: number }>;
+    const totalItems = knowledgeRepository.countAll();
+    const categoryStats = knowledgeRepository.countByCategory();
     
-    const topItems = db.prepare(`
-      SELECT * FROM knowledge_base 
-      ORDER BY usage_count DESC, created_at DESC 
-      LIMIT 10
-    `).all() as Array<{
-      id: string;
-      title: string;
-      content: string;
-      category: string;
-      tags: string;
-      usage_count: number;
-      created_at: string;
-      updated_at: string;
-    }>;
+    const topItems = knowledgeRepository.findTopItems(10);
 
     return {
       totalItems,

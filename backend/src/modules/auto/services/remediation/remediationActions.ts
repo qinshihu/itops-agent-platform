@@ -1,8 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
-import db from '../../../../models/database';
+import { remediationAuditRepository, knowledgeRepository } from '../../../../repositories';
 import { logger } from '../../../../utils/logger';
 import { executeCommand } from '../../../servers/services/sshService';
 import { rootCauseAnalysisService } from '../../../ai/services/rca/rootCauseAnalysisService';
+import type { RemediationAudit } from '../../../../repositories/types/auto';
 
 interface CreateAuditInput {
   rca_id: string;
@@ -10,6 +11,24 @@ interface CreateAuditInput {
   server_id: string;
   risk_level: string;
   recommendations?: string;
+}
+
+/** remediation_audits + root_cause_analyses + remediation_policies JOIN 查询结果 */
+interface RemediationAuditRow extends RemediationAudit {
+  rca_title?: string;
+  policy_name?: string;
+}
+
+interface VerificationResult {
+  allPassed?: boolean;
+  checks?: Array<{ name: string; success: boolean; output: string }>;
+  success?: boolean;
+  error?: string;
+}
+
+interface AuditListResult {
+  audits: RemediationAuditRow[];
+  total: number;
 }
 
 export const remediationActionsMixin = {
@@ -56,38 +75,26 @@ export const remediationActionsMixin = {
     return { valid: true };
   },
 
-  createAudit(input: CreateAuditInput): Record<string, unknown> {
+  createAudit(input: CreateAuditInput): RemediationAuditRow {
     const id = uuidv4();
     const now = new Date().toISOString();
 
-    db.prepare(`
-      INSERT INTO remediation_audits (
-        id, rca_id, policy_id, server_id, risk_level,
-        status, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    remediationAuditRepository.create({
       id,
-      input.rca_id,
-      input.policy_id || null,
-      input.server_id,
-      input.risk_level,
-      'pending',
-      now
-    );
+      rca_id: input.rca_id,
+      policy_id: input.policy_id || null,
+      server_id: input.server_id,
+      risk_level: input.risk_level,
+      status: 'pending',
+      created_at: now,
+    });
 
-    const audit = db.prepare(`
-      SELECT a.*, r.title as rca_title, p.name as policy_name
-      FROM remediation_audits a
-      LEFT JOIN root_cause_analyses r ON a.rca_id = r.id
-      LEFT JOIN remediation_policies p ON a.policy_id = p.id
-      WHERE a.id = ?
-    `).get(id) as Record<string, unknown>;
-
-    return audit || {};
+    const audit = remediationAuditRepository.getByIdWithJoins(id);
+    return (audit || {}) as RemediationAuditRow;
   },
 
-  approveAudit(id: string, userId: string, action?: string, comment?: string): Record<string, unknown> {
-    const audit = db.prepare('SELECT * FROM remediation_audits WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  approveAudit(id: string, userId: string, action?: string, _comment?: string): RemediationAuditRow {
+    const audit = remediationAuditRepository.getById(id);
     if (!audit) {
       throw new Error(`Audit not found: ${id}`);
     }
@@ -99,25 +106,19 @@ export const remediationActionsMixin = {
     const now = new Date().toISOString();
     const newStatus = action === 'reject' ? 'rejected' : 'approved';
 
-    db.prepare(`
-      UPDATE remediation_audits
-      SET status = ?, approved_by = ?, approved_at = ?, completed_at = ?
-      WHERE id = ?
-    `).run(newStatus, userId, now, now, id);
+    remediationAuditRepository.update(id, {
+      status: newStatus,
+      approved_by: userId,
+      approved_at: now,
+      completed_at: now,
+    });
 
-    const updated = db.prepare(`
-      SELECT a.*, r.title as rca_title, p.name as policy_name
-      FROM remediation_audits a
-      LEFT JOIN root_cause_analyses r ON a.rca_id = r.id
-      LEFT JOIN remediation_policies p ON a.policy_id = p.id
-      WHERE a.id = ?
-    `).get(id) as Record<string, unknown>;
-
-    return updated || {};
+    const updated = remediationAuditRepository.getByIdWithJoins(id);
+    return (updated || {}) as RemediationAuditRow;
   },
 
-  async executeAudit(id: string): Promise<Record<string, unknown>> {
-    const audit = db.prepare('SELECT * FROM remediation_audits WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  async executeAudit(id: string): Promise<RemediationAuditRow> {
+    const audit = remediationAuditRepository.getById(id) as RemediationAuditRow | undefined;
     if (!audit) {
       throw new Error(`Audit not found: ${id}`);
     }
@@ -127,11 +128,9 @@ export const remediationActionsMixin = {
       throw new Error('Audit must be approved or pending before execution');
     }
 
-    db.prepare(`
-      UPDATE remediation_audits SET status = 'executing' WHERE id = ?
-    `).run(id);
+    remediationAuditRepository.update(id, { status: 'executing' });
 
-    const startTime = Date.now();
+    const _startTime = Date.now();
     const serverId = audit.server_id as string;
     const rca = audit.rca_id ? rootCauseAnalysisService.get(audit.rca_id as string) : null;
     const recommendations = rca?.recommendations ? JSON.parse(rca.recommendations) : [];
@@ -182,11 +181,12 @@ export const remediationActionsMixin = {
       const now = new Date().toISOString();
       const finalStatus = success ? 'success' : 'failed';
 
-      db.prepare(`
-        UPDATE remediation_audits
-        SET status = ?, execution_log = ?, result = ?, completed_at = ?
-        WHERE id = ?
-      `).run(finalStatus, executionLog, JSON.stringify({ success, recommendations }), now, id);
+      remediationAuditRepository.update(id, {
+        status: finalStatus,
+        execution_log: executionLog,
+        result: JSON.stringify({ success, recommendations }),
+        completed_at: now,
+      });
 
       if (success) {
         this.persistToKnowledge(id).catch(err => {
@@ -198,26 +198,20 @@ export const remediationActionsMixin = {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(`Audit execution ${id} failed:`, error);
 
-      db.prepare(`
-        UPDATE remediation_audits
-        SET status = 'failed', execution_log = ?, result = ?, completed_at = ?
-        WHERE id = ?
-      `).run(executionLog + `\nError: ${errorMsg}`, JSON.stringify({ success: false, error: errorMsg }), new Date().toISOString(), id);
+      remediationAuditRepository.update(id, {
+        status: 'failed',
+        execution_log: executionLog + `\nError: ${errorMsg}`,
+        result: JSON.stringify({ success: false, error: errorMsg }),
+        completed_at: new Date().toISOString(),
+      });
     }
 
-    const updated = db.prepare(`
-      SELECT a.*, r.title as rca_title, p.name as policy_name
-      FROM remediation_audits a
-      LEFT JOIN root_cause_analyses r ON a.rca_id = r.id
-      LEFT JOIN remediation_policies p ON a.policy_id = p.id
-      WHERE a.id = ?
-    `).get(id) as Record<string, unknown>;
-
-    return updated || {};
+    const updated = remediationAuditRepository.getByIdWithJoins(id);
+    return (updated || {}) as RemediationAuditRow;
   },
 
-  async verifyAudit(id: string): Promise<Record<string, unknown>> {
-    const audit = db.prepare('SELECT * FROM remediation_audits WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  async verifyAudit(id: string): Promise<RemediationAuditRow> {
+    const audit = remediationAuditRepository.getById(id) as RemediationAuditRow | undefined;
     if (!audit) {
       throw new Error(`Audit not found: ${id}`);
     }
@@ -227,9 +221,9 @@ export const remediationActionsMixin = {
     }
 
     const serverId = audit.server_id as string;
-    const rca = audit.rca_id ? rootCauseAnalysisService.get(audit.rca_id as string) : null;
+    const _rca = audit.rca_id ? rootCauseAnalysisService.get(audit.rca_id as string) : null;
 
-    let verificationResult: Record<string, unknown> = {};
+    let verificationResult: VerificationResult = {};
 
     try {
       const checks = [
@@ -252,9 +246,9 @@ export const remediationActionsMixin = {
       const allPassed = checkResults.every(r => r.success);
       verificationResult = { allPassed, checks: checkResults };
 
-      db.prepare(`
-        UPDATE remediation_audits SET result = ? WHERE id = ?
-      `).run(JSON.stringify({ ...(audit.result ? JSON.parse(audit.result as string) : {}), verification: verificationResult }), id);
+      remediationAuditRepository.update(id, {
+        result: JSON.stringify({ ...(audit.result ? JSON.parse(audit.result as string) : {}), verification: verificationResult }),
+      });
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -262,19 +256,12 @@ export const remediationActionsMixin = {
       verificationResult = { success: false, error: errorMsg };
     }
 
-    const updated = db.prepare(`
-      SELECT a.*, r.title as rca_title, p.name as policy_name
-      FROM remediation_audits a
-      LEFT JOIN root_cause_analyses r ON a.rca_id = r.id
-      LEFT JOIN remediation_policies p ON a.policy_id = p.id
-      WHERE a.id = ?
-    `).get(id) as Record<string, unknown>;
-
-    return updated || {};
+    const updated = remediationAuditRepository.getByIdWithJoins(id);
+    return (updated || {}) as RemediationAuditRow;
   },
 
-  async rollbackAudit(id: string): Promise<Record<string, unknown>> {
-    const audit = db.prepare('SELECT * FROM remediation_audits WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  async rollbackAudit(id: string): Promise<RemediationAuditRow> {
+    const audit = remediationAuditRepository.getById(id) as RemediationAuditRow | undefined;
     if (!audit) {
       throw new Error(`Audit not found: ${id}`);
     }
@@ -329,36 +316,33 @@ export const remediationActionsMixin = {
         rollbackLog = `[${now}] No automatic rollback commands available. Manual intervention required.\n`;
       }
 
-      db.prepare(`
-        UPDATE remediation_audits
-        SET status = ?, execution_log = ?, result = ?, is_rollback = 1, completed_at = ?
-        WHERE id = ?
-      `).run(success ? 'rolled_back' : 'failed', rollbackLog, JSON.stringify({ success, rollback: true }), now, id);
+      remediationAuditRepository.update(id, {
+        status: success ? 'rolled_back' : 'failed',
+        execution_log: rollbackLog,
+        result: JSON.stringify({ success, rollback: true }),
+        is_rollback: 1,
+        completed_at: now,
+      });
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(`Audit rollback ${id} failed:`, error);
 
-      db.prepare(`
-        UPDATE remediation_audits
-        SET status = 'failed', execution_log = ?, result = ?, is_rollback = 1, completed_at = ?
-        WHERE id = ?
-      `).run(rollbackLog + `\nError: ${errorMsg}`, JSON.stringify({ success: false, rollback: true, error: errorMsg }), now, id);
+      remediationAuditRepository.update(id, {
+        status: 'failed',
+        execution_log: rollbackLog + `\nError: ${errorMsg}`,
+        result: JSON.stringify({ success: false, rollback: true, error: errorMsg }),
+        is_rollback: 1,
+        completed_at: now,
+      });
     }
 
-    const updated = db.prepare(`
-      SELECT a.*, r.title as rca_title, p.name as policy_name
-      FROM remediation_audits a
-      LEFT JOIN root_cause_analyses r ON a.rca_id = r.id
-      LEFT JOIN remediation_policies p ON a.policy_id = p.id
-      WHERE a.id = ?
-    `).get(id) as Record<string, unknown>;
-
-    return updated || {};
+    const updated = remediationAuditRepository.getByIdWithJoins(id);
+    return (updated || {}) as RemediationAuditRow;
   },
 
   async persistToKnowledge(auditId: string): Promise<void> {
-    const audit = db.prepare('SELECT * FROM remediation_audits WHERE id = ?').get(auditId) as Record<string, unknown> | undefined;
+    const audit = remediationAuditRepository.getById(auditId) as RemediationAuditRow | undefined;
     if (!audit) {
       throw new Error(`Audit not found: ${auditId}`);
     }
@@ -375,70 +359,33 @@ export const remediationActionsMixin = {
     const title = `自动修复知识: ${rca.title}`;
     const content = `根因: ${rca.root_cause}\n\n执行结果: ${audit.execution_log || 'N/A'}`;
 
-    db.prepare(`
-      INSERT INTO knowledge_base (id, title, category, content, tags, solutions, usage_count)
-      VALUES (?, ?, ?, ?, ?, ?, 0)
-    `).run(
-      uuidv4(),
+    knowledgeRepository.create({
+      id: uuidv4(),
       title,
-      'auto_remediation',
+      category: 'auto_remediation',
       content,
-      JSON.stringify(['auto_generated', 'remediation']),
-      JSON.stringify(rca.recommendations ? JSON.parse(rca.recommendations) : []),
-    );
+      tags: JSON.stringify(['auto_generated', 'remediation']),
+      solutions: JSON.stringify(rca.recommendations ? JSON.parse(rca.recommendations) : []),
+    });
 
     logger.info(`Persisted audit ${auditId} to knowledge base`);
   },
 
-  listAudits(filters: { status?: string; risk_level?: string; page?: number; limit?: number }): { audits: Array<Record<string, unknown>>; total: number } {
-    let sql = `
-      SELECT a.*, r.title as rca_title, p.name as policy_name
-      FROM remediation_audits a
-      LEFT JOIN root_cause_analyses r ON a.rca_id = r.id
-      LEFT JOIN remediation_policies p ON a.policy_id = p.id
-      WHERE 1=1
-    `;
-    let countSql = 'SELECT COUNT(*) as count FROM remediation_audits WHERE 1=1';
-    const params: unknown[] = [];
-
-    if (filters.status) {
-      sql += ' AND a.status = ?';
-      countSql += ' AND status = ?';
-      params.push(filters.status);
-    }
-
-    if (filters.risk_level) {
-      sql += ' AND a.risk_level = ?';
-      countSql += ' AND risk_level = ?';
-      params.push(filters.risk_level);
-    }
-
-    sql += ' ORDER BY a.created_at DESC';
-
-    const page = filters.page || 1;
-    const limit = filters.limit || 20;
-    const offset = (page - 1) * limit;
-    sql += ` LIMIT ${limit} OFFSET ${offset}`;
-
-    const audits = db.prepare(sql).all(...params) as Array<Record<string, unknown>>;
-    const totalResult = db.prepare(countSql).get(...params) as { count: number };
-
-    return { audits, total: totalResult.count };
+  listAudits(filters: { status?: string; risk_level?: string; page?: number; limit?: number }): AuditListResult {
+    const result = remediationAuditRepository.listWithJoins({
+      status: filters.status,
+      risk_level: filters.risk_level,
+      page: filters.page,
+      limit: filters.limit,
+    });
+    return { audits: result.audits as RemediationAuditRow[], total: result.total };
   },
 
-  getAudit(id: string): Record<string, unknown> {
-    const audit = db.prepare(`
-      SELECT a.*, r.title as rca_title, p.name as policy_name
-      FROM remediation_audits a
-      LEFT JOIN root_cause_analyses r ON a.rca_id = r.id
-      LEFT JOIN remediation_policies p ON a.policy_id = p.id
-      WHERE a.id = ?
-    `).get(id) as Record<string, unknown> | undefined;
-
+  getAudit(id: string): RemediationAuditRow {
+    const audit = remediationAuditRepository.getByIdWithJoins(id);
     if (!audit) {
       throw new Error(`Audit not found: ${id}`);
     }
-
-    return audit;
+    return audit as RemediationAuditRow;
   },
 };

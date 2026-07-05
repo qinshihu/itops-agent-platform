@@ -2,6 +2,13 @@
  * 双层 Agent 架构类型定义
  */
 
+// ── 语义化类型别名 ──
+
+/** 任务上下文元数据 */
+export type TaskMetadata = Record<string, unknown>;
+/** 执行结果元数据 */
+export type ExecutionMetadata = Record<string, unknown>;
+
 // Agent 类型枚举
 export enum AgentType {
   COORDINATOR = 'coordinator',
@@ -45,7 +52,7 @@ export interface TaskContext {
   input: string;
   userId?: string;
   timestamp: number;
-  metadata?: Record<string, unknown>;
+  metadata?: TaskMetadata;
 }
 
 // 任务分解结果
@@ -71,7 +78,7 @@ export interface ExecutionResult {
   success: boolean;
   output: string;
   error?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: ExecutionMetadata;
   duration: number;
   confidence?: number;
   nextActions?: string[];

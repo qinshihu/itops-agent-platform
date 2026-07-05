@@ -14,7 +14,7 @@
  */
 
 import { logger } from '../../../../../utils/logger';
-import type { RiskAssessment, RiskDimensions, RemediationPlan, RemediationCommand } from '../types';
+import type { RiskAssessment, RiskDimensions, RemediationPlan } from '../types';
 
 // 工作日时间窗口
 const BUSINESS_START_HOUR = 9;
@@ -24,7 +24,7 @@ class RiskAssessor {
   /**
    * 对修复方案做三维风险评估
    */
-  assess(remediation: RemediationPlan, alertSeverity: string, alertTitle: string): RiskAssessment {
+  assess(remediation: RemediationPlan, alertSeverity: string, _alertTitle: string): RiskAssessment {
     const operationalRisk = this.evaluateOperationalRisk(remediation);
     const urgency = this.evaluateUrgency(alertSeverity);
     const confidence = this.evaluateConfidence(remediation);

@@ -88,12 +88,12 @@ export default function SlotDetailPanel({ rack, slots, onClose }: Props) {
 
                   {/* 资源占用 */}
                   <div className="text-right shrink-0">
-                    {slot.cpuUsage != null && (
+                    {slot.cpuUsage !== null && slot.cpuUsage !== undefined && (
                       <div className="text-[9px] text-slate-500">
                         CPU {slot.cpuUsage}%
                       </div>
                     )}
-                    {slot.memUsage != null && (
+                    {slot.memUsage !== null && slot.memUsage !== undefined && (
                       <div className="text-[9px] text-slate-500">
                         内存 {slot.memUsage}%
                       </div>

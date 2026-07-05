@@ -1,13 +1,14 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Client } from 'ssh2';
 import { randomUUID } from 'crypto';
-import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
 import type { VendorType, InspectionType} from './vendorAdapter';
-import { createVendorAdapter, CommandTemplate } from './vendorAdapter';
+import { createVendorAdapter } from './vendorAdapter';
 import type { ParsedResult } from './networkResultParser';
 import { getParser } from './networkResultParser';
 import { decrypt } from '../../auth/services/encryptionService';
 import { networkCommandGenerator } from './networkCommandGenerator';
+import { networkDeviceRepository, snmpInspectionRepo } from '../../../repositories';
 
 export interface DeviceInfo {
   id: string;
@@ -48,23 +49,24 @@ class NetworkInspectionService {
     const startTime = Date.now();
     const inspectionId = randomUUID();
 
-    const device = db.prepare(
-      'SELECT id, name, ip_address, vendor, ssh_port, username, password, enable_password FROM network_devices WHERE id = ?'
-    ).get(deviceId) as DeviceInfo | undefined;
+    const device = networkDeviceRepository.getFullCredentials(deviceId) as DeviceInfo | undefined;
 
     if (!device) {
       throw new Error(`Device not found: ${deviceId}`);
     }
 
-    const decryptedDevice = {
+    const decryptedDevice: DeviceInfo = {
       ...device,
-      password: decrypt(device.password),
+      password: decrypt(device.password || ''),
       enable_password: device.enable_password ? decrypt(device.enable_password) : undefined
     };
 
-    db.prepare(
-      'INSERT INTO network_inspection_history (id, device_id, inspection_type, status) VALUES (?, ?, ?, ?)'
-    ).run(inspectionId, deviceId, inspectionType, 'running');
+    snmpInspectionRepo.createRunning({
+      id: inspectionId,
+      device_id: deviceId,
+      inspection_type: inspectionType,
+      status: 'running',
+    });
 
     try {
       const results: ParsedResult[] = [];
@@ -96,21 +98,16 @@ class NetworkInspectionService {
       const status = commandsFailed === 0 ? 'success' : commandsFailed < commandsExecuted / 2 ? 'partial' : 'failed';
       const summary = this.generateSummary(results);
 
-      db.prepare(
-        'UPDATE network_inspection_history SET status = ?, commands_executed = ?, commands_failed = ?, results = ?, summary = ?, duration_ms = ? WHERE id = ?'
-      ).run(
+      snmpInspectionRepo.updateResult(inspectionId, {
         status,
-        commandsExecuted,
-        commandsFailed,
-        JSON.stringify(results),
+        commands_executed: commandsExecuted,
+        commands_failed: commandsFailed,
+        results: JSON.stringify(results),
         summary,
-        durationMs,
-        inspectionId
-      );
+        duration_ms: durationMs,
+      });
 
-      db.prepare(
-        'UPDATE network_devices SET last_inspection_at = datetime(\'now\',\'localtime\'), last_inspection_result = ? WHERE id = ?'
-      ).run(summary, deviceId);
+      networkDeviceRepository.updateInspectionResult(deviceId, summary);
 
       return {
         inspectionId,
@@ -127,9 +124,7 @@ class NetworkInspectionService {
       const durationMs = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-      db.prepare(
-        'UPDATE network_inspection_history SET status = ?, summary = ?, duration_ms = ? WHERE id = ?'
-      ).run('failed', errorMessage, durationMs, inspectionId);
+      snmpInspectionRepo.updateFailed(inspectionId, errorMessage, durationMs);
 
       logger.error(`Inspection failed for device ${deviceId}: ${errorMessage}`);
 
@@ -190,7 +185,7 @@ class NetworkInspectionService {
 
       // 按命令拆分输出 — 每个命令输出以 <command>\r\n 开头，到下一个 <prompt> 结束
       for (const cmd of commands) {
-        const cmdEscaped = cmd.command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const _cmdEscaped = cmd.command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         // 从当前命令执行完后的位置提取输出
         const cmdOutput = this.extractCommandOutput(shellOutput, cmd.command);
 
@@ -261,7 +256,7 @@ class NetworkInspectionService {
           });
         }
       }
-    } catch (error) {
+    } catch (_error) {
       for (const cmd of commands) {
         results.push({
           type: cmd.type, success: false, status: 'error',
@@ -356,7 +351,7 @@ class NetworkInspectionService {
   private runCommandsViaShell(conn: Client, device: DeviceInfo, commands: string[]): Promise<string> {
     return new Promise((resolve, reject) => {
       const SHELL_TIMEOUT = 180000; // 整个 shell 会话最长 3 分钟
-      let stdin: any = null;
+      let _stdin: any = null;
       let stdout = '';
       let isResolved = false;
       let shellTimeout: NodeJS.Timeout | null = null;
@@ -386,14 +381,14 @@ class NetworkInspectionService {
           return;
         }
 
-        stdin = stream;
+        _stdin = stream;
         const cmdQueue = [...commands];   // 待发送的命令队列
         let currentCmd = '';            // 当前正在执行的命令
         let cmdIndex = 0;               // 命令索引
         let paginationCount = 0;        // 分页按空格计数
         let initPhase = true;           // 初始化阶段（先发 screen-length）
         let initSent = false;
-        const angularBracketCount = 0;    // 尖括号计数，用于判断是否收到提示符
+        const _angularBracketCount = 0;    // 尖括号计数，用于判断是否收到提示符
 
         // 准备初始化命令（关闭分页）
         const initCmd = device.vendor === 'huawei'

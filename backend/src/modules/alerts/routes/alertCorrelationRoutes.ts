@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { alertCorrelationService } from '../services/alertCorrelationService';
 import { requireRole } from '../../../middleware/auth';
 import { logger } from '../../../utils/logger';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -14,9 +15,9 @@ router.get('/alert-correlation/groups', (req: Request, res: Response) => {
     const offset = parseInt(req.query.offset as string, 10) || 0;
     const { groups, total } = alertCorrelationService.getGroups({ status, limit, offset });
     res.json({ success: true, data: groups, total });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to get correlation groups:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 
@@ -26,9 +27,9 @@ router.get('/alert-correlation/groups/:id', (req: Request, res: Response) => {
     const detail = alertCorrelationService.getGroupDetail(req.params.id);
     if (!detail) return res.status(404).json({ success: false, error: '组不存在' });
     res.json({ success: true, data: detail });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to get correlation group detail:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 
@@ -41,9 +42,9 @@ router.post('/alert-correlation/groups', requireRole('operator'), (req: Request,
     }
     const group = alertCorrelationService.createManualGroup(alert_ids, title);
     res.json({ success: true, data: group });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to create correlation group:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 
@@ -54,9 +55,9 @@ router.post('/alert-correlation/groups/:id/alerts', (req: Request, res: Response
     if (!alert_id) return res.status(400).json({ success: false, error: 'alert_id required' });
     alertCorrelationService.addAlertToGroup(req.params.id, alert_id);
     res.json({ success: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to add alert to group:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 
@@ -65,9 +66,9 @@ router.delete('/alert-correlation/groups/:id/alerts/:alertId', (req: Request, re
   try {
     alertCorrelationService.removeAlertFromGroup(req.params.id, req.params.alertId);
     res.json({ success: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to remove alert from group:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 
@@ -77,9 +78,9 @@ router.post('/alert-correlation/groups/:id/resolve', (req: Request, res: Respons
     const { root_cause } = req.body;
     alertCorrelationService.resolveGroup(req.params.id, root_cause);
     res.json({ success: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to resolve correlation group:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 
@@ -88,9 +89,9 @@ router.delete('/alert-correlation/groups/:id', requireRole('admin'), (req: Reque
   try {
     alertCorrelationService.deleteGroup(req.params.id);
     res.json({ success: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to delete correlation group:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 
@@ -99,9 +100,9 @@ router.get('/alert-correlation/alert/:alertId', (req: Request, res: Response) =>
   try {
     const group = alertCorrelationService.getAlertGroup(req.params.alertId);
     res.json({ success: true, data: group });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to get alert group:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 
@@ -110,9 +111,9 @@ router.post('/alert-correlation/auto', requireRole('admin'), async (_req: Reques
   try {
     const count = await alertCorrelationService.autoCorrelate();
     res.json({ success: true, data: { grouped: count } });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to auto-correlate:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 
@@ -121,9 +122,9 @@ router.get('/alert-correlation/stats', (_req: Request, res: Response) => {
   try {
     const stats = alertCorrelationService.getStats();
     res.json({ success: true, data: stats });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to get correlation stats:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: getErrorMessage(err) });
   }
 });
 

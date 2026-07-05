@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import db from '../models/database';
+import { userRepository } from '../repositories/userRepository';
 import { env } from '../utils/env';
 import { tokenBlacklist } from '../modules/auth/services/tokenBlacklist';
 
@@ -30,7 +30,7 @@ function startCacheCleanup(): void {
     }
     
     if (expiredCount > 0) {
-      console.log(`🧹 Cleaned up ${expiredCount} expired user cache entries`);
+      logger.info(`🧹 Cleaned up ${expiredCount} expired user cache entries`);
     }
   }, CACHE_CLEANUP_INTERVAL);
   interval.unref();
@@ -73,7 +73,7 @@ export function invalidateUserCache(userId: string): void {
 
 export function authenticateToken(req: Request & { user?: AuthUser }, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
-  
+
   if (!authHeader?.startsWith('Bearer ')) {
     return res.status(401).json({
       success: false,
@@ -82,55 +82,49 @@ export function authenticateToken(req: Request & { user?: AuthUser }, res: Respo
   }
 
   const token = authHeader.substring(7);
+  const user = verifyToken(token);
 
-  if (tokenBlacklist.isBlacklisted(token)) {
+  if (!user) {
     return res.status(401).json({
       success: false,
-      message: 'Token已失效'
+      message: 'Token已失效或无效'
     });
   }
+
+  req.user = user;
+  next();
+}
+
+export function verifyToken(token: string): AuthUser | null {
+  if (!token || tokenBlacklist.isBlacklisted(token)) return null;
 
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] }) as jwt.JwtPayload & { id: string };
-    
+
     let user: AuthUser | null = getCachedUser(decoded.id);
     if (!user) {
-      const dbUser = db.prepare('SELECT id, username, email, role, enabled, password_must_change FROM users WHERE id = ?').get(decoded.id);
+      const dbUser = userRepository.getCachedFields(decoded.id);
       if (dbUser) {
-        user = dbUser as AuthUser;
+        user = {
+          id: dbUser.id,
+          username: dbUser.username,
+          email: dbUser.email,
+          role: dbUser.role,
+          enabled: dbUser.enabled,
+          password_must_change: dbUser.password_must_change ?? 0,
+        };
         setCachedUser(decoded.id, user);
       }
     }
-    
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: '用户不存在'
-      });
-    }
 
-    if (!user.enabled) {
-      return res.status(403).json({
-        success: false,
-        message: '账户已被禁用'
-      });
-    }
-
-    req.user = user;
-    next();
-  } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
-      return res.status(401).json({
-        success: false,
-        message: 'Token已过期'
-      });
-    }
-    return res.status(401).json({
-      success: false,
-      message: '无效的token'
-    });
+    if (!user?.enabled) return null;
+    return user;
+  } catch {
+    return null;
   }
 }
+
+export type { AuthUser };
 
 export function requireRole(...allowedRoles: string[]) {
   return (req: Request & { user?: AuthUser }, res: Response, next: NextFunction) => {

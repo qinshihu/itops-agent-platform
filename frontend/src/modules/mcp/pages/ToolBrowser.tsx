@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Card, Table, Tag, Space, Typography, Input, Select, Tooltip, Button, Modal, Descriptions } from 'antd';
-import { SearchOutlined, ToolOutlined, SafetyOutlined, PlayCircleOutlined } from '@ant-design/icons';
-import { fetchManifest, callTool, type McpTool, type ToolCallResult } from '../api';
+import { Card, Table, Tag, Space, Typography, Input, Select, Tooltip as _Tooltip, Button, Modal, Descriptions } from 'antd';
+import { SearchOutlined, ToolOutlined, SafetyOutlined as _SafetyOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { fetchManifest, callTool } from '../api';
+import type { McpTool, ToolCallResult } from '../api';
+import { getErrorMessage } from '@/lib/errorHandler';
+import { logger } from '@/lib/logger';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -47,7 +50,7 @@ const ToolBrowser: React.FC = () => {
       const m = await fetchManifest();
       setTools(m.tools || []);
     } catch (err) {
-      console.error('加载工具失败', err);
+      logger.error('加载工具失败', err);
     } finally {
       setLoading(false);
     }
@@ -65,7 +68,7 @@ const ToolBrowser: React.FC = () => {
       );
     }
     if (domainFilter) {
-      result = result.filter((t) => (t.annotations as any)?.domain === domainFilter);
+      result = result.filter((t) => t.annotations?.domain === domainFilter);
     }
     if (riskFilter) {
       result = result.filter((t) => t.annotations?.riskLevel === riskFilter);
@@ -76,7 +79,7 @@ const ToolBrowser: React.FC = () => {
   const domains = useMemo(() => {
     const set = new Set<string>();
     tools.forEach((t) => {
-      const d = (t.annotations as any)?.domain;
+      const d = t.annotations?.domain;
       if (d) set.add(d);
     });
     return Array.from(set);
@@ -90,9 +93,9 @@ const ToolBrowser: React.FC = () => {
       const args = JSON.parse(testArgs);
       const result = await callTool(selectedTool.name, args);
       setTestResult(result);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTestResult({
-        content: [{ type: 'text', text: `参数解析错误: ${err.message}` }],
+        content: [{ type: 'text', text: `参数解析错误: ${getErrorMessage(err)}` }],
         isError: true,
       });
     } finally {
@@ -130,8 +133,8 @@ const ToolBrowser: React.FC = () => {
       title: '领域',
       key: 'domain',
       width: 100,
-      render: (_: any, record: McpTool) => {
-        const d = (record.annotations as any)?.domain;
+      render: (_: unknown, record: McpTool) => {
+        const d = record.annotations?.domain;
         return d ? <Tag>{domainLabels[d] || d}</Tag> : '-';
       },
     },
@@ -139,7 +142,7 @@ const ToolBrowser: React.FC = () => {
       title: '风险等级',
       key: 'risk',
       width: 80,
-      render: (_: any, record: McpTool) => {
+      render: (_: unknown, record: McpTool) => {
         const risk = record.annotations?.riskLevel || 'readonly';
         return <Tag color={riskColorMap[risk]}>{risk}</Tag>;
       },
@@ -148,14 +151,14 @@ const ToolBrowser: React.FC = () => {
       title: '只读',
       key: 'readOnly',
       width: 60,
-      render: (_: any, record: McpTool) =>
+      render: (_: unknown, record: McpTool) =>
         record.annotations?.readOnlyHint ? <Tag color="green">✓</Tag> : <Tag color="orange">✗</Tag>,
     },
     {
       title: '操作',
       key: 'action',
       width: 80,
-      render: (_: any, record: McpTool) => (
+      render: (_: unknown, record: McpTool) => (
         <Button
           type="link"
           size="small"
@@ -271,7 +274,7 @@ const ToolBrowser: React.FC = () => {
               padding: 12, borderRadius: 6, fontSize: 12, marginTop: 8,
               border: `1px solid ${testResult.isError ? '#ffccc7' : '#b7eb8f'}`,
             }}>
-              {testResult.content?.map((c, i) => c.text || JSON.stringify(c)).join('\n') || JSON.stringify(testResult, null, 2)}
+              {testResult.content?.map((c, _i) => c.text || JSON.stringify(c)).join('\n') || JSON.stringify(testResult, null, 2)}
             </pre>
           </div>
         )}

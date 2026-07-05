@@ -20,10 +20,12 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+// eslint-disable-next-line no-restricted-imports
 import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
 import { env } from '../../../utils/env';
 import { randomUUID } from 'crypto';
+import { tasksRepo, alertRepository } from '../../../repositories';
 
 // ====================== 接口定义 ======================
 
@@ -216,25 +218,17 @@ export class SelfMonitorService {
       try {
         for (const [key, check] of Object.entries(report.checks)) {
           if (check.status === 'fail') {
-            const existing = db.prepare(`
-              SELECT id FROM alerts
-              WHERE source = 'self_monitor'
-                AND title = ?
-                AND status IN ('new', 'acknowledged')
-            `).get(`自监控: ${key} 异常`);
+            const existing = alertRepository.findActiveBySourceAndTitle('self_monitor', `自监控: ${key} 异常`);
 
             if (!existing) {
-              db.prepare(`
-                INSERT INTO alerts (id, source, severity, title, content, metadata, status)
-                VALUES (?, ?, ?, ?, ?, ?, 'new')
-              `).run(
-                randomUUID(),
-                'self_monitor',
-                'high',
-                `自监控: ${key} 异常`,
-                check.message,
-                JSON.stringify({ check, timestamp: report.timestamp })
-              );
+              alertRepository.createSimple({
+                id: randomUUID(),
+                title: `自监控: ${key} 异常`,
+                severity: 'high',
+                content: check.message,
+                source: 'self_monitor',
+                status: 'new',
+              });
               logger.warn(`🔄 [SelfMonitor] Created alert for: ${key}`);
             }
           }
@@ -358,7 +352,7 @@ export class SelfMonitorService {
     try {
       // 检查数据目录
       const dataDir = path.dirname(env.DATABASE_PATH);
-      const baseDir = path.resolve(process.cwd());
+      const _baseDir = path.resolve(process.cwd());
 
       // 尝试获取目录的磁盘信息
       const stats = fs.statfsSync(dataDir);
@@ -423,8 +417,8 @@ export class SelfMonitorService {
       const systemUsedPercent = ((totalMem - freeMem) / totalMem) * 100;
 
       // 检查 Node 进程内存
-      const heapUsedMb = memUsage.heapUsed / 1024 / 1024;
-      const heapTotalMb = memUsage.heapTotal / 1024 / 1024;
+      const _heapUsedMb = memUsage.heapUsed / 1024 / 1024;
+      const _heapTotalMb = memUsage.heapTotal / 1024 / 1024;
       const rssMb = memUsage.rss / 1024 / 1024;
 
       // 系统内存检查
@@ -515,7 +509,7 @@ export class SelfMonitorService {
    */
   private async checkServices(): Promise<MonitorCheck> {
     try {
-      const { backupService } = await import('../../infra/services/backupService');
+      const { backupService } = await import('../../backup/services');
       const { schedulerService } = await import('../../workflow/services/schedulerService');
 
       const services: Array<{ name: string; ok: boolean; status: string; message?: string }> = [];
@@ -590,20 +584,8 @@ export class SelfMonitorService {
    */
   private checkQueue(): MonitorCheck {
     try {
-      // 检查数据库中的待处理任务
-      const pendingTasks = db.prepare(`
-        SELECT COUNT(*) as count FROM tasks WHERE status = 'pending'
-      `).get() as { count: number } | undefined;
-
-      // 检查卡住的任务（超过 1 小时仍 pending）
-      const stalledTasks = db.prepare(`
-        SELECT COUNT(*) as count FROM tasks 
-        WHERE status = 'running' 
-        AND julianday('now') - julianday(created_at) > 0.0417
-      `).get() as { count: number } | undefined;
-
-      const pendingCount = pendingTasks?.count ?? 0;
-      const stalledCount = stalledTasks?.count ?? 0;
+      const pendingCount = tasksRepo.countPending();
+      const stalledCount = tasksRepo.countStalled();
 
       if (stalledCount > 10) {
         return {

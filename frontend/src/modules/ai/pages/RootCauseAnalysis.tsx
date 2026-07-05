@@ -33,14 +33,14 @@ export default function RootCauseAnalysisPage() {
   const { data: rcas, isLoading } = useQuery({
     queryKey: ['rootCauseAnalyses'],
     queryFn: async () => {
-      const res = await api.get('/api/root-cause-analysis');
+      const res = await api.get('/root-cause-analysis');
       return res.data.data || [];
     }
   });
 
   const createMutation = useMutation({
-    mutationFn: async (rca: any) => {
-      const res = await api.post('/api/root-cause-analysis', rca);
+    mutationFn: async (rca: Record<string, unknown>) => {
+      const res = await api.post('/root-cause-analysis', rca);
       return res.data;
     },
     onSuccess: () => {
@@ -52,7 +52,7 @@ export default function RootCauseAnalysisPage() {
 
   const analyzeMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.post(`/api/root-cause-analysis/${id}/analyze`);
+      const res = await api.post(`/root-cause-analysis/${id}/analyze`);
       return res.data;
     },
     onSuccess: () => {
@@ -62,7 +62,7 @@ export default function RootCauseAnalysisPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/root-cause-analysis/${id}`);
+      await api.delete(`/root-cause-analysis/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rootCauseAnalyses'] });

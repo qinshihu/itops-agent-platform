@@ -2,6 +2,15 @@
  * 边缘代理（Edge Agent）类型定义
  */
 
+// ── 语义化类型别名 ──
+
+/** 通用元数据（用户/系统自定义扩展字段） */
+export type AgentMetadata = Record<string, unknown>;
+/** Agent 命令参数 */
+export type AgentCommandParams = Record<string, unknown>;
+/** Skill 执行参数 */
+export type SkillParams = Record<string, unknown>;
+
 // AgentType
 export enum EdgeAgentType {
   HOST = 'host',
@@ -32,7 +41,7 @@ export interface EdgeAgentConfig {
   reconnectInterval?: number; // 重连间隔（毫秒），默认 5000
   maxReconnectAttempts?: number; // 最大重连次数，默认 10
   agentVersion?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: AgentMetadata;
 }
 
 // 主机信息
@@ -104,7 +113,7 @@ export interface RegisterAgentRequest {
   secretKey: string;
   hostInfo?: HostInfo;
   agentVersion?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: AgentMetadata;
 }
 
 export interface RegisterAgentResponse {
@@ -140,7 +149,7 @@ export interface AgentCommand {
   id: string;
   type: AgentCommandType;
   timestamp: number;
-  params: Record<string, unknown>;
+  params: AgentCommandParams;
 }
 
 // Plugin Health
@@ -174,7 +183,7 @@ export interface HostMetricPoint {
 // Skill 执行
 export interface SkillExecutionRequest {
   skillName: string;
-  params: Record<string, unknown>;
+  params: SkillParams;
   timeout?: number;
 }
 
@@ -182,7 +191,7 @@ export interface SkillExecutionResponse {
   success: boolean;
   output: string;
   error?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: AgentMetadata;
 }
 
 // 隧道事件类型

@@ -30,11 +30,11 @@ export default function AuditLogs() {
   const { data: logsData, isLoading } = useQuery({
     queryKey: ['auditLogs', page, selectedAction, selectedResource],
     queryFn: async () => {
-      const params: any = { page, limit };
+      const params: Record<string, unknown> = { page, limit };
       if (selectedAction) params.action = selectedAction;
       if (selectedResource) params.resource_type = selectedResource;
       
-      const res = await api.get('/api/audit', { params });
+      const res = await api.get('/audit', { params });
       return res.data.data;
     },
   });
@@ -42,7 +42,7 @@ export default function AuditLogs() {
   const { data: statsData } = useQuery({
     queryKey: ['auditStats'],
     queryFn: async () => {
-      const res = await api.get('/api/audit/stats/summary');
+      const res = await api.get('/audit/stats/summary');
       return res.data.data;
     },
   });

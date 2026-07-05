@@ -1,5 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { logger } from '../../../../utils/logger';
-import { callDoubaoAPI } from '../llm/llmService';
 import { executeAgentNode } from '../agents/agentExecutor';
 import { SpecialistBase } from './SpecialistBase';
 import type {
@@ -35,26 +35,7 @@ export class AlertHandlingSpecialist extends SpecialistBase {
   }
 
   async execute(context: TaskContext): Promise<ExecutionResult> {
-    const startTime = Date.now();
-    try {
-      const response = await callDoubaoAPI(
-        context.input,
-        this.systemPrompt,
-        this.name,
-        this.temperature
-      );
-
-      return this.buildResult(true, response, {
-        duration: Date.now() - startTime,
-        confidence: 0.8,
-        metadata: { taskId: context.taskId }
-      });
-    } catch (error) {
-      return this.buildResult(false, '', {
-        error: error instanceof Error ? error.message : String(error),
-        duration: Date.now() - startTime
-      });
-    }
+    return this.executeWithLLM(context);
   }
 }
 
@@ -82,26 +63,7 @@ export class FaultDiagnosisSpecialist extends SpecialistBase {
   }
 
   async execute(context: TaskContext): Promise<ExecutionResult> {
-    const startTime = Date.now();
-    try {
-      const response = await callDoubaoAPI(
-        context.input,
-        this.systemPrompt,
-        this.name,
-        this.temperature
-      );
-
-      return this.buildResult(true, response, {
-        duration: Date.now() - startTime,
-        confidence: 0.8,
-        metadata: { taskId: context.taskId }
-      });
-    } catch (error) {
-      return this.buildResult(false, '', {
-        error: error instanceof Error ? error.message : String(error),
-        duration: Date.now() - startTime
-      });
-    }
+    return this.executeWithLLM(context);
   }
 }
 
@@ -129,26 +91,7 @@ export class LogAnalysisSpecialist extends SpecialistBase {
   }
 
   async execute(context: TaskContext): Promise<ExecutionResult> {
-    const startTime = Date.now();
-    try {
-      const response = await callDoubaoAPI(
-        context.input,
-        this.systemPrompt,
-        this.name,
-        this.temperature
-      );
-
-      return this.buildResult(true, response, {
-        duration: Date.now() - startTime,
-        confidence: 0.8,
-        metadata: { taskId: context.taskId }
-      });
-    } catch (error) {
-      return this.buildResult(false, '', {
-        error: error instanceof Error ? error.message : String(error),
-        duration: Date.now() - startTime
-      });
-    }
+    return this.executeWithLLM(context);
   }
 }
 
@@ -219,26 +162,7 @@ export class ChangeExecutionSpecialist extends SpecialistBase {
   }
 
   async execute(context: TaskContext): Promise<ExecutionResult> {
-    const startTime = Date.now();
-    try {
-      const response = await callDoubaoAPI(
-        context.input,
-        this.systemPrompt,
-        this.name,
-        this.temperature
-      );
-
-      return this.buildResult(true, response, {
-        duration: Date.now() - startTime,
-        confidence: 0.8,
-        metadata: { taskId: context.taskId }
-      });
-    } catch (error) {
-      return this.buildResult(false, '', {
-        error: error instanceof Error ? error.message : String(error),
-        duration: Date.now() - startTime
-      });
-    }
+    return this.executeWithLLM(context);
   }
 }
 
@@ -266,26 +190,7 @@ export class DocumentGenerationSpecialist extends SpecialistBase {
   }
 
   async execute(context: TaskContext): Promise<ExecutionResult> {
-    const startTime = Date.now();
-    try {
-      const response = await callDoubaoAPI(
-        context.input,
-        this.systemPrompt,
-        this.name,
-        this.temperature
-      );
-
-      return this.buildResult(true, response, {
-        duration: Date.now() - startTime,
-        confidence: 0.8,
-        metadata: { taskId: context.taskId }
-      });
-    } catch (error) {
-      return this.buildResult(false, '', {
-        error: error instanceof Error ? error.message : String(error),
-        duration: Date.now() - startTime
-      });
-    }
+    return this.executeWithLLM(context);
   }
 }
 
@@ -313,26 +218,7 @@ export class ComplianceCheckSpecialist extends SpecialistBase {
   }
 
   async execute(context: TaskContext): Promise<ExecutionResult> {
-    const startTime = Date.now();
-    try {
-      const response = await callDoubaoAPI(
-        context.input,
-        this.systemPrompt,
-        this.name,
-        this.temperature
-      );
-
-      return this.buildResult(true, response, {
-        duration: Date.now() - startTime,
-        confidence: 0.8,
-        metadata: { taskId: context.taskId }
-      });
-    } catch (error) {
-      return this.buildResult(false, '', {
-        error: error instanceof Error ? error.message : String(error),
-        duration: Date.now() - startTime
-      });
-    }
+    return this.executeWithLLM(context);
   }
 }
 
@@ -397,26 +283,7 @@ export class CommandGenerationSpecialist extends SpecialistBase {
   }
 
   async execute(context: TaskContext): Promise<ExecutionResult> {
-    const startTime = Date.now();
-    try {
-      const response = await callDoubaoAPI(
-        context.input,
-        this.systemPrompt,
-        this.name,
-        this.temperature
-      );
-
-      return this.buildResult(true, response, {
-        duration: Date.now() - startTime,
-        confidence: 0.85,
-        metadata: { taskId: context.taskId }
-      });
-    } catch (error) {
-      return this.buildResult(false, '', {
-        error: error instanceof Error ? error.message : String(error),
-        duration: Date.now() - startTime
-      });
-    }
+    return this.executeWithLLM(context);
   }
 }
 
@@ -444,26 +311,7 @@ export class NetworkInspectionSpecialist extends SpecialistBase {
   }
 
   async execute(context: TaskContext): Promise<ExecutionResult> {
-    const startTime = Date.now();
-    try {
-      const response = await callDoubaoAPI(
-        context.input,
-        this.systemPrompt,
-        this.name,
-        this.temperature
-      );
-
-      return this.buildResult(true, response, {
-        duration: Date.now() - startTime,
-        confidence: 0.8,
-        metadata: { taskId: context.taskId }
-      });
-    } catch (error) {
-      return this.buildResult(false, '', {
-        error: error instanceof Error ? error.message : String(error),
-        duration: Date.now() - startTime
-      });
-    }
+    return this.executeWithLLM(context);
   }
 }
 

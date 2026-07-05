@@ -1,13 +1,14 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
-import db from '../../../models/database';
+import { snmpRepository, networkDeviceRepository } from '../../../repositories';
 import { logger } from '../../../utils/logger';
 import type { SnmpVersion } from '../services/snmpService';
 import { snmpService } from '../services/snmpService';
 import { snmpTrapService } from '../services/snmpTrapService';
 import { encrypt, decrypt } from '../../auth/services/encryptionService';
-import { SYSTEM_OIDS, IF_MIB_OIDS, VENDOR_OIDS } from '../services/snmpOidRegistry';
+import { SYSTEM_OIDS, IF_MIB_OIDS } from '../services/snmpOidRegistry';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -16,45 +17,15 @@ const router = Router();
 // ================================================================
 
 // 获取设备 SNMP 凭证列表
-// 确保 snmp_credentials 表有 host 列
-function ensureCredHostColumn() {
-  try {
-    const cols = db.prepare("PRAGMA table_info('snmp_credentials')").all() as { name: string }[];
-    if (!cols.find(c => c.name === 'host')) {
-      db.exec("ALTER TABLE snmp_credentials ADD COLUMN host TEXT");
-    }
-  } catch { /* 表可能还不存在 */ }
-}
-
 router.get('/credentials', (req: Request, res: Response) => {
   try {
-    ensureCredHostColumn();
+    snmpRepository.credentials.ensureHostColumn();
     const deviceId = req.query.deviceId as string | undefined;
-    let rows: any[];
-    if (deviceId) {
-      rows = db.prepare(`
-        SELECT c.id, c.device_id, c.name, c.snmp_version, c.snmp_port,
-               c.snmp_user, c.snmp_auth_protocol, c.snmp_priv_protocol,
-               c.created_at, c.updated_at, COALESCE(c.host, nd.ip_address) AS host
-        FROM snmp_credentials c
-        LEFT JOIN network_devices nd ON c.device_id = nd.id
-        WHERE c.device_id = ?
-        ORDER BY c.snmp_version DESC
-      `).all(deviceId);
-    } else {
-      rows = db.prepare(`
-        SELECT c.id, c.device_id, c.name, c.snmp_version, c.snmp_port,
-               c.snmp_user, c.snmp_auth_protocol, c.snmp_priv_protocol,
-               c.created_at, c.updated_at, COALESCE(c.host, nd.ip_address) AS host
-        FROM snmp_credentials c
-        LEFT JOIN network_devices nd ON c.device_id = nd.id
-        ORDER BY c.device_id
-      `).all();
-    }
+    const rows = snmpRepository.credentials.list(deviceId);
     res.json({ code: 0, data: rows });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Failed to fetch SNMP credentials:', error);
-    res.status(500).json({ code: -1, message: error.message || '获取 SNMP 凭证失败' });
+    res.status(500).json({ code: -1, message: getErrorMessage(error) || '获取 SNMP 凭证失败' });
   }
 });
 
@@ -65,42 +36,38 @@ router.post('/credentials', (req: Request, res: Response) => {
       snmp_user, snmp_auth_protocol, snmp_auth_key, snmp_priv_protocol, snmp_priv_key,
       host } = req.body;
 
-    ensureCredHostColumn();
+    snmpRepository.credentials.ensureHostColumn();
     const id = randomUUID();
 
-    db.prepare(`
-      INSERT INTO snmp_credentials (id, device_id, name, community, snmp_version, snmp_port,
-        snmp_user, snmp_auth_protocol, snmp_auth_key, snmp_priv_protocol, snmp_priv_key, host)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    snmpRepository.credentials.create({
       id,
-      device_id || null,
-      name || 'default',
-      community ? encrypt(community) : null,
+      device_id: device_id || null,
+      name: name || 'default',
+      community: community ? encrypt(community) : null,
       snmp_version,
-      snmp_port || 161,
-      snmp_user || null,
-      snmp_auth_protocol || null,
-      snmp_auth_key ? encrypt(snmp_auth_key) : null,
-      snmp_priv_protocol || null,
-      snmp_priv_key ? encrypt(snmp_priv_key) : null,
-      host || null,
-    );
+      snmp_port: snmp_port || 161,
+      snmp_user: snmp_user || null,
+      snmp_auth_protocol: snmp_auth_protocol || null,
+      snmp_auth_key: snmp_auth_key ? encrypt(snmp_auth_key) : null,
+      snmp_priv_protocol: snmp_priv_protocol || null,
+      snmp_priv_key: snmp_priv_key ? encrypt(snmp_priv_key) : null,
+      host: host || null,
+    });
 
     res.json({ code: 0, data: { id } });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
 // 删除 SNMP 凭证
 router.delete('/credentials/:id', (req: Request, res: Response) => {
   try {
-    db.prepare('DELETE FROM snmp_credentials WHERE id = ?').run(req.params.id);
+    snmpRepository.credentials.delete(req.params.id);
     res.json({ code: 0 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Failed to delete SNMP credential:', error);
-    res.status(500).json({ code: -1, message: error.message || '删除 SNMP 凭证失败' });
+    res.status(500).json({ code: -1, message: getErrorMessage(error) || '删除 SNMP 凭证失败' });
   }
 });
 
@@ -111,38 +78,23 @@ router.put('/credentials/:id', (req: Request, res: Response) => {
       snmp_user, snmp_auth_protocol, snmp_auth_key, snmp_priv_protocol, snmp_priv_key,
       host } = req.body;
 
-    db.prepare(`
-      UPDATE snmp_credentials SET
-        name = COALESCE(?, name),
-        community = COALESCE(?, community),
-        snmp_version = COALESCE(?, snmp_version),
-        snmp_port = COALESCE(?, snmp_port),
-        snmp_user = COALESCE(?, snmp_user),
-        snmp_auth_protocol = COALESCE(?, snmp_auth_protocol),
-        snmp_auth_key = COALESCE(?, snmp_auth_key),
-        snmp_priv_protocol = COALESCE(?, snmp_priv_protocol),
-        snmp_priv_key = COALESCE(?, snmp_priv_key),
-        host = COALESCE(?, host),
-        updated_at = datetime('now','localtime')
-      WHERE id = ?
-    `).run(
-      name || null,
-      community ? encrypt(community) : null,
-      snmp_version || null,
-      snmp_port || null,
-      snmp_user || null,
-      snmp_auth_protocol || null,
-      snmp_auth_key ? encrypt(snmp_auth_key) : null,
-      snmp_priv_protocol || null,
-      snmp_priv_key ? encrypt(snmp_priv_key) : null,
-      host || null,
-      req.params.id,
-    );
+    snmpRepository.credentials.update(req.params.id, {
+      name: name || null,
+      community: community ? encrypt(community) : null,
+      snmp_version: snmp_version || null,
+      snmp_port: snmp_port || null,
+      snmp_user: snmp_user || null,
+      snmp_auth_protocol: snmp_auth_protocol || null,
+      snmp_auth_key: snmp_auth_key ? encrypt(snmp_auth_key) : null,
+      snmp_priv_protocol: snmp_priv_protocol || null,
+      snmp_priv_key: snmp_priv_key ? encrypt(snmp_priv_key) : null,
+      host: host || null,
+    });
 
     res.json({ code: 0 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Failed to update SNMP credential:', error);
-    res.status(500).json({ code: -1, message: error.message || '更新 SNMP 凭证失败' });
+    res.status(500).json({ code: -1, message: getErrorMessage(error) || '更新 SNMP 凭证失败' });
   }
 });
 
@@ -154,24 +106,19 @@ router.put('/credentials/:id', (req: Request, res: Response) => {
 router.post('/test', async (req: Request, res: Response) => {
   try {
     const { host, port = 161, version = 'v2c', community = 'public',
-      user, authProtocol, authKey, privProtocol, privKey } = req.body;
+      _user, _authProtocol, _authKey, _privProtocol, _privKey } = req.body;
 
     const ok = await snmpService.testConnection(host, port, version as SnmpVersion, community);
     res.json({ code: ok ? 0 : -1, data: { reachable: ok } });
-  } catch (error: any) {
-    res.json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
 // 测试已存储的 SNMP 凭证连通性（用凭证 ID）
 router.post('/credentials/:id/test', async (req: Request, res: Response) => {
   try {
-    const row = db.prepare(`
-      SELECT c.*, nd.ip_address AS host
-      FROM snmp_credentials c
-      LEFT JOIN network_devices nd ON c.device_id = nd.id
-      WHERE c.id = ?
-    `).get(req.params.id) as any;
+    const row = snmpRepository.credentials.getByIdWithHost(req.params.id);
 
     if (!row) {
       res.status(404).json({ code: -1, message: '凭证不存在' });
@@ -187,9 +134,9 @@ router.post('/credentials/:id/test', async (req: Request, res: Response) => {
     const community = row.community ? decrypt(row.community) : 'public';
     const ok = await snmpService.testConnection(host, row.snmp_port || 161, row.snmp_version as SnmpVersion, community);
     res.json({ code: ok ? 0 : -1, data: { reachable: ok } });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Failed to test credential via ID:', error);
-    res.json({ code: -1, message: error.message });
+    res.json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
@@ -199,8 +146,8 @@ router.post('/get', async (req: Request, res: Response) => {
     const { host, port = 161, version = 'v2c', community = 'public', oid = SYSTEM_OIDS.sysName } = req.body;
     const result = await snmpService.get(host, port, version as SnmpVersion, community, undefined, undefined, undefined, undefined, undefined, oid);
     res.json({ code: 0, data: result });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
@@ -210,8 +157,8 @@ router.post('/walk', async (req: Request, res: Response) => {
     const { host, port = 161, version = 'v2c', community = 'public', oid = IF_MIB_OIDS.ifTable } = req.body;
     const results = await snmpService.walk(host, port, version as SnmpVersion, community, oid);
     res.json({ code: 0, data: results });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
@@ -221,8 +168,8 @@ router.post('/system-info', async (req: Request, res: Response) => {
     const { host, port = 161, version = 'v2c', community = 'public' } = req.body;
     const info = await snmpService.getSystemInfo(host, port, version as SnmpVersion, community);
     res.json({ code: 0, data: info });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
@@ -232,8 +179,8 @@ router.post('/interfaces', async (req: Request, res: Response) => {
     const { host, port = 161, version = 'v2c', community = 'public' } = req.body;
     const ifs = await snmpService.getInterfaces(host, port, version as SnmpVersion, community);
     res.json({ code: 0, data: ifs });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
@@ -245,8 +192,8 @@ router.get('/health/:deviceId', async (req: Request, res: Response) => {
       return res.status(404).json({ code: -1, message: 'No SNMP credential or device not found' });
     }
     res.json({ code: 0, data: health });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
@@ -257,13 +204,13 @@ router.post('/health-batch', async (req: Request, res: Response) => {
     if (!deviceIds || !Array.isArray(deviceIds)) {
       return res.status(400).json({ code: -1, message: 'deviceIds array required' });
     }
-    const results: Record<string, any> = {};
+    const results: Record<string, unknown> = {};
     for (const id of deviceIds) {
       results[id] = await snmpService.healthCheck(id).catch(() => null);
     }
     res.json({ code: 0, data: results });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
@@ -273,8 +220,8 @@ router.post('/discover', async (req: Request, res: Response) => {
     const { subnet, community = 'public', version = 'v2c', port = 161 } = req.body;
     const devices = await snmpService.discoverDevices(subnet, community, version as SnmpVersion, port);
     res.json({ code: 0, data: devices });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
@@ -289,9 +236,9 @@ router.get('/traps', (req: Request, res: Response) => {
     const sourceIp = req.query.sourceIp as string | undefined;
     const traps = snmpTrapService.getTrapHistory(limit, sourceIp);
     res.json({ code: 0, data: traps });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Failed to fetch SNMP traps:', error);
-    res.status(500).json({ code: -1, message: error.message || '获取 SNMP Trap 记录失败' });
+    res.status(500).json({ code: -1, message: getErrorMessage(error) || '获取 SNMP Trap 记录失败' });
   }
 });
 
@@ -306,24 +253,21 @@ router.post('/traps/test', (_req: Request, res: Response) => {
       { oid: '1.3.6.1.4.1.9.9.43.1.1.1.0', value: 'linkDown', type: 4 },
       { oid: '1.3.6.1.6.3.1.1.4.1.0', value: '1.3.6.1.6.3.1.1.5.3', type: 6 },  // ifDown
     ]);
-    db.prepare(`
-      INSERT INTO snmp_trap_events (id, source_ip, trap_type, enterprise_oid, agent_address, generic_type, specific_type, varbinds_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    snmpRepository.trapEvents.insert({
       id,
-      '192.168.60.1',
-      'coldStart',
-      '1.3.6.1.4.1',
-      '192.168.60.1',
-      0,
-      0,
-      varbinds,
-      now
-    );
+      source_ip: '192.168.60.1',
+      trap_type: 'coldStart',
+      enterprise_oid: '1.3.6.1.4.1',
+      agent_address: '192.168.60.1',
+      generic_type: 0,
+      specific_type: 0,
+      varbinds_json: varbinds,
+      created_at: now,
+    });
     res.json({ code: 0, data: { id }, message: '测试 Trap 已生成' });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Failed to create test trap:', error);
-    res.status(500).json({ code: -1, message: error.message || '生成测试 Trap 失败' });
+    res.status(500).json({ code: -1, message: getErrorMessage(error) || '生成测试 Trap 失败' });
   }
 });
 
@@ -346,8 +290,7 @@ router.post('/trap/stop', (_req: Request, res: Response) => {
 
 router.get('/device/:deviceId/system-info', async (req: Request, res: Response) => {
   try {
-    const device = db.prepare('SELECT id, name, ip_address FROM network_devices WHERE id = ?')
-      .get(req.params.deviceId) as any;
+    const device = networkDeviceRepository.getByIdBasic(req.params.deviceId);
     if (!device) return res.status(404).json({ code: -1, message: 'Device not found' });
 
     const cred = snmpService.getCredential(device.id) || snmpService.getDefaultCredential();
@@ -355,15 +298,14 @@ router.get('/device/:deviceId/system-info', async (req: Request, res: Response) 
 
     const info = await snmpService.getSystemInfo(device.ip_address, cred.snmp_port, cred.snmp_version, cred.community || 'public');
     res.json({ code: 0, data: info });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
 router.get('/device/:deviceId/interfaces', async (req: Request, res: Response) => {
   try {
-    const device = db.prepare('SELECT id, name, ip_address FROM network_devices WHERE id = ?')
-      .get(req.params.deviceId) as any;
+    const device = networkDeviceRepository.getByIdBasic(req.params.deviceId);
     if (!device) return res.status(404).json({ code: -1, message: 'Device not found' });
 
     const cred = snmpService.getCredential(device.id) || snmpService.getDefaultCredential();
@@ -371,8 +313,8 @@ router.get('/device/:deviceId/interfaces', async (req: Request, res: Response) =
 
     const ifs = await snmpService.getInterfaces(device.ip_address, cred.snmp_port, cred.snmp_version, cred.community || 'public');
     res.json({ code: 0, data: ifs });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
@@ -400,8 +342,8 @@ router.post('/poll-interfaces', async (req: Request, res: Response) => {
       }));
 
     res.json({ code: 0, data: metrics });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 

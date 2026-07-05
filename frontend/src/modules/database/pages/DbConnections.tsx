@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 import { useToast } from '../../../contexts/ToastContext';
 import { useEscapeKey } from '../../../hooks/useEscapeKey';
 
@@ -54,14 +55,14 @@ export default function DbConnections() {
   const { data: connections, isLoading } = useQuery({
     queryKey: ['db-connections'],
     queryFn: async () => {
-      const res = await api.get('/api/db-connections');
+      const res = await api.get('/db-connections');
       return res.data.data as DbConnection[];
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
-      const res = await api.post('/api/db-connections', payload);
+      const res = await api.post('/db-connections', payload);
       return res.data;
     },
     onSuccess: () => {
@@ -70,14 +71,14 @@ export default function DbConnections() {
       setIsModalOpen(false);
       resetForm();
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.error || '创建失败');
+    onError: (err: unknown) => {
+      toast.error(getAxiosErrorMessage(err, '创建失败'));
     }
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, payload }: { id: string; payload: Record<string, unknown> }) => {
-      const res = await api.put(`/api/db-connections/${id}`, payload);
+      const res = await api.put(`/db-connections/${id}`, payload);
       return res.data;
     },
     onSuccess: () => {
@@ -87,14 +88,14 @@ export default function DbConnections() {
       setEditingConn(null);
       resetForm();
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.error || '更新失败');
+    onError: (err: unknown) => {
+      toast.error(getAxiosErrorMessage(err, '更新失败'));
     }
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/db-connections/${id}`);
+      await api.delete(`/db-connections/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['db-connections'] });
@@ -102,8 +103,8 @@ export default function DbConnections() {
       setShowDeleteConfirm(false);
       setPendingDelete(null);
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.error || '删除失败');
+    onError: (err: unknown) => {
+      toast.error(getAxiosErrorMessage(err, '删除失败'));
     }
   });
 
@@ -111,15 +112,15 @@ export default function DbConnections() {
 
   const testConnectMutation = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
-      const res = await api.post('/api/db-connections/test-connect', payload);
+      const res = await api.post('/db-connections/test-connect', payload);
       return res.data;
     },
     onSuccess: (data) => {
       toast.success(data.message || '数据库连接成功');
       setIsTestingConn(false);
     },
-    onError: (err: any) => {
-      const detail = err?.response?.data?.detail || err?.response?.data?.error || '连接失败';
+    onError: (err: unknown) => {
+      const detail = getAxiosErrorMessage(err, '连接失败');
       toast.error(`连接失败: ${detail}`);
       setIsTestingConn(false);
     }
@@ -187,7 +188,7 @@ export default function DbConnections() {
     if (editingConn) {
       // 编辑时测试已保存的连接
       setIsTestingConn(true);
-      api.post(`/api/db-connections/${editingConn.id}/test`)
+      api.post(`/db-connections/${editingConn.id}/test`)
         .then((res) => {
           toast.success(res.data.message || '数据库连接成功');
           setIsTestingConn(false);

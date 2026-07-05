@@ -1,0 +1,1 @@
+export { mcpRoutes } from './routes';

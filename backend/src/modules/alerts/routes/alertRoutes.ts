@@ -1,16 +1,17 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { randomUUID, createHash } from 'crypto';
-import db, { getIOInstance } from '../../../models/database';
-import { notificationService } from '../../infra/services/notificationService';
+import { getIOInstance } from '../../../shared/websocket/io';
+import { notificationService } from '../../notification/services/notificationService';
 import { alertNoiseReductionService } from '../services/alertNoiseReductionService';
 import { rootCauseAnalysisService } from '../../ai/services/rca/rootCauseAnalysisService';
-import { alertService } from '../services/alertService';
 import { emitToAlerts } from '../../../shared/websocket/handler';
 import { logger } from '../../../utils/logger';
 import { requireRole } from '../../../middleware/auth';
 import { alertProviderRegistry } from '../services/alertProviderRegistry';
-import { alertProcessor } from '../../../core/AlertProcessor';
+import { alertProcessor } from '../services/AlertProcessor';
+import { alertRepository, settingsRepository } from '../../../repositories';
 
 const router = Router();
 
@@ -21,42 +22,10 @@ const validStatuses = ['new', 'acknowledged', 'resolved'];
 router.get('/', (req: Request, res: Response) => {
   try {
     const { status, severity, limit } = req.query;
-    let query = 'SELECT * FROM alerts';
-    const params: unknown[] = [];
-    
-    const conditions = [];
-    if (status && validStatuses.includes(status as string)) {
-      conditions.push('status = ?');
-      params.push(status);
-    }
-    if (severity && validSeverities.includes(severity as string)) {
-      conditions.push('severity = ?');
-      params.push(severity);
-    }
-    
-    if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ');
-    }
-    
-    query += ' ORDER BY created_at DESC';
-    
-    if (limit) {
-      const limitNum = parseInt(limit as string);
-      if (!isNaN(limitNum) && limitNum > 0) {
-        query += ' LIMIT ?';
-        params.push(Math.min(limitNum, 100)); // 最多100条
-      }
-    }
-    
-    const alerts = db.prepare(query).all(...params) as Array<{ id: string; metadata?: string; [key: string]: unknown }>;
-    alerts.forEach((a) => {
-      if (a.metadata) {
-        try {
-          a.metadata = JSON.parse(a.metadata);
-        } catch {
-          a.metadata = '{}';
-        }
-      }
+    const alerts = alertRepository.getAll({
+      status: validStatuses.includes(status as string) ? (status as 'new' | 'acknowledged' | 'resolved') : undefined,
+      severity: validSeverities.includes(severity as string) ? (severity as 'critical' | 'high' | 'medium' | 'low') : undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
     });
     res.json({ success: true, data: alerts });
   } catch {
@@ -67,21 +36,12 @@ router.get('/', (req: Request, res: Response) => {
 router.get('/:id', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(id);
-    
+    const alert = alertRepository.getById(id);
+
     if (!alert) {
       return res.status(404).json({ success: false, error: 'Alert not found' });
     }
-    
-    const alertObj = alert as { metadata?: string; [key: string]: unknown };
-    if (alertObj.metadata) {
-      try {
-        alertObj.metadata = JSON.parse(alertObj.metadata);
-      } catch {
-        alertObj.metadata = '{}';
-      }
-    }
-    
+
     res.json({ success: true, data: alert });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to fetch alert' });
@@ -91,12 +51,7 @@ router.get('/:id', (req: Request, res: Response) => {
 router.get('/:id/automation-logs', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const logs = db.prepare(`
-      SELECT * FROM audit_logs
-      WHERE resource_type = 'alert_automation' AND resource_id = ?
-      ORDER BY created_at DESC
-      LIMIT 100
-    `).all(id);
+    const logs = alertRepository.getAutomationLogs(id);
 
     res.json({ success: true, data: logs });
   } catch {
@@ -127,20 +82,18 @@ router.post('/', async (req: Request, res: Response) => {
       const normalizedSource = (source || 'unknown').toLowerCase();
       const fingerprint = createHash('md5').update(`${normalizedSource}:${normalizedTitle}`).digest('hex');
 
+      let alert;
       try {
-        db.prepare(`
-          INSERT INTO alerts (id, source, severity, title, content, metadata, related_task_id, alert_fingerprint)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
+        alert = alertRepository.create({
           id,
-          source || 'unknown',
-          severity || 'medium',
+          source: source || 'unknown',
+          severity: severity || 'medium',
           title,
-          content || '',
-          JSON.stringify(metadata || {}),
+          content: content || '',
+          metadata: metadata || {},
           related_task_id,
-          fingerprint
-        );
+          alert_fingerprint: fingerprint,
+        });
       } catch (err) {
         const error = err as { code?: string };
         if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -154,15 +107,6 @@ router.post('/', async (req: Request, res: Response) => {
           });
         }
         throw err;
-      }
-
-      const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(id) as { id: string; metadata?: string; title: string; severity: string; content: string; source: string; [key: string]: unknown } | undefined;
-      if (alert?.metadata) {
-        try {
-          alert.metadata = JSON.parse(alert.metadata);
-        } catch {
-          alert.metadata = '{}';
-        }
       }
 
       if (noiseCheck.shouldNotify) {
@@ -196,22 +140,20 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id/acknowledge', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
-    const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(id) as { id: string; title: string; [key: string]: unknown } | undefined;
+
+    const alert = alertRepository.getById(id);
     if (!alert) {
       return res.status(404).json({ success: false, error: 'Alert not found' });
     }
-    
-    db.prepare('UPDATE alerts SET status = ?, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?').run('acknowledged', id);
-    
-    const updated = db.prepare('SELECT * FROM alerts WHERE id = ?').get(id);
-    
+
+    const updated = alertRepository.acknowledge(id);
+
     // 发送告警确认通知
     notificationService.sendSystemNotification(
       '告警已确认',
       `告警 "${alert.title}" 已确认处理`
     ).catch((err) => logger.error('Failed to send ack notification:', err));
-    
+
     res.json({ success: true, data: updated });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to acknowledge alert' });
@@ -221,22 +163,20 @@ router.put('/:id/acknowledge', (req: Request, res: Response) => {
 router.put('/:id/resolve', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
-    const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(id) as { id: string; title: string; [key: string]: unknown } | undefined;
+
+    const alert = alertRepository.getById(id);
     if (!alert) {
       return res.status(404).json({ success: false, error: 'Alert not found' });
     }
-    
-    db.prepare('UPDATE alerts SET status = ?, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?').run('resolved', id);
-    
-    const updated = db.prepare('SELECT * FROM alerts WHERE id = ?').get(id);
-    
+
+    const updated = alertRepository.resolve(id);
+
     // 发送告警解决通知
     notificationService.sendSystemNotification(
       '告警已解决',
       `告警 "${alert.title}" 已解决`
     ).catch((err) => logger.error('Failed to send resolve notification:', err));
-    
+
     res.json({ success: true, data: updated });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to resolve alert' });
@@ -246,14 +186,14 @@ router.put('/:id/resolve', (req: Request, res: Response) => {
 router.delete('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
-    const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(id);
+
+    const alert = alertRepository.getById(id);
     if (!alert) {
       return res.status(404).json({ success: false, error: 'Alert not found' });
     }
-    
-    db.prepare('DELETE FROM alerts WHERE id = ?').run(id);
-    
+
+    alertRepository.delete(id);
+
     res.json({ success: true, message: 'Alert deleted successfully' });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to delete alert' });
@@ -262,28 +202,14 @@ router.delete('/:id', requireRole('admin', 'operator'), (req: Request, res: Resp
 
 router.get('/stats/summary', (_req: Request, res: Response) => {
   try {
-    const stats = db.prepare(`
-      SELECT 
-        status, 
-        COUNT(*) as count 
-      FROM alerts 
-      GROUP BY status
-    `).all();
-    
-    const severityStats = db.prepare(`
-      SELECT 
-        severity, 
-        COUNT(*) as count 
-      FROM alerts 
-      GROUP BY severity
-    `).all();
-    
+    const { byStatus, bySeverity } = alertRepository.getStatsByStatusAndSeverity();
+
     res.json({
       success: true,
       data: {
-        byStatus: stats,
-        bySeverity: severityStats,
-        total: (stats as Array<{ count: number }>).reduce((sum: number, s) => sum + s.count, 0)
+        byStatus,
+        bySeverity,
+        total: byStatus.reduce((sum: number, s) => sum + s.count, 0)
       }
     });
   } catch {
@@ -314,8 +240,8 @@ async function runAlertProcessingPipeline(ctx: AlertProcessingContext): Promise<
     });
 
     // 自动根因分析
-    const autoRCAEnabled = db.prepare("SELECT value FROM settings WHERE key = 'auto_root_cause_enabled'").get() as { value: string } | undefined;
-    if (autoRCAEnabled?.value === 'true') {
+    const autoRCAEnabled = settingsRepository.getValue('auto_root_cause_enabled');
+    if (autoRCAEnabled === 'true') {
       logger.info('🔍 Auto RCA triggered for alert:', id);
       rootCauseAnalysisService.analyzeByAlert(id, title, content).catch((err) => {
         logger.error('Failed to auto-trigger RCA for alert:', err);
@@ -357,22 +283,22 @@ router.post('/:id/process', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    const alert = alertRepository.getEssentialById(id);
     if (!alert) {
       return res.status(404).json({ success: false, error: '告警不存在' });
     }
 
-    const source = (alert.source as string) || 'unknown';
-    const severity = ((alert.severity as string) || 'medium') as AlertProcessingContext['severity'];
-    const title = alert.title as string;
-    const content = (alert.content as string) || '';
+    const source = alert.source || 'unknown';
+    const severity = (alert.severity || 'medium') as AlertProcessingContext['severity'];
+    const title = alert.title;
+    const content = alert.content || '';
 
     // 解析 tags
     let tags: string[] = [];
     let rawSeverity: string | undefined;
     if (alert.metadata) {
       try {
-        const meta = typeof alert.metadata === 'string' ? JSON.parse(alert.metadata as string) : alert.metadata;
+        const meta = JSON.parse(alert.metadata) as Record<string, unknown>;
         tags = Array.isArray(meta.tags) ? meta.tags : [];
         rawSeverity = typeof meta.raw_severity === 'string'
           ? meta.raw_severity
@@ -382,7 +308,7 @@ router.post('/:id/process', async (req: Request, res: Response) => {
       } catch { /* ignore */ }
     }
 
-    const ctx: AlertProcessingContext = { id, source, severity, rawSeverity, title, content, tags };
+    const _ctx: AlertProcessingContext = { id, source, severity, rawSeverity, title, content, tags };
 
     // ── 统一告警处理入口（AARS + 工作流 智能决策）──
     let processResult: { success: boolean; strategy: string; executionId?: string; taskId?: string; errorMessage?: string } | null = null;
@@ -404,8 +330,8 @@ router.post('/:id/process', async (req: Request, res: Response) => {
 
     // 自动根因分析（后台异步）
     setImmediate(() => {
-      const autoRCAEnabled = db.prepare("SELECT value FROM settings WHERE key = 'auto_root_cause_enabled'").get() as { value: string } | undefined;
-      if (autoRCAEnabled?.value === 'true') {
+      const autoRCAEnabled = settingsRepository.getValue('auto_root_cause_enabled');
+      if (autoRCAEnabled === 'true') {
         rootCauseAnalysisService.analyzeByAlert(id, title, content).catch((err) => {
           logger.error('Failed to auto-trigger RCA for alert:', err);
         });
@@ -435,7 +361,7 @@ router.post('/:id/process-unified', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const alert = db.prepare('SELECT id, title, content, severity, source, metadata FROM alerts WHERE id = ?').get(id) as any;
+    const alert = alertRepository.getEssentialById(id);
     if (!alert) {
       return res.status(404).json({ success: false, error: '告警不存在' });
     }
@@ -446,11 +372,13 @@ router.post('/:id/process-unified', async (req: Request, res: Response) => {
       metadata = alert.metadata ? JSON.parse(alert.metadata) : {};
     } catch { /* ignore */ }
 
+    const severity = (alert.severity || 'medium') as AlertProcessingContext['severity'];
+
     const result = await alertProcessor.processAlert({
       alertId: alert.id,
       title: alert.title,
       content: alert.content,
-      severity: alert.severity,
+      severity,
       source: alert.source,
       metadata
     });
@@ -474,22 +402,22 @@ router.get('/providers/list', (req: Request, res: Response) => {
   try {
     const { type } = req.query;
     let providers;
-    
+
     if (type) {
       providers = alertProviderRegistry.listProvidersByType(type as any);
     } else {
       providers = alertProviderRegistry.listProviders();
     }
-    
+
     const simplifiedProviders = providers.map(p => ({
       id: p.id,
       name: p.name,
       type: p.type,
       configSchema: p.configSchema
     }));
-    
+
     res.json({ success: true, data: simplifiedProviders });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to get alert providers' });
   }
 });
@@ -497,29 +425,29 @@ router.get('/providers/list', (req: Request, res: Response) => {
 router.post('/providers/fetch', async (req: Request, res: Response) => {
   try {
     const { providerId, config } = req.body;
-    
+
     if (!providerId) {
       return res.status(400).json({ success: false, error: 'Provider ID is required' });
     }
-    
+
     const provider = alertProviderRegistry.getProvider(providerId);
     if (!provider) {
       return res.status(404).json({ success: false, error: `Provider ${providerId} not found` });
     }
-    
+
     const alerts = await provider.fetchAlerts(config || {});
     res.json({ success: true, data: alerts });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to fetch alerts from provider' });
   }
 });
 
 // === Alert Provider Configs CRUD ===
-router.get('/providers/configs', (req, res) => {
+router.get('/providers/configs', (_req, res) => {
   try {
-    const configs = db.prepare('SELECT * FROM alert_provider_configs ORDER BY created_at DESC').all();
+    const configs = alertRepository.listProviderConfigs();
     // Parse JSON config
-    const parsedConfigs = configs.map((config: any) => {
+    const parsedConfigs = configs.map((config) => {
       let parsedConfig;
       try {
         parsedConfig = config.config ? JSON.parse(config.config) : null;
@@ -529,25 +457,25 @@ router.get('/providers/configs', (req, res) => {
       return { ...config, config: parsedConfig };
     });
     res.json({ success: true, data: parsedConfigs });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to get provider configs' });
   }
 });
 
 router.get('/providers/configs/:id', (req, res) => {
   try {
-    const config = db.prepare('SELECT * FROM alert_provider_configs WHERE id = ?').get(req.params.id);
+    const config = alertRepository.getProviderConfigById(req.params.id);
     if (!config) {
       return res.status(404).json({ success: false, error: 'Config not found' });
     }
     let parsedConfig;
     try {
-      parsedConfig = (config as any).config ? JSON.parse((config as any).config) : null;
+      parsedConfig = config.config ? JSON.parse(config.config) : null;
     } catch {
       parsedConfig = null;
     }
-    res.json({ success: true, data: { ...(config as any), config: parsedConfig } });
-  } catch (error) {
+    res.json({ success: true, data: { ...config, config: parsedConfig } });
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to get provider config' });
   }
 });
@@ -559,25 +487,21 @@ router.post('/providers/configs', (req, res) => {
       return res.status(400).json({ success: false, error: 'provider_id and name are required' });
     }
     const id = randomUUID();
-    db.prepare(`
-      INSERT INTO alert_provider_configs (id, provider_id, name, config, enabled, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
-    `).run(
+    const newConfig = alertRepository.createProviderConfig({
       id,
       provider_id,
       name,
-      JSON.stringify(config || {}),
-      enabled !== undefined ? (enabled ? 1 : 0) : 1
-    );
-    const newConfig = db.prepare('SELECT * FROM alert_provider_configs WHERE id = ?').get(id);
+      config: JSON.stringify(config || {}),
+      enabled: enabled !== undefined ? (enabled ? 1 : 0) : 1,
+    });
     let parsedConfig;
     try {
-      parsedConfig = (newConfig as any).config ? JSON.parse((newConfig as any).config) : null;
+      parsedConfig = newConfig?.config ? JSON.parse(newConfig.config) : null;
     } catch {
       parsedConfig = null;
     }
-    res.status(201).json({ success: true, data: { ...(newConfig as any), config: parsedConfig } });
-  } catch (error) {
+    res.status(201).json({ success: true, data: { ...newConfig, config: parsedConfig } });
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to create provider config' });
   }
 });
@@ -586,39 +510,32 @@ router.put('/providers/configs/:id', (req, res) => {
   try {
     const { name, config, enabled } = req.body;
     const id = req.params.id;
-    const updates: string[] = [];
-    const values: any[] = [];
-    
+
+    const updates: { name?: string; config?: string; enabled?: number } = {};
+
     if (name !== undefined) {
-      updates.push('name = ?');
-      values.push(name);
+      updates.name = name;
     }
     if (config !== undefined) {
-      updates.push('config = ?');
-      values.push(JSON.stringify(config || {}));
+      updates.config = JSON.stringify(config || {});
     }
     if (enabled !== undefined) {
-      updates.push('enabled = ?');
-      values.push(enabled ? 1 : 0);
+      updates.enabled = enabled ? 1 : 0;
     }
-    
-    if (updates.length === 0) {
+
+    if (Object.keys(updates).length === 0) {
       return res.status(400).json({ success: false, error: 'No fields to update' });
     }
-    updates.push('updated_at = datetime(\'now\',\'localtime\')');
-    values.push(id);
-    
-    db.prepare(`UPDATE alert_provider_configs SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-    
-    const updatedConfig = db.prepare('SELECT * FROM alert_provider_configs WHERE id = ?').get(id);
+
+    const updatedConfig = alertRepository.updateProviderConfig(id, updates);
     let parsedConfig;
     try {
-      parsedConfig = (updatedConfig as any).config ? JSON.parse((updatedConfig as any).config) : null;
+      parsedConfig = updatedConfig?.config ? JSON.parse(updatedConfig.config) : null;
     } catch {
       parsedConfig = null;
     }
-    res.json({ success: true, data: { ...(updatedConfig as any), config: parsedConfig } });
-  } catch (error) {
+    res.json({ success: true, data: { ...updatedConfig, config: parsedConfig } });
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to update provider config' });
   }
 });
@@ -626,12 +543,12 @@ router.put('/providers/configs/:id', (req, res) => {
 router.delete('/providers/configs/:id', (req, res) => {
   try {
     const id = req.params.id;
-    const result = db.prepare('DELETE FROM alert_provider_configs WHERE id = ?').run(id);
-    if (result.changes === 0) {
+    const changes = alertRepository.deleteProviderConfig(id);
+    if (changes === 0) {
       return res.status(404).json({ success: false, error: 'Config not found' });
     }
     res.json({ success: true, message: 'Config deleted successfully' });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ success: false, error: 'Failed to delete provider config' });
   }
 });

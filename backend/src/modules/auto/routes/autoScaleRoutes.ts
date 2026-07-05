@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { autoScaleService } from '../services/autoScaleService';
 import { requireRole } from '../../../middleware/auth';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -9,7 +10,7 @@ router.get('/rules', (_req: Request, res: Response) => {
   try {
     const data = autoScaleService.listRules();
     res.json({ success: true, data });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 router.get('/rules/:id', (req: Request, res: Response) => {
@@ -17,28 +18,28 @@ router.get('/rules/:id', (req: Request, res: Response) => {
     const data = autoScaleService.getRule(req.params.id);
     if (!data) return res.status(404).json({ success: false, message: '规则不存在' });
     res.json({ success: true, data });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 router.post('/rules', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const data = autoScaleService.createRule(req.body);
     res.json({ success: true, data });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 router.put('/rules/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const data = autoScaleService.updateRule(req.params.id, req.body);
     res.json({ success: true, data });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 router.delete('/rules/:id', requireRole('admin'), (req: Request, res: Response) => {
   try {
     autoScaleService.deleteRule(req.params.id);
     res.json({ success: true, message: '已删除' });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 router.get('/history', (req: Request, res: Response) => {
@@ -48,14 +49,14 @@ router.get('/history', (req: Request, res: Response) => {
     const ruleId = req.query.ruleId as string;
     const result = autoScaleService.getHistory(page, pageSize, ruleId);
     res.json({ success: true, data: result.data, total: result.total });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 router.get('/summary', (_req: Request, res: Response) => {
   try {
     const data = autoScaleService.getSummary();
     res.json({ success: true, data });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 export default router;

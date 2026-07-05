@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import db from '../../../models/database';
 import { randomUUID } from 'crypto';
+import { networkSubnetRepository } from '../../../repositories';
 import { requireRole } from '../../../middleware/auth';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -30,10 +31,7 @@ function cidrToRange(cidr: string): { network: number; broadcast: number; total:
 // 获取所有子网
 router.get('/', (_req: Request, res: Response) => {
   try {
-    const subnets = db.prepare(`
-      SELECT s.*, (SELECT COUNT(*) FROM network_ips WHERE subnet_id = s.id AND status != 'available') as used_ips
-      FROM network_subnets s ORDER BY s.created_at DESC
-    `).all();
+    const subnets = networkSubnetRepository.subnets.list();
     res.json({ success: true, data: subnets });
   } catch {
     res.status(500).json({ success: false, error: '获取子网列表失败' });
@@ -43,7 +41,7 @@ router.get('/', (_req: Request, res: Response) => {
 // 获取单个子网
 router.get('/:id', (req: Request, res: Response) => {
   try {
-    const subnet = db.prepare('SELECT * FROM network_subnets WHERE id = ?').get(req.params.id);
+    const subnet = networkSubnetRepository.subnets.getById(req.params.id);
     if (!subnet) return res.status(404).json({ success: false, error: '子网不存在' });
     res.json({ success: true, data: subnet });
   } catch {
@@ -60,30 +58,30 @@ router.post('/', requireRole('admin', 'operator'), (req: Request, res: Response)
     const { total } = cidrToRange(cidr);
     const id = randomUUID();
 
-    db.prepare(`
-      INSERT INTO network_subnets (id, name, cidr, gateway, vlan_id, network_type, location, description, status, total_ips)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, name, cidr, gateway || null, vlan_id || null, network_type || 'lan', location || null, description || null, status || 'active', total);
+    networkSubnetRepository.subnets.create({
+      id, name, cidr,
+      gateway: gateway || null,
+      vlan_id: vlan_id || null,
+      network_type: network_type || 'lan',
+      location: location || null,
+      description: description || null,
+      status: status || 'active',
+      total_ips: total,
+    });
 
     // 自动生成 IP 地址池
     if (total > 0 && total <= 65536) {
       const { network } = cidrToRange(cidr);
-      const insertStmt = db.prepare(`
-        INSERT OR IGNORE INTO network_ips (id, subnet_id, ip_address, status)
-        VALUES (?, ?, ?, 'available')
-      `);
-      const insertMany = db.transaction(() => {
-        for (let i = 1; i <= total; i++) {
-          const ip = intToIp(network + i);
-          insertStmt.run(randomUUID(), id, ip);
-        }
-      });
-      insertMany();
+      const ips: string[] = [];
+      for (let i = 1; i <= total; i++) {
+        ips.push(intToIp(network + i));
+      }
+      networkSubnetRepository.ips.bulkInsertAvailable(id, ips);
     }
 
     res.json({ success: true, data: { id } });
-  } catch (e: any) {
-    res.status(500).json({ success: false, error: e.message || '创建子网失败' });
+  } catch (e: unknown) {
+    res.status(500).json({ success: false, error: getErrorMessage(e) || '创建子网失败' });
   }
 });
 
@@ -91,16 +89,15 @@ router.post('/', requireRole('admin', 'operator'), (req: Request, res: Response)
 router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { name, gateway, vlan_id, network_type, location, description, status } = req.body;
-    db.prepare(`
-      UPDATE network_subnets
-      SET name = COALESCE(?, name), gateway = COALESCE(?, gateway), vlan_id = COALESCE(?, vlan_id),
-          network_type = COALESCE(?, network_type), location = COALESCE(?, location),
-          description = COALESCE(?, description), status = COALESCE(?, status),
-          updated_at = datetime('now','localtime')
-      WHERE id = ?
-    `).run(name || null, gateway !== undefined ? gateway : null, vlan_id !== undefined ? vlan_id : null,
-      network_type || null, location !== undefined ? location : null, description !== undefined ? description : null,
-      status || null, req.params.id);
+    networkSubnetRepository.subnets.update(req.params.id, {
+      name: name || null,
+      gateway: gateway !== undefined ? gateway : null,
+      vlan_id: vlan_id !== undefined ? vlan_id : null,
+      network_type: network_type || null,
+      location: location !== undefined ? location : null,
+      description: description !== undefined ? description : null,
+      status: status || null,
+    });
     res.json({ success: true });
   } catch {
     res.status(500).json({ success: false, error: '更新子网失败' });
@@ -110,7 +107,7 @@ router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Respons
 // 删除子网
 router.delete('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
-    db.prepare('DELETE FROM network_subnets WHERE id = ?').run(req.params.id);
+    networkSubnetRepository.subnets.delete(req.params.id);
     res.json({ success: true });
   } catch {
     res.status(500).json({ success: false, error: '删除子网失败' });
@@ -127,33 +124,17 @@ router.get('/:id/ips', (req: Request, res: Response) => {
     const size = Math.min(500, Math.max(10, parseInt(pageSize, 10) || 100));
     const offset = (pageNum - 1) * size;
 
-    let sql = 'SELECT * FROM network_ips WHERE subnet_id = ?';
-    const params: (string | number)[] = [req.params.id];
+    const filters = {
+      subnetId: req.params.id,
+      status: status && status !== 'all' ? status : undefined,
+      search: search || undefined,
+      limit: size,
+      offset,
+    };
 
-    if (status && status !== 'all') {
-      sql += ' AND status = ?';
-      params.push(status);
-    }
-    if (search) {
-      sql += ' AND (ip_address LIKE ? OR device_name LIKE ? OR mac_address LIKE ?)';
-      const s = `%${search}%`;
-      params.push(s, s, s);
-    }
-
-    // 获取总数
-    const countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as total');
-    const { total } = db.prepare(countSql).get(...params) as { total: number };
-
-    sql += ' ORDER BY ip_address ASC LIMIT ? OFFSET ?';
-    params.push(size, offset);
-
-    const ips = db.prepare(sql).all(...params);
-
-    // 统计
-    const stats = db.prepare(`
-      SELECT status, COUNT(*) as count FROM network_ips WHERE subnet_id = ?
-      GROUP BY status
-    `).all(req.params.id) as Array<{ status: string; count: number }>;
+    const ips = networkSubnetRepository.ips.list(filters);
+    const total = networkSubnetRepository.ips.count(filters);
+    const stats = networkSubnetRepository.ips.statsByStatus(req.params.id);
 
     res.json({
       success: true,
@@ -168,15 +149,12 @@ router.get('/:id/ips', (req: Request, res: Response) => {
 router.put('/:id/ips/:ipId', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { status, device_name, mac_address, description } = req.body;
-    db.prepare(`
-      UPDATE network_ips
-      SET status = COALESCE(?, status), device_name = COALESCE(?, device_name),
-          mac_address = COALESCE(?, mac_address), description = COALESCE(?, description),
-          updated_at = datetime('now','localtime')
-      WHERE id = ? AND subnet_id = ?
-    `).run(status || null, device_name !== undefined ? device_name : null,
-      mac_address !== undefined ? mac_address : null, description !== undefined ? description : null,
-      req.params.ipId, req.params.id);
+    networkSubnetRepository.ips.update(req.params.ipId, req.params.id, {
+      status: status || null,
+      device_name: device_name !== undefined ? device_name : null,
+      mac_address: mac_address !== undefined ? mac_address : null,
+      description: description !== undefined ? description : null,
+    });
     res.json({ success: true });
   } catch {
     res.status(500).json({ success: false, error: '更新IP失败' });
@@ -191,19 +169,11 @@ router.post('/:id/ips/batch', requireRole('admin', 'operator'), (req: Request, r
       return res.status(400).json({ success: false, error: '请选择IP地址' });
     }
 
-    const stmt = db.prepare(`
-      UPDATE network_ips
-      SET status = ?, device_name = ?, description = COALESCE(?, description),
-          updated_at = datetime('now','localtime')
-      WHERE id = ? AND subnet_id = ?
-    `);
-
-    const batchUpdate = db.transaction(() => {
-      for (const ipId of ip_ids) {
-        stmt.run(status, device_name || null, description || null, ipId, req.params.id);
-      }
+    networkSubnetRepository.ips.batchUpdate(ip_ids, req.params.id, {
+      status,
+      device_name: device_name || null,
+      description: description || null,
     });
-    batchUpdate();
 
     res.json({ success: true, data: { count: ip_ids.length } });
   } catch {

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 链接修复策略与工作流
  *
  * 在 initRemediationPolicies() 和 initializePresetWorkflows() 之后执行，
@@ -6,7 +6,7 @@
  *
  * 同时创建额外的高级策略（带验证、回滚工作流）。
  */
-import { db } from '../database';
+import db from '../database';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../../utils/logger';
 

@@ -1,6 +1,7 @@
-import db from '../../../models/database';
 import { randomUUID, createHash } from 'crypto';
 import { logger } from '../../../utils/logger';
+import { noiseReductionRepo } from '../../../repositories';
+import type { AlertNoiseReductionRecord } from '../../../repositories/alertRepository/types';
 
 interface AlertNoiseRecord {
   id: string;
@@ -37,9 +38,7 @@ class AlertNoiseReductionService {
     const fingerprint = this.generateFingerprint(source, title, content);
     const now = new Date();
 
-    const existing = db.prepare(
-      'SELECT * FROM alert_noise_reduction WHERE alert_fingerprint = ?'
-    ).get(fingerprint) as AlertNoiseRecord | null;
+    const existing = noiseReductionRepo.getByFingerprint(fingerprint);
 
     if (existing) {
       return this.handleExistingRecord(existing, fingerprint, now, severity);
@@ -49,7 +48,7 @@ class AlertNoiseReductionService {
   }
 
   private handleExistingRecord(
-    existing: AlertNoiseRecord,
+    existing: AlertNoiseReductionRecord,
     fingerprint: string,
     now: Date,
     severity?: string
@@ -63,26 +62,22 @@ class AlertNoiseReductionService {
       (!existing.suppression_until || new Date(existing.suppression_until) > now);
 
     const newCount = existing.occurrence_count + 1;
-    db.prepare(
-      `UPDATE alert_noise_reduction SET occurrence_count = ?, last_occurrence = ? WHERE alert_fingerprint = ?`
-    ).run(newCount, now.toISOString(), fingerprint);
+    noiseReductionRepo.updateOccurrence(fingerprint, newCount, now.toISOString());
 
     const shouldSuppress = this.shouldSuppressAlert(existing, severity);
 
     if (shouldSuppress && !isSuppressed) {
-      db.prepare(
-        `UPDATE alert_noise_reduction SET is_suppressed = 1, suppression_reason = ?, suppression_until = ? WHERE alert_fingerprint = ?`
-      ).run(
+      noiseReductionRepo.suppress(
+        fingerprint,
         '频繁告警自动抑制',
-        new Date(now.getTime() + 30 * 60 * 1000).toISOString(),
-        fingerprint
+        new Date(now.getTime() + 30 * 60 * 1000).toISOString()
       );
     }
 
     return {
       shouldNotify: !isSuppressed && !shouldSuppress,
       isDuplicate: true,
-      suppressionReason: isSuppressed ? existing.suppression_reason : undefined,
+      suppressionReason: isSuppressed ? (existing.suppression_reason ?? undefined) : undefined,
       occurrenceCount: newCount
     };
   }
@@ -99,25 +94,20 @@ class AlertNoiseReductionService {
     suppressionReason?: string;
     occurrenceCount: number;
   } {
-    const result = db.prepare(
-      `INSERT OR IGNORE INTO alert_noise_reduction (id, alert_fingerprint, alert_source, alert_title, occurrence_count, first_occurrence, last_occurrence) VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      randomUUID(),
-      fingerprint,
-      source,
-      title,
-      1,
-      now.toISOString(),
-      now.toISOString()
-    );
+    const changes = noiseReductionRepo.create({
+      id: randomUUID(),
+      alert_fingerprint: fingerprint,
+      alert_source: source,
+      alert_title: title,
+      first_occurrence: now.toISOString(),
+      last_occurrence: now.toISOString(),
+    });
 
-    if (result.changes === 0) {
-      return this.handleExistingRecord(
-        db.prepare('SELECT * FROM alert_noise_reduction WHERE alert_fingerprint = ?').get(fingerprint) as AlertNoiseRecord,
-        fingerprint,
-        now,
-        severity
-      );
+    if (changes === 0) {
+      const record = noiseReductionRepo.getByFingerprint(fingerprint);
+      if (record) {
+        return this.handleExistingRecord(record, fingerprint, now, severity);
+      }
     }
 
     return {
@@ -127,7 +117,7 @@ class AlertNoiseReductionService {
     };
   }
 
-  private shouldSuppressAlert(record: AlertNoiseRecord, severity?: string): boolean {
+  private shouldSuppressAlert(record: AlertNoiseReductionRecord, severity?: string): boolean {
     if (severity === 'critical' || severity === 'high') {
       return false;
     }
@@ -140,16 +130,11 @@ class AlertNoiseReductionService {
     duplicateCount: number;
     noiseReductionRate: number;
   } {
-    const stats = db.prepare(`
-      SELECT COUNT(*) as total,
-             SUM(CASE WHEN is_suppressed = 1 THEN 1 ELSE 0 END) as suppressed,
-             SUM(occurrence_count - 1) as duplicates
-      FROM alert_noise_reduction
-    `).get() as { total: number; suppressed: number; duplicates: number } | undefined;
+    const stats = noiseReductionRepo.getStats();
 
-    const total = stats?.total || 0;
-    const suppressed = stats?.suppressed || 0;
-    const duplicates = stats?.duplicates || 0;
+    const total = stats.total || 0;
+    const suppressed = stats.suppressed || 0;
+    const duplicates = stats.duplicates || 0;
     const noiseReductionRate = total > 0
       ? Math.round(((suppressed + duplicates) / (total + duplicates)) * 100)
       : 0;
@@ -158,24 +143,12 @@ class AlertNoiseReductionService {
   }
 
   getSuppressedAlerts(): AlertNoiseRecord[] {
-    const records = db.prepare(
-      `SELECT * FROM alert_noise_reduction WHERE is_suppressed = 1 ORDER BY last_occurrence DESC LIMIT 50`
-    ).all() as Array<{
-      id: string;
-      alert_title: string;
-      alert_content: string;
-      alert_fingerprint: string;
-      occurrence_count: number;
-      first_occurrence: string;
-      last_occurrence: string;
-      is_suppressed: number;
-      suppression_until: string | null;
-    }>;
+    const records = noiseReductionRepo.listSuppressed(50);
 
     return records.map(r => ({
       id: r.id,
       alert_fingerprint: r.alert_fingerprint,
-      alert_source: '',
+      alert_source: r.alert_source ?? '',
       alert_title: r.alert_title,
       occurrence_count: r.occurrence_count,
       first_occurrence: new Date(r.first_occurrence),
@@ -186,27 +159,18 @@ class AlertNoiseReductionService {
   }
 
   unsuppressAlert(fingerprint: string): boolean {
-    const result = db.prepare(
-      `UPDATE alert_noise_reduction SET is_suppressed = 0, suppression_reason = NULL, suppression_until = NULL WHERE alert_fingerprint = ?`
-    ).run(fingerprint);
-    return result.changes > 0;
+    return noiseReductionRepo.unsuppress(fingerprint) > 0;
   }
 
   cleanupOldRecords(daysToKeep = 30): number {
     const cutoffDate = new Date(Date.now() - daysToKeep * 24 * 60 * 60 * 1000);
-    const result = db.prepare(
-      `DELETE FROM alert_noise_reduction WHERE last_occurrence < ?`
-    ).run(cutoffDate.toISOString());
-    return result.changes;
+    return noiseReductionRepo.cleanup(cutoffDate.toISOString());
   }
 
   manuallySuppressAlert(fingerprint: string, reason: string, durationMinutes = 60): boolean {
     const now = new Date();
     const suppressionUntil = new Date(now.getTime() + durationMinutes * 60 * 1000);
-    const result = db.prepare(
-      `UPDATE alert_noise_reduction SET is_suppressed = 1, suppression_reason = ?, suppression_until = ? WHERE alert_fingerprint = ?`
-    ).run(reason, suppressionUntil.toISOString(), fingerprint);
-    return result.changes > 0;
+    return noiseReductionRepo.manuallySuppress(fingerprint, reason, suppressionUntil.toISOString()) > 0;
   }
 }
 

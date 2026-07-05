@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { logger } from '../../utils/logger';
 import { randomUUID } from 'crypto';
 
@@ -59,9 +60,16 @@ export class MigrationManager {
   }
 
   register(migration: Migration): void {
-    const exists = this.migrations.find(m => m.version === migration.version);
-    if (exists) {
+    const versionExists = this.migrations.find(m => m.version === migration.version);
+    if (versionExists) {
       throw new Error(`Migration version ${migration.version} already exists: ${migration.name}`);
+    }
+    const nameExists = this.migrations.find(m => m.name === migration.name);
+    if (nameExists) {
+      throw new Error(
+        `Migration name "${migration.name}" conflicts with v${nameExists.version}. ` +
+        `Duplicate table operations cause silent schema drift. Use a distinct name (e.g. "${migration.name}_alter_v${migration.version}").`
+      );
     }
     this.migrations.push(migration);
     this.migrations.sort((a, b) => a.version - b.version);

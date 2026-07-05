@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * =============================================================================
  * 虚拟机管理 - 基础适配器接口
@@ -19,9 +20,6 @@ import type {
   RestoreSnapshotRequest,
   MigrateVMRequest,
   ReconfigureVMRequest} from '../../../../types/vmManagement';
-import {
-  VMConfig
-} from '../../../../types/vmManagement';
 
 export interface VMAdapter {
   // 连接管理

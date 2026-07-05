@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Pencil, CheckCircle2, AlertCircle, Loader2, GripVertical, Power, Zap, Bot, ArrowRight, ChevronDown } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 import { useToast } from '../../../contexts/ToastContext';
 
 interface AIModel {
@@ -119,14 +120,14 @@ export default function AIModels() {
   const { data: modelsData } = useQuery({
     queryKey: ['aiModels'],
     queryFn: async () => {
-      const res = await api.get('/api/ai-models');
+      const res = await api.get('/ai-models');
       return res.data.data as AIModel[];
     }
   });
 
   const createModelMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const res = await api.post('/api/ai-models', {
+      const res = await api.post('/ai-models', {
         name: data.name,
         provider_type: data.provider_type,
         model_id: data.model_id,
@@ -156,7 +157,7 @@ export default function AIModels() {
       is_default?: number;
       tags?: string[];
     }}) => {
-      const res = await api.put(`/api/ai-models/${id}`, data);
+      const res = await api.put(`/ai-models/${id}`, data);
       return res.data;
     },
     onSuccess: () => {
@@ -169,22 +170,21 @@ export default function AIModels() {
 
   const deleteModelMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.delete(`/api/ai-models/${id}`);
+      const res = await api.delete(`/ai-models/${id}`);
       return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['aiModels'] });
       toast.success('模型删除成功');
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || '删除模型失败';
-      toast.error(message);
+    onError: (error: unknown) => {
+      toast.error(getAxiosErrorMessage(error, '删除模型失败'));
     }
   });
 
   const toggleModelMutation = useMutation({
     mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
-      const res = await api.put(`/api/ai-models/${id}`, { enabled: enabled ? 1 : 0 });
+      const res = await api.put(`/ai-models/${id}`, { enabled: enabled ? 1 : 0 });
       return res.data;
     },
     onSuccess: () => {
@@ -194,7 +194,7 @@ export default function AIModels() {
 
   const setDefaultModelMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.put(`/api/ai-models/${id}`, { is_default: 1 });
+      const res = await api.put(`/ai-models/${id}`, { is_default: 1 });
       return res.data;
     },
     onSuccess: () => {
@@ -204,7 +204,7 @@ export default function AIModels() {
 
   const reorderMutation = useMutation({
     mutationFn: async (modelIds: string[]) => {
-      const res = await api.put('/api/ai-models/reorder', { modelIds });
+      const res = await api.put('/ai-models/reorder', { modelIds });
       return res.data;
     },
     onSuccess: () => {
@@ -215,7 +215,7 @@ export default function AIModels() {
   const testModelMutation = useMutation({
     mutationFn: async (id: string) => {
       setTestingModel(id);
-      const res = await api.post(`/api/ai-models/${id}/test`);
+      const res = await api.post(`/ai-models/${id}/test`);
       return res.data;
     },
     onSuccess: (data, id) => {

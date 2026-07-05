@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import axios from 'axios';
 import FormData from 'form-data';
 import { logger } from '../../../../utils/logger';
-import db from '../../../../models/database';
+import { settingsRepository } from '../../../../repositories';
+import { getErrorMessage } from '../../../../utils/errorHelpers';
 
 interface QAnythingConfig {
   enabled: boolean;
@@ -20,13 +22,11 @@ class QAnythingService {
    */
   private loadConfig(): QAnythingConfig | null {
     try {
-      const setting = db.prepare(
-        "SELECT value FROM settings WHERE key = 'qanything_config'"
-      ).get() as { value: string } | undefined;
+      const value = settingsRepository.getValue('qanything_config');
 
-      if (!setting) return null;
+      if (!value) return null;
 
-      return JSON.parse(setting.value) as QAnythingConfig;
+      return JSON.parse(value) as QAnythingConfig;
     } catch (error) {
       logger.error('Failed to load QAnything config:', error);
       return null;
@@ -179,14 +179,14 @@ class QAnythingService {
         logger.info(`📚 Found relevant knowledge from QAnything (length: ${context.length})`);
         return context;
 
-      } catch (error: any) {
-        lastError = error;
-        logger.error(`❌ QAnything query attempt ${attempt} failed: ${error.message}`);
+      } catch (error: unknown) {
+        lastError = error instanceof Error ? error : new Error(getErrorMessage(error));
+        logger.error(`❌ QAnything query attempt ${attempt} failed: ${getErrorMessage(error)}`);
         
         // 如果是认证错误或配置错误，不重试
-        if (error.message.includes('API Key') || 
-            error.message.includes('not configured') ||
-            error.message.includes('not properly configured')) {
+        if (getErrorMessage(error).includes('API Key') || 
+            getErrorMessage(error).includes('not configured') ||
+            getErrorMessage(error).includes('not properly configured')) {
           throw error;
         }
       }
@@ -247,8 +247,8 @@ class QAnythingService {
         status: result?.status || 'processing'
       };
 
-    } catch (error: any) {
-      logger.error('❌ Document upload failed:', error.message);
+    } catch (error: unknown) {
+      logger.error('❌ Document upload failed:', getErrorMessage(error));
       throw error;
     }
   }
@@ -285,8 +285,8 @@ class QAnythingService {
         fileName: result?.file_name || result?.fileName || ''
       };
 
-    } catch (error: any) {
-      logger.error('❌ Failed to get document status:', error.message);
+    } catch (error: unknown) {
+      logger.error('❌ Failed to get document status:', getErrorMessage(error));
       throw error;
     }
   }
@@ -320,8 +320,8 @@ class QAnythingService {
 
       logger.info(`🗑️ Document deleted: ${fileId}`);
 
-    } catch (error: any) {
-      logger.error('❌ Failed to delete document:', error.message);
+    } catch (error: unknown) {
+      logger.error('❌ Failed to delete document:', getErrorMessage(error));
       throw error;
     }
   }
@@ -355,10 +355,10 @@ class QAnythingService {
       }
 
       return { success: false, message: `Unexpected response: ${response.status}` };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        message: `Connection failed: ${error.message || 'Unknown error'}`
+        message: `Connection failed: ${getErrorMessage(error) || 'Unknown error'}`
       };
     }
   }

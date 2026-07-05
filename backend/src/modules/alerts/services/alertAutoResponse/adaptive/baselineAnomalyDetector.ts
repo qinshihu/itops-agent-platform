@@ -10,8 +10,9 @@
  * =============================================================================
  */
 
-import db from '../../../../../models/database';
 import { logger } from '../../../../../utils/logger';
+import { getErrorMessage } from '../../../../../utils/errorHelpers';
+import { snmpInspectionRepo, baselineMetricsRepo } from '../../../../../repositories';
 
 export interface BaselineDeviation {
   deviationScore: number;   // 0~1, 越大越异常
@@ -71,8 +72,8 @@ class BaselineAnomalyDetector {
         : `在基线范围内（最大偏离 ${maxDeviation.toFixed(1)}σ）`;
 
       return { deviationScore: score, isAnomaly, factors, baselineSummary: summary };
-    } catch (err: any) {
-      logger.warn(`[Baseline] Baseline analysis failed: ${err.message}`);
+    } catch (err: unknown) {
+      logger.warn(`[Baseline] Baseline analysis failed: ${getErrorMessage(err)}`);
       return { deviationScore: 0.5, isAnomaly: true, factors: [], baselineSummary: '基线分析失败，按异常处理' };
     }
   }
@@ -85,13 +86,7 @@ class BaselineAnomalyDetector {
 
     try {
       // 取最新一次指标
-      const current = db.prepare(`
-        SELECT interface_name, if_oper_status, if_in_errors, if_out_errors
-        FROM snmp_interface_metrics
-        WHERE device_id = ?
-        ORDER BY sampled_at DESC
-        LIMIT 20
-      `).all(deviceId) as Array<{ interface_name: string; if_oper_status: number; if_in_errors: number; if_out_errors: number }>;
+      const current = snmpInspectionRepo.listRecentInterfaceMetrics(deviceId, 20);
 
       if (current.length === 0) return factors;
 
@@ -142,7 +137,7 @@ class BaselineAnomalyDetector {
   /**
    * 提取服务器指标
    */
-  private extractServerMetrics(deviceId: string): BaselineFactor[] {
+  private extractServerMetrics(_deviceId: string): BaselineFactor[] {
     return []; // 服务器指标需要 agent 采集，暂缺
   }
 
@@ -150,32 +145,8 @@ class BaselineAnomalyDetector {
    * 更新基线（处理完成后调用，如修复成功则更新正常值）
    */
   updateBaseline(deviceId: string, metrics: Record<string, number>): void {
-    // 简化实现：记录最近 7 天的采样值到 baseline_metrics 表
-    try {
-      db.prepare(`
-        CREATE TABLE IF NOT EXISTS baseline_metrics (
-          device_id TEXT NOT NULL,
-          metric_name TEXT NOT NULL,
-          sample_value REAL NOT NULL,
-          sampled_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-          PRIMARY KEY (device_id, metric_name, sampled_at)
-        )
-      `);
-    } catch { /* ignore */ }
-
-    // 批量写入采样值
-    const stmt = db.prepare(`
-      INSERT INTO baseline_metrics (device_id, metric_name, sample_value)
-      VALUES (?, ?, ?)
-    `);
-
-    const tx = db.transaction(() => {
-      for (const [name, value] of Object.entries(metrics)) {
-        stmt.run(deviceId, name, value);
-      }
-    });
-
-    try { tx(); } catch { /* ignore */ }
+    baselineMetricsRepo.ensureTable();
+    baselineMetricsRepo.insertBatch(deviceId, metrics);
   }
 }
 

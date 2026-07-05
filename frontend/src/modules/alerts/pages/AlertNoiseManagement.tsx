@@ -33,7 +33,7 @@ export default function AlertNoiseManagement() {
   const { data: stats } = useQuery<Stats>({
     queryKey: ['alert-noise-stats'],
     queryFn: async () => {
-      const res = await api.get('/api/alert-noise/stats');
+      const res = await api.get('/alert-noise/stats');
       return res.data.data;
     }
   });
@@ -41,14 +41,14 @@ export default function AlertNoiseManagement() {
   const { data: suppressedAlerts } = useQuery<NoiseAlert[]>({
     queryKey: ['suppressed-alerts'],
     queryFn: async () => {
-      const res = await api.get('/api/alert-noise/suppressed');
+      const res = await api.get('/alert-noise/suppressed');
       return res.data.data || [];
     }
   });
 
   const unsuppressMutation = useMutation({
     mutationFn: async (fingerprint: string) => {
-      const res = await api.post('/api/alert-noise/unsuppress', { fingerprint });
+      const res = await api.post('/alert-noise/unsuppress', { fingerprint });
       return res.data;
     },
     onSuccess: () => {
@@ -59,7 +59,7 @@ export default function AlertNoiseManagement() {
 
   const suppressMutation = useMutation({
     mutationFn: async ({ fingerprint, reason, duration }: { fingerprint: string; reason: string; duration: number }) => {
-      const res = await api.post('/api/alert-noise/suppress', { fingerprint, reason, durationMinutes: duration });
+      const res = await api.post('/alert-noise/suppress', { fingerprint, reason, durationMinutes: duration });
       return res.data;
     },
     onSuccess: () => {
@@ -72,7 +72,7 @@ export default function AlertNoiseManagement() {
 
   const cleanupMutation = useMutation({
     mutationFn: async (days: number) => {
-      const res = await api.post('/api/alert-noise/cleanup', { daysToKeep: days });
+      const res = await api.post('/alert-noise/cleanup', { daysToKeep: days });
       return res.data;
     },
     onSuccess: () => {

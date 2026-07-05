@@ -1,47 +1,28 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { db } from '../../models/database';
 import crypto from 'crypto';
+import { dcRepository } from '../../repositories';
+import { getErrorMessage } from '../../utils/errorHelpers';
 
 const router = Router();
 
 // GET /slots — 所有U位数据（DataRoom 3D调用）
 router.get('/', (_req: Request, res: Response) => {
   try {
-    const slots = db.prepare(`
-      SELECT s.*,
-        COALESCE(ser.name, nd.name, vm.name, s.device_id) as device_name,
-        COALESCE(ser.ip_address, nd.ip_address, '') as ip_address,
-        COALESCE(CASE WHEN ser.enabled = 1 THEN 'online' ELSE 'offline' END, nd.status, vm.status) as device_status
-      FROM dc_rack_slots s
-      LEFT JOIN servers ser ON s.device_type='server' AND s.device_id = ser.id
-      LEFT JOIN network_devices nd ON s.device_type='network_device' AND s.device_id = nd.id
-      LEFT JOIN virtual_machines vm ON s.device_type='vm_host' AND s.device_id = vm.id
-      ORDER BY s.rack_id, s.start_u
-    `).all();
+    const slots = dcRepository.slots.listWithDeviceInfo();
     res.json({ success: true, data: slots });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
 // GET /slots/:rackId — 按机柜获取U位
 router.get('/:rackId', (req: Request, res: Response) => {
   try {
-    const slots = db.prepare(`
-      SELECT s.*,
-        COALESCE(ser.name, nd.name, vm.name, s.device_id) as device_name,
-        COALESCE(CASE WHEN ser.enabled = 1 THEN 'online' ELSE 'offline' END, nd.status, vm.status) as device_status
-      FROM dc_rack_slots s
-      LEFT JOIN servers ser ON s.device_type='server' AND s.device_id = ser.id
-      LEFT JOIN network_devices nd ON s.device_type='network_device' AND s.device_id = nd.id
-      LEFT JOIN virtual_machines vm ON s.device_type='vm_host' AND s.device_id = vm.id
-      WHERE s.rack_id = ?
-      ORDER BY s.start_u
-    `).all(req.params.rackId);
+    const slots = dcRepository.slots.listByRackWithDeviceInfo(req.params.rackId);
     res.json({ success: true, data: slots });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -51,45 +32,40 @@ router.post('/', (req: Request, res: Response) => {
     const { rack_id, device_id, device_type, device_type_id, start_u, end_u, position_face, lifecycle_notes } = req.body;
 
     // 检查冲突
-    const conflict = db.prepare(`
-      SELECT * FROM dc_rack_slots
-      WHERE rack_id = ? AND NOT (end_u < ? OR start_u > ?)
-    `).get(rack_id, start_u, end_u);
+    const conflict = dcRepository.slots.findConflict(rack_id, start_u, end_u);
     if (conflict) {
       return res.status(409).json({ success: false, message: 'U位冲突：该U位已被占用' });
     }
 
     // 检查总U数
-    const rack = db.prepare('SELECT * FROM dc_racks WHERE id = ?').get(rack_id) as any;
-    if (rack && end_u > rack.total_u) {
+    const rack = dcRepository.racks.getById(rack_id);
+    if (rack && end_u > (rack.total_u ?? 42)) {
       return res.status(400).json({ success: false, message: `超出机柜容量(最大${rack.total_u}U)` });
     }
 
     // 如果有 device_type_id，自动从型号继承 u_height
     let resolvedEndU = end_u;
     if (device_type_id) {
-      const dt = db.prepare('SELECT u_height FROM device_types WHERE id = ?').get(device_type_id) as any;
-      if (dt && dt.u_height > 0) {
-        resolvedEndU = start_u + Math.ceil(dt.u_height) - 1;
+      const uHeight = dcRepository.devices.getDeviceTypeUHeight(device_type_id);
+      if (uHeight && uHeight > 0) {
+        resolvedEndU = start_u + Math.ceil(uHeight) - 1;
       }
     }
 
     const id = crypto.randomUUID();
-    db.prepare(`
-      INSERT INTO dc_rack_slots (id, rack_id, device_id, device_type, device_type_id, start_u, end_u, position_face)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, rack_id, device_id, device_type, device_type_id || null, start_u, resolvedEndU, position_face || 'front');
+    dcRepository.slots.create({
+      id, rack_id, device_id, device_type, device_type_id, start_u, end_u: resolvedEndU, position_face,
+    });
 
     // 生命周期记录
-    db.prepare(`
-      INSERT INTO dc_device_lifecycle (id, device_id, device_type, action,
-        to_rack_id, to_slot_start, to_slot_end, notes)
-      VALUES (?, ?, ?, 'mounted', ?, ?, ?, ?)
-    `).run(crypto.randomUUID(), device_id, device_type, rack_id, start_u, end_u, lifecycle_notes || '');
+    dcRepository.devices.createLifecycle({
+      id: crypto.randomUUID(), device_id, device_type, action: 'mounted',
+      to_rack_id: rack_id, to_slot_start: start_u, to_slot_end: end_u, notes: lifecycle_notes || '',
+    });
 
     res.json({ success: true, data: { id } });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -97,58 +73,63 @@ router.post('/', (req: Request, res: Response) => {
 router.put('/:id', (req: Request, res: Response) => {
   try {
     const { rack_id, start_u, end_u, position_face, lifecycle_notes } = req.body;
-    const oldSlot = db.prepare('SELECT * FROM dc_rack_slots WHERE id = ?').get(req.params.id) as any;
+    const oldSlot = dcRepository.slots.getById(req.params.id);
     if (!oldSlot) return res.status(404).json({ success: false, message: 'U位记录不存在' });
 
     // 检查冲突（排除自身）
-    const conflict = db.prepare(`
-      SELECT * FROM dc_rack_slots
-      WHERE rack_id = ? AND id != ? AND NOT (end_u < ? OR start_u > ?)
-    `).get(rack_id || oldSlot.rack_id, req.params.id, start_u, end_u);
+    const effectiveRackId = rack_id || oldSlot.rack_id;
+    const conflict = dcRepository.slots.findConflict(effectiveRackId, start_u, end_u, req.params.id);
     if (conflict) {
       return res.status(409).json({ success: false, message: 'U位冲突' });
     }
 
-    db.prepare(`
-      UPDATE dc_rack_slots
-      SET rack_id=?, start_u=?, end_u=?, position_face=?
-      WHERE id=?
-    `).run(rack_id || oldSlot.rack_id, start_u, end_u, position_face || 'front', req.params.id);
+    dcRepository.slots.update(req.params.id, { rack_id: effectiveRackId, start_u, end_u, position_face });
 
     // 记录生命周期
     if (rack_id && rack_id !== oldSlot.rack_id) {
-      db.prepare(`
-        INSERT INTO dc_device_lifecycle (id, device_id, device_type, action,
-          from_rack_id, to_rack_id, from_slot_start, from_slot_end, to_slot_start, to_slot_end, notes)
-        VALUES (?, ?, ?, 'moved', ?, ?, ?, ?, ?, ?, ?)
-      `).run(crypto.randomUUID(), oldSlot.device_id, oldSlot.device_type,
-        oldSlot.rack_id, rack_id, oldSlot.start_u, oldSlot.end_u, start_u, end_u, lifecycle_notes || '');
+      dcRepository.devices.createLifecycle({
+        id: crypto.randomUUID(),
+        device_id: String(oldSlot.device_id ?? ''),
+        device_type: String(oldSlot.device_type_id ?? ''),
+        action: 'moved',
+        from_rack_id: oldSlot.rack_id,
+        to_rack_id: rack_id,
+        from_slot_start: Number(oldSlot.start_u),
+        from_slot_end: Number(oldSlot.end_u),
+        to_slot_start: start_u,
+        to_slot_end: end_u,
+        notes: lifecycle_notes || '',
+      });
     }
 
     res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
 // DELETE /slots/:id — 移除U位（下架设备）
 router.delete('/:id', (req: Request, res: Response) => {
   try {
-    const slot = db.prepare('SELECT * FROM dc_rack_slots WHERE id = ?').get(req.params.id) as any;
+    const slot = dcRepository.slots.getById(req.params.id);
     if (!slot) return res.status(404).json({ success: false, message: 'U位记录不存在' });
 
     // 生命周期记录
-    db.prepare(`
-      INSERT INTO dc_device_lifecycle (id, device_id, device_type, action,
-        from_rack_id, from_slot_start, from_slot_end, notes)
-      VALUES (?, ?, ?, 'unmounted', ?, ?, ?, ?)
-    `).run(crypto.randomUUID(), slot.device_id, slot.device_type,
-      slot.rack_id, slot.start_u, slot.end_u, '');
+    dcRepository.devices.createLifecycle({
+      id: crypto.randomUUID(),
+      device_id: String(slot.device_id ?? ''),
+      device_type: String(slot.device_type_id ?? ''),
+      action: 'unmounted',
+      from_rack_id: slot.rack_id,
+      from_slot_start: Number(slot.start_u),
+      from_slot_end: Number(slot.end_u),
+      notes: '',
+    });
 
-    db.prepare('DELETE FROM dc_rack_slots WHERE id = ?').run(req.params.id);
+    dcRepository.slots.delete(req.params.id);
     res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 

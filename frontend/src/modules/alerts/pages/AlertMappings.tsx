@@ -80,7 +80,7 @@ export default function AlertMappings() {
   const { data: mappingsData, isLoading: mappingsLoading } = useQuery({
     queryKey: ['alertMappings'],
     queryFn: async () => {
-      const res = await api.get('/api/alert-mappings');
+      const res = await api.get('/alert-mappings');
       return res.data.data as AlertMapping[];
     },
   });
@@ -88,14 +88,14 @@ export default function AlertMappings() {
   const { data: workflowsData } = useQuery({
     queryKey: ['workflows'],
     queryFn: async () => {
-      const res = await api.get('/api/workflows');
+      const res = await api.get('/workflows');
       return res.data.data as Workflow[];
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await api.post('/api/alert-mappings', data);
+    mutationFn: async (data: Record<string, unknown>) => {
+      const res = await api.post('/alert-mappings', data);
       return res.data;
     },
     onSuccess: () => {
@@ -106,8 +106,8 @@ export default function AlertMappings() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const res = await api.put(`/api/alert-mappings/${id}`, data);
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      const res = await api.put(`/alert-mappings/${id}`, data);
       return res.data;
     },
     onSuccess: () => {
@@ -119,7 +119,7 @@ export default function AlertMappings() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.delete(`/api/alert-mappings/${id}`);
+      const res = await api.delete(`/alert-mappings/${id}`);
       return res.data;
     },
     onSuccess: () => {

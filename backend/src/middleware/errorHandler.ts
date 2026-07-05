@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Request, Response, NextFunction } from 'express';
 import { env } from '../utils/env';
 import { logger } from '../utils/logger';
 import type { AppError} from '../types/errors';
-import { ErrorCode, ERROR_MESSAGES, getErrorMessage, createAppError } from '../types/errors';
+import { ErrorCode, getErrorMessage, createAppError } from '../types/errors';
 
 export function errorHandler(err: Error, req: Request, res: Response, _next: NextFunction) {
   const appError = err as AppError;

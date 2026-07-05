@@ -1,5 +1,9 @@
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { logger } from '../../../../utils/logger';
 import type { Provider, ProviderResult } from './types';
+import { getErrorMessage } from '../../../../utils/errorHelpers';
+import type { ProviderRegistry } from './ProviderRegistry';
 
 /**
  * HTTP Provider
@@ -48,13 +52,13 @@ export const httpProvider: Provider = {
 
 // 实现 HTTP Provider 方法
 export const httpMethods = {
-  async get(params: any): Promise<ProviderResult> {
+  async get(params: Record<string, unknown>): Promise<ProviderResult> {
     try {
-      const response = await fetch(params.url, {
+      const response = await fetch(params.url as string, {
         method: 'GET',
-        headers: params.headers || {}
+        headers: (params.headers as Record<string, string>) || {}
       });
-      const data: any = await response.json();
+      const data = await response.json() as unknown;
 
       return {
         success: true,
@@ -72,17 +76,17 @@ export const httpMethods = {
     }
   },
 
-  async post(params: any): Promise<ProviderResult> {
+  async post(params: Record<string, unknown>): Promise<ProviderResult> {
     try {
-      const response = await fetch(params.url, {
+      const response = await fetch(params.url as string, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...params.headers
+          ...(params.headers as Record<string, string> || {})
         },
         body: JSON.stringify(params.data)
       });
-      const data: any = await response.json();
+      const data = await response.json() as unknown;
 
       return {
         success: true,
@@ -137,7 +141,7 @@ export const notifyProvider: Provider = {
 
 // 通知方法实现
 export const notifyMethods = {
-  async send(params: any): Promise<ProviderResult> {
+  async send(params: Record<string, unknown>): Promise<ProviderResult> {
     logger.info(`[NotifyProvider] Sending notification: ${params.title}`);
     // 简化实现，实际应该集成通知服务
     return {
@@ -176,17 +180,15 @@ export const scriptProvider: Provider = {
 
 // 脚本方法实现
 export const scriptMethods = {
-  async exec(params: any): Promise<ProviderResult> {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
+  async exec(params: Record<string, unknown>): Promise<ProviderResult> {
     const execPromise = promisify(exec);
 
     try {
       const { stdout, stderr } = await execPromise(
-        params.command,
+        params.command as string,
         {
-          cwd: params.cwd,
-          timeout: params.timeout
+          cwd: params.cwd as string | undefined,
+          timeout: params.timeout as number | undefined
         }
       );
 
@@ -194,14 +196,15 @@ export const scriptMethods = {
         success: true,
         data: { stdout, stderr, code: 0 }
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const execError = error as { stdout?: string; stderr?: string; code?: number };
       return {
         success: false,
-        error: error.message,
+        error: getErrorMessage(error),
         data: {
-          stdout: error.stdout,
-          stderr: error.stderr,
-          code: error.code
+          stdout: execError.stdout,
+          stderr: execError.stderr,
+          code: execError.code
         }
       };
     }
@@ -235,7 +238,7 @@ export const databaseProvider: Provider = {
 
 // 数据库方法实现
 export const databaseMethods = {
-  async query(params: any): Promise<ProviderResult> {
+  async query(_params: Record<string, unknown>): Promise<ProviderResult> {
     // 简化实现
     return {
       success: true,
@@ -250,7 +253,7 @@ export const databaseMethods = {
 /**
  * 注册所有内置 Provider
  */
-export function registerBuiltinProviders(registry: any): void {
+export function registerBuiltinProviders(registry: ProviderRegistry): void {
   registry.register(httpProvider, httpMethods);
   registry.register(notifyProvider, notifyMethods);
   registry.register(scriptProvider, scriptMethods);

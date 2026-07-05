@@ -1,4 +1,4 @@
-import { db } from '../../../models/database';
+import { userRepository } from '../../../repositories';
 import { logger } from '../../../utils/logger';
 import { invalidateUserCache } from '../../../middleware/auth';
 
@@ -12,9 +12,7 @@ export interface LoginAttemptResult {
 }
 
 export function checkLoginLockout(username: string): LoginAttemptResult {
-  const user = db
-    .prepare('SELECT id, failed_login_attempts, locked_until FROM users WHERE username = ?')
-    .get(username) as { id: string; failed_login_attempts: number; locked_until: string | null } | undefined;
+  const user = userRepository.getLockoutStatus(username);
 
   if (!user) {
     return { locked: false };
@@ -29,7 +27,7 @@ export function checkLoginLockout(username: string): LoginAttemptResult {
         remainingAttempts: 0
       };
     }
-    db.prepare('UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?').run(user.id);
+    userRepository.clearLockout(user.id);
   }
 
   const remainingAttempts = MAX_FAILED_ATTEMPTS - user.failed_login_attempts;
@@ -40,9 +38,7 @@ export function checkLoginLockout(username: string): LoginAttemptResult {
 }
 
 export function recordFailedLogin(username: string): LoginAttemptResult {
-  const user = db
-    .prepare('SELECT id, failed_login_attempts FROM users WHERE username = ?')
-    .get(username) as { id: string; failed_login_attempts: number } | undefined;
+  const user = userRepository.getFailedAttempts(username);
 
   if (!user) {
     return { locked: false };
@@ -53,11 +49,7 @@ export function recordFailedLogin(username: string): LoginAttemptResult {
 
   if (newAttempts >= MAX_FAILED_ATTEMPTS) {
     const lockoutUntil = new Date(now.getTime() + LOCKOUT_DURATION_MINUTES * 60 * 1000);
-    db.prepare(`
-      UPDATE users 
-      SET failed_login_attempts = ?, locked_until = ?, last_failed_login = ?, updated_at = datetime('now','localtime') 
-      WHERE id = ?
-    `).run(newAttempts, lockoutUntil.toISOString(), now.toISOString(), user.id);
+    userRepository.recordFailedLoginWithLock(user.id, newAttempts, lockoutUntil.toISOString(), now.toISOString());
 
     logger.warn(`User ${username} has been locked out due to too many failed login attempts`);
 
@@ -70,11 +62,7 @@ export function recordFailedLogin(username: string): LoginAttemptResult {
     };
   }
 
-  db.prepare(`
-    UPDATE users 
-    SET failed_login_attempts = ?, last_failed_login = ?, updated_at = datetime('now','localtime') 
-    WHERE id = ?
-  `).run(newAttempts, now.toISOString(), user.id);
+  userRepository.recordFailedLogin(user.id, newAttempts, now.toISOString());
 
   return {
     locked: false,
@@ -83,11 +71,7 @@ export function recordFailedLogin(username: string): LoginAttemptResult {
 }
 
 export function resetFailedLoginAttempts(userId: string): void {
-  db.prepare(`
-    UPDATE users 
-    SET failed_login_attempts = 0, locked_until = NULL, updated_at = datetime('now','localtime') 
-    WHERE id = ?
-  `).run(userId);
+  userRepository.unlock(userId);
 
   invalidateUserCache(userId);
 }

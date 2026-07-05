@@ -10,9 +10,11 @@
  * =============================================================================
  */
 
-import db from '../../../../../models/database';
 import { logger } from '../../../../../utils/logger';
 import type { RiskAssessment, TrustRecord, RemediationPlan } from '../types';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { getErrorMessage } from '../../../../../utils/errorHelpers';
+import { automataTrustRepo } from '../../../../../repositories';
 
 // 安全规则：这些操作始终需要审核
 const DESTRUCTIVE_PATTERNS = [
@@ -39,21 +41,7 @@ class AdaptiveAutomationEngine {
 
   /** 确保信任表存在 */
   private ensureTrustTable(): void {
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS automata_trust (
-          operation_key TEXT PRIMARY KEY,
-          approval_count INTEGER DEFAULT 0,
-          rejection_count INTEGER DEFAULT 0,
-          success_count INTEGER DEFAULT 0,
-          failure_count INTEGER DEFAULT 0,
-          success_rate REAL DEFAULT 0.5,
-          last_updated TEXT
-        )
-      `);
-    } catch (err: any) {
-      logger.warn(`Failed to create automata_trust table: ${err.message}`);
-    }
+    automataTrustRepo.ensureTable();
   }
 
   /** 加载信任矩阵 */
@@ -63,15 +51,7 @@ class AdaptiveAutomationEngine {
     this.ensureTrustTable();
 
     try {
-      const rows = db.prepare('SELECT * FROM automata_trust').all() as Array<{
-        operation_key: string;
-        approval_count: number;
-        rejection_count: number;
-        success_count: number;
-        failure_count: number;
-        success_rate: number;
-        last_updated: string;
-      }>;
+      const rows = automataTrustRepo.listAll();
       for (const row of rows) {
         this.trustMatrix.set(row.operation_key, {
           operationKey: row.operation_key,
@@ -200,21 +180,13 @@ class AdaptiveAutomationEngine {
 
   /** 持久化信任记录 */
   private persistTrustRecord(key: string, record: TrustRecord): void {
-    try {
-      db.prepare(`
-        INSERT INTO automata_trust (operation_key, approval_count, rejection_count, success_count, failure_count, success_rate, last_updated)
-        VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))
-        ON CONFLICT(operation_key) DO UPDATE SET
-          approval_count = excluded.approval_count,
-          rejection_count = excluded.rejection_count,
-          success_count = excluded.success_count,
-          failure_count = excluded.failure_count,
-          success_rate = excluded.success_rate,
-          last_updated = datetime('now','localtime')
-      `).run(key, record.approvalCount, record.rejectionCount, record.successCount, record.failureCount, record.successRate);
-    } catch (err: any) {
-      logger.warn(`Failed to persist trust record: ${err.message}`);
-    }
+    automataTrustRepo.upsert(key, {
+      approvalCount: record.approvalCount,
+      rejectionCount: record.rejectionCount,
+      successCount: record.successCount,
+      failureCount: record.failureCount,
+      successRate: record.successRate,
+    });
   }
 
   /** 获取信任统计 */

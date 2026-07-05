@@ -1,42 +1,31 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
-import db from '../../../models/database';
+import { knowledgeRepository } from '../../../repositories';
 import { authenticateToken } from '../../../middleware/auth';
 
 const router = Router();
 
 router.use(authenticateToken);
 
+// 解析 tags/solutions/related_alerts（JSON 字符串 → 对象）
+function parseKnowledgeJson<T extends { tags?: string | null; solutions?: string | null; related_alerts?: string | null }>(k: T): T {
+  const result = { ...k };
+  if (result.tags) (result as { tags: unknown }).tags = JSON.parse(result.tags);
+  if (result.solutions) (result as { solutions: unknown }).solutions = JSON.parse(result.solutions);
+  if (result.related_alerts) (result as { related_alerts: unknown }).related_alerts = JSON.parse(result.related_alerts);
+  return result;
+}
+
 router.get('/', (req: Request, res: Response) => {
   try {
     const { category, search } = req.query;
-    let query = 'SELECT * FROM knowledge_base';
-    const params: unknown[] = [];
-    
-    const conditions = [];
-    if (category) {
-      conditions.push('category = ?');
-      params.push(category);
-    }
-    if (search) {
-      conditions.push('(title LIKE ? OR content LIKE ?)');
-      params.push(`%${search}%`, `%${search}%`);
-    }
-    
-    if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ');
-    }
-    
-    query += ' ORDER BY usage_count DESC, created_at DESC';
-    
-    const knowledge = db.prepare(query).all(...params) as Array<{ tags?: string; solutions?: string; related_alerts?: string; [key: string]: unknown }>;
-    knowledge.forEach((k) => {
-      if (k.tags) k.tags = JSON.parse(k.tags);
-      if (k.solutions) k.solutions = JSON.parse(k.solutions);
-      if (k.related_alerts) k.related_alerts = JSON.parse(k.related_alerts);
+    const knowledge = knowledgeRepository.list({
+      category: category as string | undefined,
+      search: search as string | undefined,
     });
-    res.json({ success: true, data: knowledge });
+    const parsed = knowledge.map(parseKnowledgeJson);
+    res.json({ success: true, data: parsed });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
@@ -46,21 +35,18 @@ router.post('/', (req: Request, res: Response) => {
   try {
     const { title, category, tags, content, solutions, related_alerts } = req.body;
     const id = randomUUID();
-    
-    db.prepare(`
-      INSERT INTO knowledge_base (id, title, category, tags, content, solutions, related_alerts)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
+
+    knowledgeRepository.createFromRest({
       id,
       title,
       category,
-      JSON.stringify(tags || []),
+      tags: JSON.stringify(tags || []),
       content,
-      JSON.stringify(solutions || []),
-      JSON.stringify(related_alerts || [])
-    );
-    
-    const knowledge = db.prepare('SELECT * FROM knowledge_base WHERE id = ?').get(id);
+      solutions: JSON.stringify(solutions || []),
+      related_alerts: JSON.stringify(related_alerts || []),
+    });
+
+    const knowledge = knowledgeRepository.getById(id);
     res.status(201).json({ success: true, data: knowledge });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -70,23 +56,17 @@ router.post('/', (req: Request, res: Response) => {
 router.put('/:id', (req: Request, res: Response) => {
   try {
     const { title, category, tags, content, solutions, related_alerts } = req.body;
-    
-    db.prepare(`
-      UPDATE knowledge_base 
-      SET title = ?, category = ?, tags = ?, content = ?, 
-          solutions = ?, related_alerts = ?, updated_at = datetime('now','localtime')
-      WHERE id = ?
-    `).run(
+
+    knowledgeRepository.updateFromRest(req.params.id, {
       title,
       category,
-      JSON.stringify(tags || []),
+      tags: JSON.stringify(tags || []),
       content,
-      JSON.stringify(solutions || []),
-      JSON.stringify(related_alerts || []),
-      req.params.id
-    );
-    
-    const knowledge = db.prepare('SELECT * FROM knowledge_base WHERE id = ?').get(req.params.id);
+      solutions: JSON.stringify(solutions || []),
+      related_alerts: JSON.stringify(related_alerts || []),
+    });
+
+    const knowledge = knowledgeRepository.getById(req.params.id);
     res.json({ success: true, data: knowledge });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -95,7 +75,7 @@ router.put('/:id', (req: Request, res: Response) => {
 
 router.delete('/:id', (req: Request, res: Response) => {
   try {
-    db.prepare('DELETE FROM knowledge_base WHERE id = ?').run(req.params.id);
+    knowledgeRepository.delete(req.params.id);
     res.json({ success: true, message: 'Knowledge entry deleted' });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -108,19 +88,11 @@ router.get('/search', (req: Request, res: Response) => {
     if (!q) {
       return res.status(400).json({ success: false, error: 'Search query required' });
     }
-    
-    const knowledge = db.prepare(`
-      SELECT * FROM knowledge_base 
-      WHERE title LIKE ? OR content LIKE ?
-      ORDER BY usage_count DESC
-    `).all(`%${q}%`, `%${q}%`) as Array<{ tags?: string; solutions?: string; [key: string]: unknown }>;
-    
-    knowledge.forEach((k) => {
-      if (k.tags) k.tags = JSON.parse(k.tags);
-      if (k.solutions) k.solutions = JSON.parse(k.solutions);
-    });
-    
-    res.json({ success: true, data: knowledge });
+
+    const knowledge = knowledgeRepository.search(q as string);
+    const parsed = knowledge.map(parseKnowledgeJson);
+
+    res.json({ success: true, data: parsed });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }

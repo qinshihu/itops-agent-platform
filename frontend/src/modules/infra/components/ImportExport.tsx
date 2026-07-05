@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Upload, Download, AlertCircle, CheckCircle, X } from 'lucide-react';
 import api from '../../../lib/api';
 import { useToast } from '../../../contexts/ToastContext';
+import { getAxiosErrorMessage } from '@/lib/errorHandler';
 
 interface ImportResult {
   imported: number;
@@ -85,7 +86,7 @@ export function ImportExport({ resourceType, onImportSuccess }: ImportExportProp
     try {
       const text = await file.text();
       
-      const response = await api.post('/api/import-export/servers/import', {
+      const response = await api.post('/import-export/servers/import', {
         csvContent: text
       });
 
@@ -95,11 +96,12 @@ export function ImportExport({ resourceType, onImportSuccess }: ImportExportProp
         onImportSuccess();
         toast.success(`成功导入 ${response.data.data.imported} 条`);
       }
-    } catch (error: any) {
-      if (error.response?.data?.data) {
-        setImportResult(error.response.data.data);
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { data?: ImportResult; error?: string; message?: string } } };
+      if (axiosError.response?.data?.data) {
+        setImportResult(axiosError.response.data.data);
       } else {
-        toast.error('导入失败: ' + (error.response?.data?.error || error.response?.data?.message || '未知错误'));
+        toast.error('导入失败: ' + getAxiosErrorMessage(error, '未知错误'));
       }
     } finally {
       setImporting(false);
@@ -125,7 +127,7 @@ export function ImportExport({ resourceType, onImportSuccess }: ImportExportProp
 
   const handleDownloadTemplate = async () => {
     try {
-      const response = await api.get('/api/import-export/template/servers', {
+      const response = await api.get('/import-export/template/servers', {
         responseType: 'blob'
       });
 

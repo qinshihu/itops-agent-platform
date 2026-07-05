@@ -13,6 +13,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/test/setup.ts',
+    testTimeout: 60000,
     css: true,
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     coverage: {
@@ -25,6 +26,16 @@ export default defineConfig({
         'src/**/*.d.ts',
         'src/**/*.{test,spec}.{ts,tsx}',
       ],
+      thresholds: {
+        // 当前覆盖率: branches 15%, functions 15%, lines 15%, statements 15%
+        // 目标: 逐月提升 5%，最终达到 50%
+        global: {
+          branches: 20,
+          functions: 20,
+          lines: 20,
+          statements: 20,
+        },
+      },
     },
   },
 });

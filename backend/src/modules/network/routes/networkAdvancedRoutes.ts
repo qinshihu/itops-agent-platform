@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { configBackupService } from '../../infra/services/configBackupService';
+import { configBackupService } from '../../config-management/services/configBackupService';
 import { lldpDiscoveryService } from '../services/lldpDiscoveryService';
-import { logger } from '../../../utils/logger';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -15,8 +15,8 @@ router.post('/backup/:deviceId', async (req: Request, res: Response) => {
   try {
     const result = await configBackupService.backupDevice(req.params.deviceId);
     res.json({ code: 0, data: result });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
@@ -25,8 +25,8 @@ router.post('/backup-all', async (_req: Request, res: Response) => {
   try {
     const result = await configBackupService.backupAllOnlineDevices();
     res.json({ code: 0, data: result });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
@@ -57,8 +57,8 @@ router.post('/check-change/:deviceId', async (req: Request, res: Response) => {
   try {
     const result = await configBackupService.checkConfigChange(req.params.deviceId);
     res.json({ code: 0, data: result });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
@@ -71,8 +71,8 @@ router.post('/lldp/:deviceId', async (req: Request, res: Response) => {
   try {
     const neighbors = await lldpDiscoveryService.discoverNeighbors(req.params.deviceId);
     res.json({ code: 0, data: neighbors });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
@@ -85,8 +85,8 @@ router.post('/lldp-batch', async (req: Request, res: Response) => {
     }
     const result = await lldpDiscoveryService.batchDiscover(deviceIds);
     res.json({ code: 0, data: result });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 
@@ -95,8 +95,8 @@ router.post('/lldp-all', async (_req: Request, res: Response) => {
   try {
     const result = await lldpDiscoveryService.discoverAll();
     res.json({ code: 0, data: result });
-  } catch (error: any) {
-    res.status(500).json({ code: -1, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ code: -1, message: getErrorMessage(error) });
   }
 });
 

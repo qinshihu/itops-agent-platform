@@ -77,7 +77,94 @@ export interface Slot {
   memory_usage?: number;
   os_type?: string;
   ip_address?: string;
-  [key: string]: any;
+  [key: string]: unknown;
+}
+
+export interface Manufacturer {
+  id: string;
+  name: string;
+  description?: string;
+  type_count?: number;
+}
+
+export interface DeviceTypeInfo {
+  id: string;
+  model: string;
+  manufacturer_name?: string;
+  manufacturer_id?: string;
+  device_type?: string;
+  u_height?: number;
+  is_full_depth?: number;
+  airflow?: string;
+  description?: string;
+  instance_count?: number;
+}
+
+export interface PowerPanel {
+  id: string;
+  name: string;
+  room_id?: string;
+  room_name?: string;
+  type?: string;
+  phase?: string;
+  voltage?: number;
+  feed_count?: number;
+}
+
+export interface PowerFeed {
+  id: string;
+  name: string;
+  panel_id?: string;
+  panel_name?: string;
+  rack_id?: string;
+  rack_name?: string;
+  phase?: string;
+  voltage?: number;
+  amperage?: number;
+  max_power?: number;
+}
+
+export interface Cable {
+  id: string;
+  label: string;
+  type?: string;
+  status?: string;
+  a_device_id?: string;
+  a_device_name?: string;
+  b_device_id?: string;
+  b_device_name?: string;
+  length_m?: number;
+  color?: string;
+}
+
+export interface DeviceSummary {
+  id: string;
+  name?: string;
+  device_name?: string;
+  device_type?: string;
+}
+
+export interface DeviceGroup {
+  room_id?: string;
+  room_name?: string;
+  room_label?: string;
+  racks?: Record<string, RackGroup>;
+}
+
+export interface RackGroup {
+  rack_id?: string;
+  rack_name?: string;
+  rack_label?: string;
+  devices?: DeviceSlot[];
+}
+
+export interface DeviceSlot {
+  slot_id?: string;
+  device_name?: string;
+  device_type?: string;
+  start_u?: number;
+  end_u?: number;
+  ip_address?: string;
 }
 
 export interface PDU {
@@ -121,8 +208,8 @@ export interface OverviewSummary {
 
 export interface OverviewData {
   summary?: OverviewSummary;
-  rackData?: any[];
-  rooms?: any[];
+  rackData?: Record<string, unknown>[];
+  rooms?: Record<string, unknown>[];
   isEmpty?: boolean;
   isPartialMock?: boolean;
   pue?: number;

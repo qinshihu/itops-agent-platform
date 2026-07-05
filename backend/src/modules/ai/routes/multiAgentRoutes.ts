@@ -1,26 +1,16 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
-import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
 import {
-  initializeMultiAgentSystem,
   executeTask,
   getCoordinator,
   specialistRegistry,
 } from '../services/multiAgent';
+import { agentExecutionRepository } from '../../../repositories';
 
 const router = Router();
-
-// 初始化系统（懒加载）
-let systemInitialized = false;
-
-function ensureSystemInitialized() {
-  if (!systemInitialized) {
-    initializeMultiAgentSystem();
-    systemInitialized = true;
-  }
-}
 
 // ==================== 任务执行 API ====================
 
@@ -39,32 +29,27 @@ router.post('/task', async (req: Request, res: Response) => {
       });
     }
 
-    ensureSystemInitialized();
-
     const taskStartTime = Date.now();
     const result = await executeTask(input, userId);
 
     // 保存执行记录
     const executionId = randomUUID();
     try {
-      db.prepare(`
-        INSERT INTO agent_executions (id, agent_id, agent_name, input_text, output_text, status, error_message, execution_time_ms, metadata, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
-      `).run(
-        executionId,
-        result.agentId,
-        result.agentName,
-        input,
-        result.result?.output || '',
-        result.status,
-        result.result?.error || null,
-        Date.now() - taskStartTime,
-        JSON.stringify({
+      agentExecutionRepository.create({
+        id: executionId,
+        agentId: result.agentId,
+        agentName: result.agentName,
+        inputText: input,
+        outputText: result.result?.output || '',
+        status: result.status,
+        errorMessage: result.result?.error || null,
+        executionTimeMs: Date.now() - taskStartTime,
+        metadata: {
           multiAgent: true,
           context: context || null,
           delegatedTo: result.delegatedTo || null,
-        })
-      );
+        },
+      });
     } catch (dbErr) {
       logger.error('保存执行记录失败', dbErr);
     }
@@ -90,8 +75,6 @@ router.post('/task', async (req: Request, res: Response) => {
  */
 router.get('/specialists', (req: Request, res: Response) => {
   try {
-    ensureSystemInitialized();
-
     const { domain, enabled } = req.query;
     let specialists;
 
@@ -118,7 +101,7 @@ router.get('/specialists', (req: Request, res: Response) => {
       success: true,
       data,
     });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({
       success: false,
       error: 'Failed to get specialists',
@@ -140,9 +123,7 @@ router.get('/specialists/select', (req: Request, res: Response) => {
       });
     }
 
-    ensureSystemInitialized();
     const specialist = specialistRegistry.selectBestSpecialistForTask(input as string);
-
     if (!specialist) {
       return res.json({
         success: true,
@@ -160,7 +141,7 @@ router.get('/specialists/select', (req: Request, res: Response) => {
         capabilities: specialist.capabilities,
       },
     });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({
       success: false,
       error: 'Failed to select specialist',
@@ -184,7 +165,6 @@ router.post('/specialists/:id/execute', async (req: Request, res: Response) => {
       });
     }
 
-    ensureSystemInitialized();
     const specialist = specialistRegistry.getById(id);
 
     if (!specialist) {
@@ -220,7 +200,7 @@ router.post('/specialists/:id/execute', async (req: Request, res: Response) => {
         executionTime: Date.now() - startTime,
       },
     });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({
       success: false,
       error: 'Failed to execute specialist',
@@ -236,8 +216,6 @@ router.post('/specialists/:id/execute', async (req: Request, res: Response) => {
  */
 router.get('/status', (req: Request, res: Response) => {
   try {
-    ensureSystemInitialized();
-
     const coordinator = getCoordinator();
     const allSpecialists = specialistRegistry.getAll();
     const enabledSpecialists = specialistRegistry.getEnabled();
@@ -257,7 +235,7 @@ router.get('/status', (req: Request, res: Response) => {
         },
       },
     });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({
       success: false,
       error: 'Failed to get system status',

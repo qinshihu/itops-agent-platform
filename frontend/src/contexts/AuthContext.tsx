@@ -24,7 +24,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // 验证token是否有效
 const verifyToken = async (_token: string): Promise<boolean> => {
   try {
-    const response = await api.get('/api/auth/me');
+    const response = await api.get('/auth/me');
     return response.status === 200;
   } catch {
     return false;

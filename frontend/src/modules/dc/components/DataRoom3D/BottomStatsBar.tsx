@@ -27,8 +27,8 @@ export default function BottomStatsBar({ overview }: Props) {
   };
 
   const allMetrics = [
-    ...METRICS.map(m => ({ ...m, value: m.fmt((overview as any)?.[m.key] ?? 0) })),
-    ...SUMMARY_METRICS.map(m => ({ ...m, value: m.fmt((summary as any)?.[m.key] ?? 0) })),
+    ...METRICS.map(m => ({ ...m, value: m.fmt((overview?.[m.key] as number) ?? 0) })),
+    ...SUMMARY_METRICS.map(m => ({ ...m, value: m.fmt((summary[m.key as keyof OverviewSummary] as number) ?? 0) })),
   ];
 
   return (

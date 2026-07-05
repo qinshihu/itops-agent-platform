@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Statistic, Row, Col, Table, Tag, Space, Typography, Descriptions, Badge, Spin, Input, Select, Tooltip } from 'antd';
+import { logger } from '@/lib/logger';
+import { Card, Statistic, Row, Col, Table, Tag, Space, Typography, Descriptions, Badge as _Badge, Spin, Input, Select, Tooltip } from 'antd';
 import {
   ApiOutlined, ToolOutlined, SafetyOutlined, CloudServerOutlined,
   CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, ClockCircleOutlined,
-  SearchOutlined, PlayCircleOutlined,
+  SearchOutlined, PlayCircleOutlined as _PlayCircleOutlined,
 } from '@ant-design/icons';
-import { fetchHealth, fetchManifest, fetchExternalStatus, callTool, type McpHealth, type McpTool, type ExternalServer, type ToolCallResult } from '../api';
+import { fetchHealth, fetchManifest, fetchExternalStatus, callTool as _callTool } from '../api';
+import type { McpHealth, McpTool, ExternalServer, ToolCallResult as _ToolCallResult } from '../api';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text, Paragraph: _Paragraph } = Typography;
 
 const riskColorMap: Record<string, string> = {
   readonly: 'green',
@@ -61,7 +63,7 @@ const McpOverview: React.FC = () => {
       setManifest(m.tools || []);
       setServers(s.servers || []);
     } catch (err) {
-      console.error('加载 MCP 数据失败', err);
+      logger.error('加载 MCP 数据失败', err);
     } finally {
       setLoading(false);
     }
@@ -72,19 +74,19 @@ const McpOverview: React.FC = () => {
   }
 
   const toolsByDomain = manifest.reduce((acc, t) => {
-    const domain = (t.annotations as any)?.domain || 'other';
+    const domain = (t.annotations)?.domain || 'other';
     acc[domain] = (acc[domain] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
-  const domains = Array.from(new Set(manifest.map(t => (t.annotations as any)?.domain).filter(Boolean)));
+  const domains = Array.from(new Set(manifest.map(t => (t.annotations)?.domain).filter((d): d is string => !!d)));
 
   const filteredTools = manifest.filter(t => {
     if (toolSearch) {
       const s = toolSearch.toLowerCase();
       if (!t.name.toLowerCase().includes(s) && !t.description.toLowerCase().includes(s) && !(t.title || '').toLowerCase().includes(s)) return false;
     }
-    if (toolDomainFilter && (t.annotations as any)?.domain !== toolDomainFilter) return false;
+    if (toolDomainFilter && (t.annotations)?.domain !== toolDomainFilter) return false;
     if (toolRiskFilter && t.annotations?.riskLevel !== toolRiskFilter) return false;
     return true;
   });
@@ -111,8 +113,8 @@ const McpOverview: React.FC = () => {
       title: '领域',
       key: 'domain',
       width: 100,
-      render: (_: any, record: McpTool) => {
-        const d = (record.annotations as any)?.domain;
+      render: (_: unknown, record: McpTool) => {
+        const d = (record.annotations)?.domain;
         return d ? <Tag>{domainLabels[d] || d}</Tag> : '-';
       },
     },
@@ -120,7 +122,7 @@ const McpOverview: React.FC = () => {
       title: '风险',
       key: 'risk',
       width: 70,
-      render: (_: any, record: McpTool) => {
+      render: (_: unknown, record: McpTool) => {
         const risk = record.annotations?.riskLevel || 'readonly';
         return <Tag color={riskColorMap[risk]}>{risk}</Tag>;
       },
@@ -129,7 +131,7 @@ const McpOverview: React.FC = () => {
       title: '只读',
       key: 'readOnly',
       width: 55,
-      render: (_: any, record: McpTool) =>
+      render: (_: unknown, record: McpTool) =>
         record.annotations?.readOnlyHint ? <Tag color="green">✓</Tag> : <Tag color="orange">✗</Tag>,
     },
   ];

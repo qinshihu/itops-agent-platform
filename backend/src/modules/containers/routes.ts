@@ -7,6 +7,7 @@ import vmManagementRoutes from './routes/vmManagementRoutes';
 import volumeRoutes from './routes/volumeRoutes';
 import registryRoutes from './routes/registryRoutes';
 import vmMigrationRoutes from './routes/vmMigrationRoutes';
+import snapshotPolicyRoutes from './routes/snapshotPolicyRoutes';
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use('/vm-management', vmManagementRoutes);
 router.use('/volumes', volumeRoutes);
 router.use('/registries', registryRoutes);
 router.use('/vm-migrations', vmMigrationRoutes);
+router.use('/snapshot-policies', snapshotPolicyRoutes);
 
 export default router;

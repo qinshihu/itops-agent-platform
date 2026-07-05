@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
-import { db } from '../../../models/database';
+import { imageRegistryRepository } from '../../../../repositories';
 import { credentialService } from '../../auth/services/credentialService';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 interface RegistryConfig {
   id: string;
@@ -31,49 +32,37 @@ interface RegistryImage {
   vulnerabilities?: { severity: string; count: number }[];
 }
 
+interface RegistryRow {
+  id: string;
+  name: string;
+  type: string;
+  url: string;
+  username?: string;
+  encrypted_password?: string;
+  encrypted_password_iv?: string;
+  status: string;
+  error_message?: string;
+  project_count?: number;
+  repo_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
 class RegistryService {
   constructor() {
-    // Tables initialized via ensureTables() called from app.ts after DB ready
+    // 表结构由 migration v045 维护，本服务不再 ensureTables。
   }
 
-  ensureTables() {
-    this.initTables();
-  }
-
-  private initTables() {
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS image_registries (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          type TEXT NOT NULL,
-          url TEXT NOT NULL,
-          username TEXT,
-          encrypted_password TEXT,
-          encrypted_password_iv TEXT,
-          status TEXT DEFAULT 'inactive',
-          error_message TEXT,
-          project_count INTEGER DEFAULT 0,
-          repo_count INTEGER DEFAULT 0,
-          created_at TEXT DEFAULT (datetime('now','localtime')),
-          updated_at TEXT DEFAULT (datetime('now','localtime'))
-        )
-      `);
-    } catch (err) {
-      logger.error('Failed to create image_registries table:', err);
-    }
-  }
-
-  private decryptPassword(registry: any): string {
+  private decryptPassword(registry: RegistryRow): string {
     try {
       if (registry.encrypted_password && registry.encrypted_password_iv) {
         return credentialService.decryptCredential(registry.encrypted_password, registry.encrypted_password_iv);
       }
-    } catch {}
+    } catch { /* ignore */ }
     return '';
   }
 
-  private getAuthHeader(registry: any): { username: string; password: string } | null {
+  private getAuthHeader(registry: RegistryRow): { username: string; password: string } | null {
     const password = this.decryptPassword(registry);
     if (registry.username && password) {
       return { username: registry.username, password };
@@ -84,30 +73,30 @@ class RegistryService {
   /**
    * 获取原始数据库行（用于解密等操作，返回 snake_case 格式）
    */
-  private getRegistryRow(registryId: string): any {
-    return db.prepare('SELECT * FROM image_registries WHERE id = ?').get(registryId);
+  private getRegistryRow(registryId: string): RegistryRow | undefined {
+    return imageRegistryRepository.getById(registryId) as RegistryRow | undefined;
   }
 
   listRegistries(): RegistryConfig[] {
-    const rows = db.prepare('SELECT * FROM image_registries ORDER BY name').all() as any[];
-    return rows.map((r: any) => ({
-      id: r.id, name: r.name, type: r.type, url: r.url,
-      username: r.username, encryptedPassword: r.encrypted_password,
-      encryptedPasswordIV: r.encrypted_password_iv,
-      status: r.status, errorMessage: r.error_message,
+    const rows = imageRegistryRepository.list();
+    return rows.map((r) => ({
+      id: r.id, name: r.name, type: r.type as RegistryConfig['type'], url: r.url,
+      username: r.username ?? undefined, encryptedPassword: r.encrypted_password ?? undefined,
+      encryptedPasswordIV: r.encrypted_password_iv ?? undefined,
+      status: r.status as RegistryConfig['status'], errorMessage: r.error_message ?? undefined,
       projectCount: r.project_count, repoCount: r.repo_count,
       createdAt: r.created_at, updatedAt: r.updated_at,
     }));
   }
 
   getRegistry(registryId: string): RegistryConfig | null {
-    const row = db.prepare('SELECT * FROM image_registries WHERE id = ?').get(registryId) as any;
+    const row = imageRegistryRepository.getById(registryId);
     if (!row) return null;
     return {
-      id: row.id, name: row.name, type: row.type, url: row.url,
-      username: row.username, encryptedPassword: row.encrypted_password,
-      encryptedPasswordIV: row.encrypted_password_iv,
-      status: row.status, errorMessage: row.error_message,
+      id: row.id, name: row.name, type: row.type as RegistryConfig['type'], url: row.url,
+      username: row.username ?? undefined, encryptedPassword: row.encrypted_password ?? undefined,
+      encryptedPasswordIV: row.encrypted_password_iv ?? undefined,
+      status: row.status as RegistryConfig['status'], errorMessage: row.error_message ?? undefined,
       projectCount: row.project_count, repoCount: row.repo_count,
       createdAt: row.created_at, updatedAt: row.updated_at,
     };
@@ -117,7 +106,6 @@ class RegistryService {
     name: string; type: string; url: string; username?: string; password?: string;
   }): Promise<RegistryConfig> {
     const id = randomUUID();
-    const now = new Date().toISOString();
 
     let encryptedPassword = '';
     let encryptedPasswordIV = '';
@@ -127,38 +115,40 @@ class RegistryService {
       encryptedPasswordIV = iv;
     }
 
-    db.prepare(`
-      INSERT INTO image_registries (id, name, type, url, username, encrypted_password, encrypted_password_iv, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, config.name, config.type, config.url, config.username || null, encryptedPassword || null, encryptedPasswordIV || null, now, now);
+    imageRegistryRepository.create({
+      id,
+      name: config.name,
+      type: config.type as RegistryConfig['type'],
+      url: config.url,
+      username: config.username || null,
+      encrypted_password: encryptedPassword || null,
+      encrypted_password_iv: encryptedPasswordIV || null,
+    });
 
     return this.getRegistry(id)!;
   }
 
   async deleteRegistry(registryId: string): Promise<void> {
-    db.prepare('DELETE FROM image_registries WHERE id = ?').run(registryId);
+    imageRegistryRepository.delete(registryId);
   }
 
   async updateRegistry(registryId: string, config: {
     name?: string; type?: string; url?: string; username?: string; password?: string;
-  }): Promise<any> {
+  }): Promise<RegistryConfig | null> {
     const existing = this.getRegistry(registryId);
     if (!existing) throw new Error('仓库不存在');
-    
-    const updates: string[] = [];
-    const params: any[] = [];
-    if (config.name !== undefined) { updates.push('name = ?'); params.push(config.name); }
-    if (config.type !== undefined) { updates.push('type = ?'); params.push(config.type); }
-    if (config.url !== undefined) { updates.push('url = ?'); params.push(config.url); }
-    if (config.username !== undefined) { updates.push('username = ?'); params.push(config.username); }
-    if (config.password !== undefined) { updates.push('encrypted_password = ?'); params.push(config.password); }
-    
-    if (updates.length > 0) {
-      updates.push("updated_at = datetime('now','localtime')");
-      params.push(registryId);
-      db.prepare(`UPDATE image_registries SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+
+    const fields: Record<string, unknown> = {};
+    if (config.name !== undefined) fields.name = config.name;
+    if (config.type !== undefined) fields.type = config.type;
+    if (config.url !== undefined) fields.url = config.url;
+    if (config.username !== undefined) fields.username = config.username;
+    if (config.password !== undefined) fields.encrypted_password = config.password;
+
+    if (Object.keys(fields).length > 0) {
+      imageRegistryRepository.update(registryId, fields);
     }
-    
+
     return this.getRegistry(registryId);
   }
 
@@ -167,7 +157,7 @@ class RegistryService {
     if (!registry) throw new Error('仓库不存在');
 
     try {
-      const auth = this.getAuthHeader(this.getRegistryRow(registryId));
+      const auth = this.getAuthHeader(this.getRegistryRow(registryId)!);
 
       switch (registry.type) {
         case 'harbor': {
@@ -204,10 +194,9 @@ class RegistryService {
           }
         }
       }
-    } catch (err: any) {
-      db.prepare(`UPDATE image_registries SET status='error', error_message=?, updated_at=datetime('now','localtime') WHERE id=?`)
-        .run(err.message, registryId);
-      return { success: false, message: err.message };
+    } catch (err: unknown) {
+      imageRegistryRepository.updateStatus(registryId, 'error', getErrorMessage(err));
+      return { success: false, message: getErrorMessage(err) };
     }
   }
 
@@ -216,7 +205,7 @@ class RegistryService {
     if (!registry) throw new Error('仓库不存在');
 
     try {
-      const auth = this.getAuthHeader(this.getRegistryRow(registryId));
+      const auth = this.getAuthHeader(this.getRegistryRow(registryId)!);
 
       switch (registry.type) {
         case 'harbor': {
@@ -244,15 +233,15 @@ class RegistryService {
                       size: art.size || 0,
                       pushedAt: art.push_time || '',
                       pullCount: art.pull_count || 0,
-                      vulnerabilities: art.scan_overview ? Object.entries(art.scan_overview).map(([sev, info]: [string, any]) => ({
-                        severity: sev, count: info.total || 0,
+                      vulnerabilities: art.scan_overview ? Object.entries(art.scan_overview).map(([sev, info]) => ({
+                        severity: sev, count: (info as Record<string, unknown>).total as number || 0,
                       })) : [],
                     });
                   }
                 }
               }
-            } catch (err: any) {
-              logger.warn(`Failed to fetch Harbor project ${p}:`, err.message);
+            } catch (err: unknown) {
+              logger.warn(`Failed to fetch Harbor project ${p}:`, getErrorMessage(err));
             }
           }
           return images;
@@ -262,7 +251,7 @@ class RegistryService {
           const resp = await axios.get(url + '?page_size=50', {
             auth: auth || undefined, timeout: 15000,
           });
-          return (resp.data.results || []).map((r: any) => ({
+          return (resp.data.results || []).map((r: Record<string, unknown>) => ({
             registryId,
             project: project || 'library',
             repository: r.name,
@@ -276,8 +265,8 @@ class RegistryService {
           return [];
         }
       }
-    } catch (err: any) {
-      logger.error('Failed to list registry images:', err.message);
+    } catch (err: unknown) {
+      logger.error('Failed to list registry images:', getErrorMessage(err));
       return [];
     }
   }
@@ -285,11 +274,11 @@ class RegistryService {
   private async getHarborProjects(registry: RegistryConfig): Promise<string[]> {
     try {
       const baseUrl = registry.url.replace(/\/+$/, '') + '/api/v2.0';
-      const auth = this.getAuthHeader(this.getRegistryRow(registry.id));
+      const auth = this.getAuthHeader(this.getRegistryRow(registry.id)!);
       const resp = await axios.get(`${baseUrl}/projects?page_size=50`, {
         auth: auth || undefined, timeout: 10000,
       });
-      return (resp.data || []).map((p: any) => p.name);
+      return (resp.data || []).map((p: Record<string, unknown>) => p.name);
     } catch {
       return ['library'];
     }

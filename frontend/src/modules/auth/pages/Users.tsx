@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Edit, Trash2, UserPlus } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 import { useToast } from '../../../contexts/ToastContext';
 
 interface User {
@@ -32,14 +33,14 @@ export default function Users() {
   const { data: usersData, isLoading: usersLoading } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
-      const res = await api.get('/api/users');
+      const res = await api.get('/users');
       return res.data.data as User[];
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await api.post('/api/users', data);
+    mutationFn: async (data: Record<string, unknown>) => {
+      const res = await api.post('/users', data);
       return res.data;
     },
     onSuccess: () => {
@@ -48,14 +49,14 @@ export default function Users() {
       resetForm();
       toast.success('用户创建成功');
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.error || err.response?.data?.message || '用户创建失败');
+    onError: (err: unknown) => {
+      toast.error(getAxiosErrorMessage(err, '用户创建失败'));
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const res = await api.put(`/api/users/${id}`, data);
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      const res = await api.put(`/users/${id}`, data);
       return res.data;
     },
     onSuccess: () => {
@@ -64,22 +65,22 @@ export default function Users() {
       resetForm();
       toast.success('用户更新成功');
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.error || err.response?.data?.message || '用户更新失败');
+    onError: (err: unknown) => {
+      toast.error(getAxiosErrorMessage(err, '用户更新失败'));
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.delete(`/api/users/${id}`);
+      const res = await api.delete(`/users/${id}`);
       return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       toast.success('用户删除成功');
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.error || err.response?.data?.message || '用户删除失败');
+    onError: (err: unknown) => {
+      toast.error(getAxiosErrorMessage(err, '用户删除失败'));
     },
   });
 

@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { Lock, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 import { validatePassword, getPasswordStrength } from '../../../utils/passwordValidator';
 
 export default function ForcePasswordChange() {
@@ -17,7 +18,7 @@ export default function ForcePasswordChange() {
 
   const changePasswordMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/api/auth/change-password', {
+      const res = await api.post('/auth/change-password', {
         currentPassword,
         newPassword
       });
@@ -27,8 +28,8 @@ export default function ForcePasswordChange() {
       updateUser({ passwordMustChange: false });
       navigate('/dashboard', { replace: true });
     },
-    onError: (err: any) => {
-      setPasswordError(err.response?.data?.error || err.response?.data?.message || '密码修改失败');
+    onError: (err: unknown) => {
+      setPasswordError(getAxiosErrorMessage(err, '密码修改失败'));
     }
   });
 

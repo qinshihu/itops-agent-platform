@@ -1,4 +1,4 @@
-import { db } from '../database';
+import db from '../database';
 import { randomUUID } from 'crypto';
 import { logger } from '../../utils/logger';
 
@@ -232,7 +232,7 @@ export function initializePresetAgents() {
   ];
 
   const insertAgent = db.prepare(`
-    INSERT INTO agents (id, name, avatar, role, system_prompt, model, temperature, is_preset, enabled, category, description, api_provider)
+    INSERT OR IGNORE INTO agents (id, name, avatar, role, system_prompt, model, temperature, is_preset, enabled, category, description, api_provider)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 

@@ -1,5 +1,5 @@
 /**
- * 前端路由聚合
+ * 前端路由聚合（18 个 DDD 限界上下文模块）
  * 
  * 所有模块路由在此统一导出，App.tsx 只需导入此文件
  * 新增模块路由只需：
@@ -11,6 +11,9 @@ import { aiRoutes } from './ai/routes';
 import { alertRoutes } from './alerts/routes';
 import { authRoutes, publicRoutes } from './auth/routes';
 import { autoRoutes } from './auto/routes';
+import { backupRoutes } from './backup/routes';
+import { changeManagementRoutes } from './change-management/routes';
+import { configManagementRoutes } from './config-management/routes';
 import { containerRoutes } from './containers/routes';
 import { databaseRoutes } from './database/routes';
 import { dcRoutes } from './dc/routes';
@@ -19,6 +22,7 @@ import { kubernetesRoutes } from './kubernetes/routes';
 import { mcpRoutes } from './mcp/routes';
 import { monitorRoutes } from './monitor/routes';
 import { networkRoutes } from './network/routes';
+import { notificationRoutes } from './notification/routes';
 import { serverRoutes } from './servers/routes';
 import { workflowRoutes } from './workflow/routes';
 
@@ -34,6 +38,9 @@ export const protectedRoutes = [
   ...alertRoutes,
   ...authRoutes,
   ...autoRoutes,
+  ...backupRoutes,
+  ...changeManagementRoutes,
+  ...configManagementRoutes,
   ...containerRoutes,
   ...databaseRoutes,
   ...dcRoutes,
@@ -42,6 +49,7 @@ export const protectedRoutes = [
   ...mcpRoutes,
   ...monitorRoutes,
   ...networkRoutes,
+  ...notificationRoutes,
   ...serverRoutes,
   ...workflowRoutes,
   { path: 'frontend-tests', element: <FrontendTests /> },

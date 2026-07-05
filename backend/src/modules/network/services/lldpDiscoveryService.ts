@@ -1,10 +1,13 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Client } from 'ssh2';
 import { randomUUID } from 'crypto';
-import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
-import type { VendorType} from './vendorAdapter';
-import { createVendorAdapter, InspectionType } from './vendorAdapter';
+import type { VendorType } from './vendorAdapter';
+import { createVendorAdapter } from './vendorAdapter';
 import { decrypt } from '../../auth/services/encryptionService';
+import { getErrorMessage } from '../../../utils/errorHelpers';
+import { networkDeviceRepository } from '../../../repositories';
+import type { NetworkDeviceCredentials } from '../../../repositories';
 
 // ================================================================
 // LLDP/CDP 邻居发现拓扑服务
@@ -44,7 +47,7 @@ class LldpDiscoveryService {
    * 对单台设备执行 LLDP/CDP 邻居发现
    */
   async discoverNeighbors(deviceId: string): Promise<NeighborEntry[]> {
-    const device = this.getDeviceById(deviceId);
+    const device = networkDeviceRepository.getConnectionCredentials(deviceId);
     if (!device) throw new Error(`Device not found: ${deviceId}`);
 
     const adapter = createVendorAdapter(device.vendor as VendorType);
@@ -59,8 +62,8 @@ class LldpDiscoveryService {
       const output = await this.executeSSHCommand(
         device.ip_address,
         device.ssh_port,
-        device.username,
-        decrypt(device.password),
+        device.username ?? '',
+        decrypt(device.password ?? ''),
         neighborTemplate.command
       );
 
@@ -74,8 +77,8 @@ class LldpDiscoveryService {
       await this.buildTopologyLinks(device, neighbors);
 
       return neighbors;
-    } catch (error: any) {
-      logger.error(`LLDP discovery failed for ${device.name}: ${error.message}`);
+    } catch (error: unknown) {
+      logger.error(`LLDP discovery failed for ${device.name}: ${getErrorMessage(error)}`);
       return [];
     }
   }
@@ -95,9 +98,7 @@ class LldpDiscoveryService {
    * 发现所有在线设备的 LLDP 邻居
    */
   async discoverAll(): Promise<Record<string, NeighborEntry[]>> {
-    const devices = db.prepare(
-      "SELECT id FROM network_devices WHERE status IN ('online', 'unknown')"
-    ).all() as { id: string }[];
+    const devices = networkDeviceRepository.listIdsByStatus(['online', 'unknown']);
 
     return this.batchDiscover(devices.map(d => d.id));
   }
@@ -107,17 +108,9 @@ class LldpDiscoveryService {
    */
   getTopologyLinks(deviceId?: string): TopologyLink[] {
     if (deviceId) {
-      return db.prepare(`
-        SELECT * FROM network_topology_links
-        WHERE deviceA_id = ? OR deviceB_id = ?
-        ORDER BY last_seen_at DESC
-      `).all(deviceId, deviceId) as TopologyLink[];
+      return networkDeviceRepository.listTopologyLinks(deviceId) as unknown as TopologyLink[];
     }
-    return db.prepare(`
-      SELECT * FROM network_topology_links
-      WHERE status = 'active'
-      ORDER BY last_seen_at DESC
-    `).all() as TopologyLink[];
+    return networkDeviceRepository.listTopologyLinks() as unknown as TopologyLink[];
   }
 
   /**
@@ -158,12 +151,6 @@ class LldpDiscoveryService {
   }
 
   // ── 私有方法 ──
-
-  private getDeviceById(id: string): { name: string; ip_address: string; vendor: string; ssh_port: number; username: string; password: string } | undefined {
-    return db.prepare(
-      'SELECT id, name, ip_address, vendor, ssh_port, username, password FROM network_devices WHERE id = ?'
-    ).get(id) as any;
-  }
 
   private parseNeighborOutput(vendor: VendorType, output: string): NeighborEntry[] {
     const neighbors: NeighborEntry[] = [];
@@ -275,63 +262,62 @@ class LldpDiscoveryService {
 
   private saveNeighborEntries(deviceId: string, neighbors: NeighborEntry[]): void {
     // 先清除旧数据
-    db.prepare('DELETE FROM network_lldp_neighbors WHERE device_id = ?').run(deviceId);
-
-    const insert = db.prepare(`
-      INSERT INTO network_lldp_neighbors (id, device_id, local_interface, remote_device_name, remote_interface, remote_platform, remote_mgmt_ip, protocol)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    networkDeviceRepository.clearLldpNeighbors(deviceId);
 
     for (const n of neighbors) {
-      insert.run(randomUUID(), deviceId, n.localInterface, n.remoteDevice, n.remoteInterface,
-        n.remotePlatform || null, n.remoteMgmtIP || null, n.protocol);
+      networkDeviceRepository.insertLldpNeighbor({
+        id: randomUUID(),
+        device_id: deviceId,
+        local_interface: n.localInterface,
+        remote_device_name: n.remoteDevice,
+        remote_interface: n.remoteInterface,
+        remote_platform: n.remotePlatform || null,
+        remote_mgmt_ip: n.remoteMgmtIP || null,
+        protocol: n.protocol,
+      });
     }
 
     logger.info(`Saved ${neighbors.length} neighbor entries for device ${deviceId}`);
   }
 
-  private async buildTopologyLinks(device: any, neighbors: NeighborEntry[]): Promise<void> {
+  private async buildTopologyLinks(device: NetworkDeviceCredentials, neighbors: NeighborEntry[]): Promise<void> {
     for (const n of neighbors) {
       // 查找远程设备是否已管理
-      const remoteDevice = db.prepare(
-        "SELECT id, name FROM network_devices WHERE name = ? OR ip_address = ?"
-      ).get(n.remoteDevice, n.remoteMgmtIP || '') as { id: string; name: string } | undefined;
+      const remoteDevice = networkDeviceRepository.getByNameOrIp(n.remoteDevice, n.remoteMgmtIP || '');
 
       if (!remoteDevice) {
         // 远程设备未管理，记录为外部设备
-        const existingExt = db.prepare(
-          'SELECT id FROM network_external_devices WHERE name = ?'
-        ).get(n.remoteDevice) as { id: string } | undefined;
+        const existingExt = networkDeviceRepository.getExternalDeviceByName(n.remoteDevice);
 
         if (!existingExt) {
-          db.prepare(`
-            INSERT INTO network_external_devices (id, name, discovered_from_device_id, platform, management_ip, last_seen_at)
-            VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))
-          `).run(randomUUID(), n.remoteDevice, device.id, n.remotePlatform || null, n.remoteMgmtIP || null);
+          networkDeviceRepository.insertExternalDevice({
+            id: randomUUID(),
+            name: n.remoteDevice,
+            discovered_from_device_id: device.id,
+            platform: n.remotePlatform || null,
+            management_ip: n.remoteMgmtIP || null,
+          });
         }
         continue;
       }
 
       // 双向链路：检查是否已存在
-      const existingLink = db.prepare(`
-        SELECT id FROM network_topology_links
-        WHERE (deviceA_id = ? AND deviceB_id = ? AND deviceA_interface = ? AND deviceB_interface = ?)
-           OR (deviceA_id = ? AND deviceB_id = ? AND deviceA_interface = ? AND deviceB_interface = ?)
-      `).get(
-        device.id, remoteDevice.id, n.localInterface, n.remoteInterface,
-        remoteDevice.id, device.id, n.remoteInterface, n.localInterface
-      ) as { id: string } | undefined;
+      const existingLink = networkDeviceRepository.findTopologyLink(
+        device.id, remoteDevice.id, n.localInterface, n.remoteInterface
+      );
 
       if (existingLink) {
-        db.prepare(`
-          UPDATE network_topology_links SET status = 'active', last_seen_at = datetime('now','localtime')
-          WHERE id = ?
-        `).run(existingLink.id);
+        networkDeviceRepository.refreshTopologyLink(existingLink.id);
       } else {
-        db.prepare(`
-          INSERT INTO network_topology_links (id, deviceA_id, deviceA_name, deviceA_interface, deviceB_id, deviceB_name, deviceB_interface, status)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
-        `).run(randomUUID(), device.id, device.name, n.localInterface, remoteDevice.id, remoteDevice.name, n.remoteInterface);
+        networkDeviceRepository.createTopologyLink({
+          id: randomUUID(),
+          deviceA_id: device.id,
+          deviceA_name: device.name,
+          deviceA_interface: n.localInterface,
+          deviceB_id: remoteDevice.id,
+          deviceB_name: remoteDevice.name,
+          deviceB_interface: n.remoteInterface,
+        });
 
         logger.info(`New topology link: ${device.name}:${n.localInterface} <-> ${remoteDevice.name}:${n.remoteInterface}`);
       }
@@ -367,7 +353,7 @@ class LldpDiscoveryService {
 
           stream.on('data', (data: Buffer) => { stdout += data.toString(); });
           stream.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
-          stream.on('close', (code: number | null) => {
+          stream.on('close', (_code: number | null) => {
             done(null, stdout || stderr);
           });
           stream.on('error', (e: any) => done(e));

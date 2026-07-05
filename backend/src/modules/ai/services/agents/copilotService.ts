@@ -1,6 +1,8 @@
+import { serversRepo } from '../../../../repositories';
+// eslint-disable-next-line no-restricted-imports
 import db from '../../../../models/database';
 import { logger } from '../../../../utils/logger';
-import { callDoubaoAPI, callOpenAIAPI, callLocalAIAPI, checkLLMAvailability, generateCompletion } from '../llm/llmService';
+import { generateCompletion } from '../llm/llmService';
 import { randomUUID } from 'crypto';
 
 interface CopilotMessage {
@@ -253,7 +255,7 @@ class CopilotService {
 
     if (lowerInput.includes('服务器') || lowerInput.includes('server')) {
       try {
-        const servers = db.prepare('SELECT * FROM servers LIMIT 20').all() as Array<{
+        const servers = serversRepo.listEnabled() as Array<{
           id: string;
           name: string;
           hostname: string;
@@ -389,7 +391,7 @@ class CopilotService {
   }
 
   private handleServerQuery(): string {
-    const servers = db.prepare('SELECT * FROM servers LIMIT 20').all() as Array<{
+    const servers = serversRepo.listEnabled() as Array<{
       id: string;
       name: string;
       hostname: string;

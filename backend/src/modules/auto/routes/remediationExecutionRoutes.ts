@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { remediationService } from '../services/remediationService';
 import { logger } from '../../../utils/logger';
-import db from '../../../models/database';
+import { remediationAuditRepository } from '../../../repositories';
 import { authenticateToken as authenticate } from '../../../middleware/auth';
 
 const router = Router();
@@ -120,7 +121,7 @@ router.post('/:id/execute', authenticate, async (req: Request, res: Response) =>
 
 router.post('/:id/rollback', authenticate, async (req: Request, res: Response) => {
   try {
-    const audit = db.prepare('SELECT * FROM remediation_audits WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+    const audit = remediationAuditRepository.getById(req.params.id);
     if (!audit) {
       return res.status(404).json({
         success: false,

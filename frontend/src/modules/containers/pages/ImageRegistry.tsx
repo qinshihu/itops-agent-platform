@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from 'react';
-import { Card, Button, Modal, Tag, Space, message, Form, Input, Select, Popconfirm, Row, Col, Table, Typography, Empty } from 'antd';
+import { Card, Button, Modal, Tag, Space as _Space, message, Form, Input, Select, Popconfirm, Row, Col, Table, Typography, Empty } from 'antd';
 import { Plus, Trash2, RefreshCw, Wifi, Package, ExternalLink } from 'lucide-react';
 import api from '../../../lib/api';
 
@@ -45,7 +45,7 @@ export default function ImageRegistry() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/api/registries');
+      const res = await api.get('/registries');
       setRegistries(res.data.data || []);
     } catch { message.error('加载失败'); }
     finally { setLoading(false); }
@@ -57,10 +57,10 @@ export default function ImageRegistry() {
     const values = await form.validateFields();
     try {
       if (editing) {
-        await api.put(`/api/registries/${editing.id}`, values);
+        await api.put(`/registries/${editing.id}`, values);
         message.success('更新成功');
       } else {
-        await api.post('/api/registries', values);
+        await api.post('/registries', values);
         message.success('添加成功');
       }
       setModalOpen(false);
@@ -71,13 +71,13 @@ export default function ImageRegistry() {
   };
 
   const handleDelete = async (id: string) => {
-    try { await api.delete(`/api/registries/${id}`); message.success('删除成功'); fetchData(); } catch { message.error('删除失败'); }
+    try { await api.delete(`/registries/${id}`); message.success('删除成功'); fetchData(); } catch { message.error('删除失败'); }
   };
 
   const handleTestConnection = async (id: string) => {
     setTestingId(id);
     try {
-      await api.post(`/api/registries/${id}/test`);
+      await api.post(`/registries/${id}/test`);
       message.success('连接测试成功');
     } catch { message.error('连接测试失败'); }
     finally { setTestingId(null); }
@@ -88,7 +88,7 @@ export default function ImageRegistry() {
     setDetailVisible(true);
     setImagesLoading(true);
     try {
-      const res = await api.get(`/api/registries/${registry.id}/images`);
+      const res = await api.get(`/registries/${registry.id}/images`);
       setImages(res.data.data || []);
     } catch { message.error('获取镜像列表失败'); setImages([]); }
     finally { setImagesLoading(false); }

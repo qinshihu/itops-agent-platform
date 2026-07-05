@@ -1,0 +1,29 @@
+# CODEOWNERS
+
+# 全局所有者（默认审查人）
+# 所有 PR 都需要 @tance 审查
+* @tance
+
+# 核心基础设施（任何改动都需要审查）
+/core/                        @tance
+/middleware/                   @tance
+/repositories/                 @tance
+/models/migrations/            @tance
+/scripts/                      @tance
+/.github/workflows/            @tance
+/.trae/                        @tance
+
+# 核心业务模块（改动影响全局）
+/src/modules/ai/               @tance
+/src/modules/workflow/         @tance
+/src/modules/mcp/              @tance
+/src/modules/alerts/           @tance
+/src/modules/auto/             @tance
+
+# 前端核心
+/frontend/src/lib/             @tance
+/frontend/src/contexts/        @tance
+/frontend/src/shared/          @tance
+
+# 文档
+*.md                           @tance

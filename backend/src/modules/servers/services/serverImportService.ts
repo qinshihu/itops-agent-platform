@@ -1,6 +1,6 @@
 import { Client } from 'ssh2';
 import { randomUUID } from 'crypto';
-import db from '../../../models/database';
+import { serversRepo } from '../../../repositories/serverRepository';
 import { encrypt } from '../../auth/services/encryptionService';
 
 interface ImportServer {
@@ -64,7 +64,7 @@ class ServerImportService {
     const result: ImportResult = { success: 0, failed: 0, skipped: 0, details: [] };
 
     for (const server of servers) {
-      const existing = db.prepare('SELECT id FROM servers WHERE hostname = ? AND port = ?').get(server.hostname, server.port || 22);
+      const existing = serversRepo.checkDuplicateByHostnameAndPort(server.hostname, server.port || 22);
 
       if (existing) {
         result.skipped++;
@@ -82,25 +82,21 @@ class ServerImportService {
         const encryptedPassword = server.password ? encrypt(server.password) : null;
         const encryptedPrivateKey = server.private_key ? encrypt(server.private_key) : null;
 
-        db.prepare(`
-          INSERT INTO servers (id, name, hostname, port, username, password, private_key, use_ssh_key, description, tags, enabled)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-        `).run(
+        serversRepo.insertImport({
           id,
-          server.name,
-          server.hostname,
-          server.port || 22,
-          server.username,
-          encryptedPassword,
-          encryptedPrivateKey,
-          server.use_ssh_key,
-          server.description || null,
-          server.tags ? JSON.stringify(server.tags) : null
-        );
+          name: server.name,
+          hostname: server.hostname,
+          port: server.port || 22,
+          username: server.username,
+          password: encryptedPassword,
+          private_key: encryptedPrivateKey,
+          use_ssh_key: server.use_ssh_key ? 1 : 0,
+          description: server.description || null,
+          tags: server.tags ? JSON.stringify(server.tags) : null,
+        });
 
         if (server.group_id) {
-          db.prepare('INSERT OR IGNORE INTO server_group_mapping (server_id, group_id) VALUES (?, ?)')
-            .run(id, server.group_id);
+          serversRepo.addGroupMapping(id, server.group_id);
         }
 
         if (testConnection) {
@@ -114,8 +110,8 @@ class ServerImportService {
           });
 
           if (!testResult.success) {
-            db.prepare('DELETE FROM server_group_mapping WHERE server_id = ?').run(id);
-            db.prepare('DELETE FROM servers WHERE id = ?').run(id);
+            serversRepo.removeGroupMappingByServerId(id);
+            serversRepo.delete(id);
             result.failed++;
             result.details.push({
               name: server.name,

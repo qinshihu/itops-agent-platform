@@ -5,7 +5,7 @@ import os from 'os';
 import { logger, LogLevel, LogEntry } from './logger';
 
 describe('Logger', () => {
-  let logStats: any;
+  let logStats: ReturnType<typeof logger.getStats>;
 
   beforeEach(() => {
     logStats = logger.getStats();

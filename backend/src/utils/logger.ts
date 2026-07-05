@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { env } from './env';
 import fs from 'fs';
 import path from 'path';
@@ -17,6 +18,16 @@ export interface LogEntry {
     message: string;
     stack?: string;
   };
+  meta?: unknown;
+  trace?: string;
+  span?: string;
+}
+
+interface LogOptions {
+  requestId?: string;
+  userId?: string;
+  durationMs?: number;
+  error?: unknown;
   meta?: unknown;
   trace?: string;
   span?: string;
@@ -264,15 +275,7 @@ class Logger {
   private format(
     level: LogLevel,
     message: string,
-    options?: {
-      requestId?: string;
-      userId?: string;
-      durationMs?: number;
-      error?: unknown;
-      meta?: unknown;
-      trace?: string;
-      span?: string;
-    }
+    options?: LogOptions
   ): LogEntry {
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
@@ -298,15 +301,7 @@ class Logger {
   private log(
     level: LogLevel,
     message: string,
-    options?: {
-      requestId?: string;
-      userId?: string;
-      durationMs?: number;
-      error?: unknown;
-      meta?: unknown;
-      trace?: string;
-      span?: string;
-    }
+    options?: LogOptions
   ): void {
     if (!this.shouldLog(level)) {
       return;
@@ -414,12 +409,12 @@ class Logger {
 
   child(options: { service?: string; requestId?: string; userId?: string }): Logger {
     const childLogger = new Logger(options.service || this.service);
-    const originalLog = (childLogger as any).log.bind(childLogger);
-    
-    (childLogger as any).log = (
+    const originalLog = childLogger.log.bind(childLogger);
+
+    childLogger.log = (
       level: LogLevel,
       message: string,
-      logOptions?: any
+      logOptions?: LogOptions
     ) => {
       originalLog(level, message, {
         ...logOptions,

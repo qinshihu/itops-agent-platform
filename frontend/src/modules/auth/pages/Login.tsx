@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { User, AlertCircle, Globe, Lock, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '@/lib/errorHandler';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -18,7 +19,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await api.post('/api/auth/login', { username, password });
+      const response = await api.post('/auth/login', { username, password });
 
       if (response.data.success) {
         login(response.data.data.token, response.data.data.user, response.data.data.refreshToken);
@@ -32,8 +33,8 @@ export default function Login() {
       } else {
         setError(response.data.error || response.data.message || '登录失败，请检查用户名和密码');
       }
-    } catch (err: any) {
-      setError(err.response?.data?.error || err.response?.data?.message || '网络错误，请稍后重试');
+    } catch (err: unknown) {
+      setError(getAxiosErrorMessage(err, '网络错误，请稍后重试'));
     } finally {
       setLoading(false);
     }

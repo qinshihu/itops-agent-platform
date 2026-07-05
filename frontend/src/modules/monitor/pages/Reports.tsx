@@ -1,9 +1,56 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FileText, Plus, Download, Clock, Trash2, Edit2, Eye, X } from 'lucide-react';
+import { logger } from '@/lib/logger';
 import api from '../../../lib/api';
 import MarkdownOutput from '../../../shared/components/MarkdownOutput';
+
+interface ReportTemplate {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  content: string;
+  variables: string[];
+  is_preset?: boolean;
+}
+
+interface GeneratedReport {
+  id: string;
+  name: string;
+  type: string;
+  format: string;
+  created_at: string;
+  content: string;
+}
+
+interface ScheduledReport {
+  id: string;
+  name: string;
+  format: string;
+  enabled: boolean;
+  cron_expression: string;
+  last_generated?: string;
+  recipients?: string[];
+}
+
+interface AlertTrendItem {
+  date: string;
+  severity: string;
+  count: number;
+}
+
+interface DiagnosisItem {
+  summary: string;
+  count: number;
+}
+
+interface _ReportAnalytics {
+  analysisStats?: { total?: number; completed?: number; failed?: number };
+  remediationStats?: { total?: number; success_count?: number; failed_count?: number; rolled_back?: number };
+  alertTrends?: AlertTrendItem[];
+  topDiagnoses?: DiagnosisItem[];
+}
 
 export default function Reports() {
   const queryClient = useQueryClient();
@@ -11,7 +58,7 @@ export default function Reports() {
   const [showCreateTemplateModal, setShowCreateTemplateModal] = useState(false);
   const [showGenerateReportModal, setShowGenerateReportModal] = useState(false);
   const [showViewReportModal, setShowViewReportModal] = useState(false);
-  const [selectedReport, setSelectedReport] = useState<any>(null);
+  const [selectedReport, setSelectedReport] = useState<GeneratedReport | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [templateForm, setTemplateForm] = useState({
@@ -25,7 +72,7 @@ export default function Reports() {
   const { data: templates } = useQuery({
     queryKey: ['reportTemplates'],
     queryFn: async () => {
-      const res = await api.get('/api/reports/templates');
+      const res = await api.get('/reports/templates');
       return res.data.data || [];
     }
   });
@@ -33,7 +80,7 @@ export default function Reports() {
   const { data: reports } = useQuery({
     queryKey: ['reports'],
     queryFn: async () => {
-      const res = await api.get('/api/reports');
+      const res = await api.get('/reports');
       return res.data.data || [];
     }
   });
@@ -41,7 +88,7 @@ export default function Reports() {
   const { data: analytics } = useQuery({
     queryKey: ['reportAnalytics'],
     queryFn: async () => {
-      const res = await api.get('/api/reports/analytics');
+      const res = await api.get('/reports/analytics');
       return res.data.data;
     },
     staleTime: 120000,
@@ -50,14 +97,14 @@ export default function Reports() {
   const { data: scheduledReports } = useQuery({
     queryKey: ['scheduledReports'],
     queryFn: async () => {
-      const res = await api.get('/api/reports/scheduled/all');
+      const res = await api.get('/reports/scheduled/all');
       return res.data.data || [];
     }
   });
 
   const createTemplateMutation = useMutation({
-    mutationFn: async (template: any) => {
-      const res = await api.post('/api/reports/templates', template);
+    mutationFn: async (template: Omit<ReportTemplate, 'id'>) => {
+      const res = await api.post('/reports/templates', template);
       return res.data;
     },
     onSuccess: () => {
@@ -75,7 +122,7 @@ export default function Reports() {
 
   const generateReportMutation = useMutation({
     mutationFn: async ({ templateId, variables }: { templateId: string; variables: Record<string, string> }) => {
-      const res = await api.post('/api/reports/generate', { templateId, variables, format: 'markdown' });
+      const res = await api.post('/reports/generate', { templateId, variables, format: 'markdown' });
       return res.data;
     },
     onSuccess: () => {
@@ -87,7 +134,7 @@ export default function Reports() {
 
   const deleteTemplateMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/reports/templates/${id}`);
+      await api.delete(`/reports/templates/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reportTemplates'] });
@@ -95,7 +142,7 @@ export default function Reports() {
   });
 
   const handleGenerateReport = (templateId: string) => {
-    const template = templates?.find((t: any) => t.id === templateId);
+    const template = (templates as ReportTemplate[])?.find((t) => t.id === templateId);
     if (template) {
       const initialData: Record<string, string> = {};
       template.variables?.forEach((v: string) => {
@@ -114,14 +161,14 @@ export default function Reports() {
     });
   };
 
-  const handleViewReport = (report: any) => {
+  const handleViewReport = (report: GeneratedReport) => {
     setSelectedReport(report);
     setShowViewReportModal(true);
   };
 
   const handleDownloadReport = async (reportId: string, format: 'markdown' | 'pdf' | 'word' = 'markdown') => {
     try {
-      const response = await api.get(`/api/reports/${reportId}/export?format=${format}`, { responseType: 'blob' });
+      const response = await api.get(`/reports/${reportId}/export?format=${format}`, { responseType: 'blob' });
       const blob = response.data;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -133,7 +180,7 @@ export default function Reports() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      console.error('Download failed:', error);
+      logger.error('Download failed:', error);
     }
   };
 
@@ -189,7 +236,7 @@ export default function Reports() {
 
         {activeTab === 'templates' && (
           <div className="grid gap-4">
-            {templates?.map((template: any) => (
+            {(templates as ReportTemplate[])?.map((template) => (
               <div key={template.id} className="bg-surface border border-border rounded-lg p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -244,7 +291,7 @@ export default function Reports() {
 
         {activeTab === 'reports' && (
           <div className="grid gap-4">
-            {reports?.map((report: any) => (
+            {(reports as GeneratedReport[])?.map((report) => (
               <div key={report.id} className="bg-surface border border-border rounded-lg p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -292,7 +339,7 @@ export default function Reports() {
 
         {activeTab === 'scheduled' && (
           <div className="grid gap-4">
-            {scheduledReports?.map((report: any) => (
+            {(scheduledReports as ScheduledReport[])?.map((report) => (
               <div key={report.id} className="bg-surface border border-border rounded-lg p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -354,7 +401,7 @@ export default function Reports() {
               <div className="bg-surface border border-border rounded-lg p-4">
                 <h3 className="text-sm font-medium text-text-secondary mb-1">告警趋势（7天）</h3>
                 <p className="text-2xl font-bold text-text-primary">
-                  {analytics?.alertTrends?.reduce?.((s: number, r: any) => s + r.count, 0) ?? '-'}
+                  {analytics?.alertTrends?.reduce?.((s: number, r: AlertTrendItem) => s + r.count, 0) ?? '-'}
                 </p>
                 <div className="text-xs text-text-secondary mt-2">总告警数</div>
               </div>
@@ -372,7 +419,7 @@ export default function Reports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {analytics?.alertTrends?.map((row: any, i: number) => (
+                    {analytics?.alertTrends?.map((row: AlertTrendItem, i: number) => (
                       <tr key={i} className="border-b border-border/50">
                         <td className="py-2 text-text-primary">{row.date}</td>
                         <td className="py-2">
@@ -394,7 +441,7 @@ export default function Reports() {
               <h3 className="text-lg font-semibold text-text-primary mb-4">热点分析摘要</h3>
               <div className="flex flex-wrap gap-2">
                 {analytics?.topDiagnoses?.length ? (
-                  analytics.topDiagnoses.map((d: any, i: number) => (
+                  analytics.topDiagnoses.map((d: DiagnosisItem, i: number) => (
                     <span key={i} className="px-3 py-1 bg-background border border-border rounded-full text-sm text-text-primary">
                       {d.summary} ({d.count}次)
                     </span>
@@ -437,7 +484,7 @@ export default function Reports() {
                     <label className="block text-sm text-text-primary mb-1">报告类型</label>
                     <select
                       value={templateForm.type}
-                      onChange={(e) => setTemplateForm({ ...templateForm, type: e.target.value as any })}
+                      onChange={(e) => setTemplateForm({ ...templateForm, type: e.target.value as 'incident' | 'inspection' | 'change' })}
                       className="w-full bg-background border border-border rounded-lg p-2 text-text-primary"
                     >
                       <option value="incident">故障报告</option>

@@ -17,6 +17,7 @@
     "check:deps:graph": "npx depcruise --config .dependency-cruiser.json backend/src --output-type dot | dot -T svg > deps-graph.svg",
     "check:circular": "npx madge --circular --extensions ts backend/src",
     "precommit": "npm run check:arch",
+    "prepare": "husky",
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
@@ -37,6 +38,19 @@
   "devDependencies": {
     "concurrently": "^8.2.2",
     "dependency-cruiser": "^18.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.8",
     "madge": "^8.0.0"
+  },
+  "dependencies": {
+    "docx": "^9.7.1"
+  },
+  "lint-staged": {
+    "backend/src/**/*.ts": [
+      "node scripts/lint-staged.cjs backend"
+    ],
+    "frontend/src/**/*.{ts,tsx}": [
+      "node scripts/lint-staged.cjs frontend"
+    ]
   }
 }

@@ -2,6 +2,8 @@
  * 敏感信息脱敏工具
  */
 
+import { logger } from './logger';
+
 /**
  * 脱敏 API Key / Token
  */
@@ -93,7 +95,7 @@ export function safeLog(...args: unknown[]): void {
     }
     return arg;
   });
-  console.log(...maskedArgs);
+  logger.info(...maskedArgs);
 }
 
 export function safeError(...args: unknown[]): void {

@@ -8,7 +8,7 @@ import {
   Play,
   RefreshCw,
   Clock,
-  AlertTriangle,
+  AlertTriangle as _AlertTriangle,
   Eye,
   RotateCcw,
   Shield
@@ -24,7 +24,7 @@ export default function RemediationWorkbench() {
   const { data, isLoading } = useQuery({
     queryKey: ['remediation-audits', page],
     queryFn: async () => {
-      const res = await api.get('/api/remediation-audits', {
+      const res = await api.get('/remediation-audits', {
         params: { page: String(page), limit: String(limit) }
       });
       return res.data.data;
@@ -33,7 +33,7 @@ export default function RemediationWorkbench() {
 
   const approveMutation = useMutation({
     mutationFn: async ({ id }: { id: string }) => {
-      await api.post(`/api/remediation-audits/${id}/approve`);
+      await api.post(`/remediation-audits/${id}/approve`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['remediation-audits'] });
@@ -42,7 +42,7 @@ export default function RemediationWorkbench() {
 
   const rejectMutation = useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
-      await api.post(`/api/remediation-audits/${id}/approve`, { action: 'reject', comment: reason });
+      await api.post(`/remediation-audits/${id}/approve`, { action: 'reject', comment: reason });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['remediation-audits'] });
@@ -51,7 +51,7 @@ export default function RemediationWorkbench() {
 
   const executeMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.post(`/api/remediation-audits/${id}/execute`);
+      await api.post(`/remediation-audits/${id}/execute`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['remediation-audits'] });
@@ -60,7 +60,7 @@ export default function RemediationWorkbench() {
 
   const rollbackMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.post(`/api/remediation-audits/${id}/rollback`);
+      await api.post(`/remediation-audits/${id}/rollback`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['remediation-audits'] });
@@ -69,7 +69,7 @@ export default function RemediationWorkbench() {
 
   const verifyMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.post(`/api/remediation-audits/${id}/verify`);
+      await api.post(`/remediation-audits/${id}/verify`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['remediation-audits'] });
@@ -80,7 +80,7 @@ export default function RemediationWorkbench() {
     queryKey: ['remediation-audit-detail', selectedAuditId],
     queryFn: async () => {
       if (!selectedAuditId) return null;
-      const res = await api.get(`/api/remediation-audits/${selectedAuditId}`);
+      const res = await api.get(`/remediation-audits/${selectedAuditId}`);
       return res.data.data;
     },
     enabled: !!selectedAuditId
@@ -162,7 +162,7 @@ export default function RemediationWorkbench() {
   };
 
   const pendingAudits = data?.audits?.filter((a: any) => a.status === 'pending') || [];
-  const recentExecutions = data?.audits?.filter((a: any) => a.status !== 'pending') || [];
+  const _recentExecutions = data?.audits?.filter((a: any) => a.status !== 'pending') || [];
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">

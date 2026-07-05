@@ -1,11 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Test setup: provides an in-memory SQLite database for isolated testing
  * All services that depend on `import db from '../models/database'` will
  * automatically use this in-memory instance when NODE_ENV='test'.
  */
 import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 
@@ -405,7 +404,7 @@ export function seedTestUser(db: Database.Database, overrides: Record<string, an
  * Reset all tables (for use in beforeEach)
  */
 export function resetTestTables(db: Database.Database): void {
-  const tables = db.prepare(`
+  const _tables = db.prepare(`
     SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'
   `).all() as { name: string }[];
 

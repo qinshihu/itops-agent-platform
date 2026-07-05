@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   ExternalLink, Globe, Cog, Plus, Search, Copy, X, CheckCircle2,
   ArrowUp, ArrowDown, AlertTriangle, Wrench, Monitor, Activity, Shield,
@@ -9,8 +10,10 @@ import {
   Play, Zap, Users, Network, Key, FileSearch, FileText, FileCode,
   Image, Upload, XCircle, Edit, Trash2, Settings,
 } from 'lucide-react';
+/* eslint-enable @typescript-eslint/no-unused-vars */
 import clsx from 'clsx';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 import { useToast } from '../../../contexts/ToastContext';
 import { useEscapeKey } from '../../../hooks/useEscapeKey';
 
@@ -34,6 +37,7 @@ interface ToolLink {
   is_external: number;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const iconMap: Record<string, any> = {
   ExternalLink, Globe, Cog, Plus, Search, Edit, Copy,
   Wrench, Monitor, Activity, Shield, FileSearch, BarChart3,
@@ -59,7 +63,7 @@ export default function ToolLinks() {
   const [deleteConfirm, setDeleteConfirm] = useState<ToolLink | null>(null);
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [iconMode, setIconMode] = useState<'lucide' | 'upload'>('lucide');
-  const [uploading, setUploading] = useState(false);
+  const [_uploading, _setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     name: '', url: '', icon: 'ExternalLink', category: '未分类',
@@ -72,7 +76,7 @@ export default function ToolLinks() {
   const { data: groupedData, isLoading } = useQuery({
     queryKey: ['tool-links', 'categories'],
     queryFn: async () => {
-      const res = await api.get('/api/tool-links/categories');
+      const res = await api.get('/tool-links/categories');
       return res.data.data as Record<string, ToolLink[]>;
     },
   });
@@ -80,36 +84,36 @@ export default function ToolLinks() {
   const { data: allTools } = useQuery({
     queryKey: ['tool-links'],
     queryFn: async () => {
-      const res = await api.get('/api/tool-links');
+      const res = await api.get('/tool-links');
       return res.data.data as ToolLink[];
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: typeof formData) => api.post('/api/tool-links', data),
+    mutationFn: (data: typeof formData) => api.post('/tool-links', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tool-links'] });
       queryClient.invalidateQueries({ queryKey: ['tool-links', 'categories'] });
       closeModal();
       toast.success(t('common.success'));
     },
-    onError: (err: any) => toast.error(err?.response?.data?.error || t('common.failed')),
+    onError: (err: unknown) => toast.error(getAxiosErrorMessage(err, t('common.failed'))),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<typeof formData> }) =>
-      api.put(`/api/tool-links/${id}`, data),
+      api.put(`/tool-links/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tool-links'] });
       queryClient.invalidateQueries({ queryKey: ['tool-links', 'categories'] });
       closeModal();
       toast.success(t('common.success'));
     },
-    onError: (err: any) => toast.error(err?.response?.data?.error || t('common.failed')),
+    onError: (err: unknown) => toast.error(getAxiosErrorMessage(err, t('common.failed'))),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/tool-links/${id}`),
+    mutationFn: (id: string) => api.delete(`/tool-links/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tool-links'] });
       queryClient.invalidateQueries({ queryKey: ['tool-links', 'categories'] });
@@ -123,7 +127,7 @@ export default function ToolLinks() {
     mutationFn: ({ id, file }: { id: string; file: File }) => {
       const fd = new FormData();
       fd.append('icon', file);
-      return api.post(`/api/tool-links/${id}/upload-icon`, fd, {
+      return api.post(`/tool-links/${id}/upload-icon`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
     },
@@ -135,7 +139,7 @@ export default function ToolLinks() {
   });
 
   const deleteIconMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/tool-links/${id}/icon`),
+    mutationFn: (id: string) => api.delete(`/tool-links/${id}/icon`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tool-links'] });
       queryClient.invalidateQueries({ queryKey: ['tool-links', 'categories'] });

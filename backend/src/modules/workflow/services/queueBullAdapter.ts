@@ -14,15 +14,23 @@
  */
 
 import type { QueueJob, QueueAdapter, QueueStats } from './queueService';
+import { logger } from '../../../utils/logger';
 
 // 延迟导入，仅在启用 Redis 时加载
-let Bull: any;
-let Queue: any;
-let Worker: any;
-let QueueScheduler: any;
+let Bull: Record<string, unknown> | null = null;
+
+interface BullQueue {
+  client: { ping(): Promise<unknown> };
+  add(name: string, data: unknown, opts?: Record<string, unknown>): Promise<unknown>;
+  getJobCounts(...types: string[]): Promise<Record<string, number>>;
+  getJobCount(): Promise<number>;
+  drain(): Promise<void>;
+  clean(grace: number, limit: number, type: string): Promise<void>;
+  close(): Promise<void>;
+}
 
 export class BullQueueAdapter implements QueueAdapter {
-  private queue: any;
+  private queue: BullQueue | null = null;
   private redisUrl: string;
   private initialized = false;
 
@@ -35,10 +43,11 @@ export class BullQueueAdapter implements QueueAdapter {
 
     try {
       // 动态导入 BullMQ（可选依赖，不强制安装）
-      Bull = require('bullmq');
-      Queue = Bull.Queue;
-      Worker = Bull.Worker;
-      QueueScheduler = Bull.QueueScheduler;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      Bull = require('bullmq') as Record<string, unknown>;
+      const Queue = Bull.Queue as new (...args: unknown[]) => Record<string, unknown>;
+      const _Worker = Bull.Worker;
+      const QueueScheduler = Bull.QueueScheduler as new (...args: unknown[]) => Record<string, unknown>;
 
       this.queue = new Queue('itops-queue', {
         connection: { url: this.redisUrl },
@@ -48,16 +57,16 @@ export class BullQueueAdapter implements QueueAdapter {
           removeOnComplete: { count: 100 },
           removeOnFail: { count: 50 },
         },
-      });
+      }) as unknown as BullQueue;
 
       new QueueScheduler('itops-queue', {
         connection: { url: this.redisUrl },
       });
 
       this.initialized = true;
-      console.log('BullMQ queue initialized (Redis backend)');
+      logger.info('BullMQ queue initialized (Redis backend)');
     } catch (error) {
-      console.error('Failed to initialize BullMQ:', error);
+      logger.error('Failed to initialize BullMQ:', error);
       throw error;
     }
   }
@@ -65,7 +74,7 @@ export class BullQueueAdapter implements QueueAdapter {
   async health(): Promise<boolean> {
     if (!this.initialized) await this.init();
     try {
-      await this.queue.client.ping();
+      await this.queue!.client.ping();
       return true;
     } catch {
       return false;
@@ -74,7 +83,7 @@ export class BullQueueAdapter implements QueueAdapter {
 
   async enqueue(job: QueueJob): Promise<void> {
     if (!this.initialized) await this.init();
-    await this.queue.add(job.type, job.payload, {
+    await this.queue!.add(job.type, job.payload, {
       jobId: job.id,
       priority: job.priority,
       attempts: job.maxRetries,
@@ -87,17 +96,17 @@ export class BullQueueAdapter implements QueueAdapter {
     return null;
   }
 
-  async acknowledge(id: string): Promise<void> {
+  async acknowledge(_id: string): Promise<void> {
     // BullMQ 在 Worker 完成后自动 acknowledge
   }
 
-  async fail(id: string, error: string): Promise<void> {
+  async fail(_id: string, _error: string): Promise<void> {
     // BullMQ 在 Worker 抛出异常时自动 fail
   }
 
   async stats(): Promise<QueueStats> {
     if (!this.initialized) return { pending: 0, running: 0, completed24h: 0, failed24h: 0, stalled: 0, avgLatencyMs: 0 };
-    const counts = await this.queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed');
+    const counts = await this.queue!.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed');
     return {
       pending: (counts.waiting || 0) + (counts.delayed || 0),
       running: counts.active || 0,
@@ -110,19 +119,19 @@ export class BullQueueAdapter implements QueueAdapter {
 
   async size(): Promise<number> {
     if (!this.initialized) return 0;
-    return this.queue.getJobCount();
+    return this.queue!.getJobCount();
   }
 
   async clear(): Promise<void> {
     if (!this.initialized) return;
-    await this.queue.drain();
-    await this.queue.clean(0, 0, 'completed');
-    await this.queue.clean(0, 0, 'failed');
+    await this.queue!.drain();
+    await this.queue!.clean(0, 0, 'completed');
+    await this.queue!.clean(0, 0, 'failed');
   }
 
   async shutdown(): Promise<void> {
     if (!this.initialized) return;
-    await this.queue.close();
+    await this.queue!.close();
     this.initialized = false;
   }
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
 
 // ============================================================
 // 核心模块基础测试（重构后路径更新）
@@ -67,18 +67,24 @@ describe('DC Status Service', () => {
   });
 });
 
-describe('MultiAgent Orchestrator', () => {
-  it('should reject empty agents', async () => {
-    const { MultiAgentOrchestrator } = await import('../modules/ai/services/agents/multiAgentCollaboration');
-    const orchestrator = new MultiAgentOrchestrator('test-task');
-    await expect(orchestrator.collaborate('test query', [], {}))
-      .rejects.toThrow('No valid agents found');
+describe('MultiAgent System (Coordinator + Specialist)', () => {
+  let multiAgent: typeof import('../modules/ai/services/multiAgent');
+
+  beforeAll(async () => {
+    multiAgent = await import('../modules/ai/services/multiAgent');
+  }, 30000);
+
+  it('should initialize and return a coordinator', () => {
+    const coordinator = multiAgent.initializeMultiAgentSystem();
+    expect(coordinator).toBeDefined();
+    expect(coordinator.id).toBeDefined();
+    expect(multiAgent.getCoordinator()).toBe(coordinator);
   });
 
-  it('should have abort controller', async () => {
-    const { MultiAgentOrchestrator } = await import('../modules/ai/services/agents/multiAgentCollaboration');
-    const orchestrator = new MultiAgentOrchestrator('test-task');
-    expect(orchestrator).toBeDefined();
+  it('should register specialists after initialization', () => {
+    multiAgent.initializeMultiAgentSystem();
+    const specialists = multiAgent.specialistRegistry.getAll();
+    expect(specialists.length).toBeGreaterThan(0);
   });
 });
 

@@ -14,7 +14,7 @@ const pageMap: Record<string, string> = {
   Knowledge: '../../modules/ai/pages/Knowledge',
   Scripts: '../../modules/infra/pages/Scripts',
   AuditLogs: '../../modules/infra/pages/AuditLogs',
-  Notifications: '../../modules/infra/pages/Notifications',
+  Notifications: '../../modules/notification/pages/Notifications',
   Reports: '../../modules/monitor/pages/Reports',
   Users: '../../modules/auth/pages/Users',
   Settings: '../../modules/infra/pages/Settings',
@@ -26,7 +26,7 @@ const pageMap: Record<string, string> = {
 
 describe('App Routing', () => {
   it('should lazy load all page components', async () => {
-    for (const [page, path] of Object.entries(pageMap)) {
+    for (const [_page, path] of Object.entries(pageMap)) {
       let mod;
       try {
         mod = await import(path);

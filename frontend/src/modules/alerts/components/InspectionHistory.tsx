@@ -61,7 +61,7 @@ export default function InspectionHistory({ deviceId, deviceName, onClose }: Ins
 
   const { data: history = [], isLoading } = useQuery({
     queryKey: ['inspection-history', deviceId],
-    queryFn: () => api.get(`/api/network-devices/${deviceId}/history`).then(res => res.data.data)
+    queryFn: () => api.get(`/network-devices/${deviceId}/history`).then(res => res.data.data)
   });
 
   const handleViewDetails = (item: HistoryItem) => {

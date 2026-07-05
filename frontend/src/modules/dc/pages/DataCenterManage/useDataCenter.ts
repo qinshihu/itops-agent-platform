@@ -2,7 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { Form, message } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import api from '../../../../lib/api';
-import type { Room, Rack, Slot, PDU, LifecycleRecord, OverviewData } from './types';
+import type { Room, Rack, Slot, PDU, LifecycleRecord, OverviewData, Manufacturer, DeviceTypeInfo, PowerPanel, PowerFeed, Cable, DeviceSummary, DeviceGroup } from './types';
+
+interface ExportData {
+  summary?: { rooms?: number; racks?: number; devices?: number };
+  rooms?: unknown[];
+  racks?: unknown[];
+}
 
 /** 数据中心管理页面的所有状态和 API 操作 */
 export default function useDataCenter() {
@@ -29,7 +35,7 @@ export default function useDataCenter() {
   const [slotForm] = Form.useForm();
 
   // ===== 设备（插槽分配） =====
-  const [availDevices, setAvailDevices] = useState<any[]>([]);
+  const [availDevices, setAvailDevices] = useState<DeviceSummary[]>([]);
 
   // ===== 生命周期 =====
   const [lifecycles, setLifecycles] = useState<LifecycleRecord[]>([]);
@@ -44,7 +50,7 @@ export default function useDataCenter() {
   const [pdusLoading, setPdusLoading] = useState(false);
 
   // ===== 导出/导入 =====
-  const [exportData, setExportData] = useState<any>(null);
+  const [exportData, setExportData] = useState<ExportData | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importText, setImportText] = useState('');
   const [importLoading, setImportLoading] = useState(false);
@@ -56,17 +62,17 @@ export default function useDataCenter() {
   const [moveForm] = Form.useForm();
 
   // ===== 设备分布 =====
-  const [deviceGroups, setDeviceGroups] = useState<any[]>([]);
+  const [deviceGroups, setDeviceGroups] = useState<DeviceGroup[]>([]);
   const [deviceSearch, setDeviceSearch] = useState('');
   const [deviceGroupLoading, setDeviceGroupLoading] = useState(false);
   const [expandedRooms, setExpandedRooms] = useState<Record<string, boolean>>({});
 
   // ===== NetBox 功能：制造商/型号/配电柜/供电线路/线缆 =====
-  const [manufacturers, setManufacturers] = useState<any[]>([]);
-  const [deviceTypes, setDeviceTypes] = useState<any[]>([]);
-  const [powerPanels, setPowerPanels] = useState<any[]>([]);
-  const [powerFeeds, setPowerFeeds] = useState<any[]>([]);
-  const [cables, setCables] = useState<any[]>([]);
+  const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
+  const [deviceTypes, setDeviceTypes] = useState<DeviceTypeInfo[]>([]);
+  const [powerPanels, setPowerPanels] = useState<PowerPanel[]>([]);
+  const [powerFeeds, setPowerFeeds] = useState<PowerFeed[]>([]);
+  const [cables, setCables] = useState<Cable[]>([]);
   const [mfLoading, setMfLoading] = useState(false);
   const [dtLoading, setDtLoading] = useState(false);
   const [ppLoading, setPpLoading] = useState(false);
@@ -75,19 +81,19 @@ export default function useDataCenter() {
 
   // ===== NetBox Modal 状态 =====
   const [mfModalOpen, setMfModalOpen] = useState(false);
-  const [editingMf, setEditingMf] = useState<any>(null);
+  const [editingMf, setEditingMf] = useState<Manufacturer | null>(null);
   const [mfForm] = Form.useForm();
   const [dtModalOpen, setDtModalOpen] = useState(false);
-  const [editingDt, setEditingDt] = useState<any>(null);
+  const [editingDt, setEditingDt] = useState<DeviceTypeInfo | null>(null);
   const [dtForm] = Form.useForm();
   const [ppModalOpen, setPpModalOpen] = useState(false);
-  const [editingPp, setEditingPp] = useState<any>(null);
+  const [editingPp, setEditingPp] = useState<PowerPanel | null>(null);
   const [ppForm] = Form.useForm();
   const [pfModalOpen, setPfModalOpen] = useState(false);
-  const [editingPf, setEditingPf] = useState<any>(null);
+  const [editingPf, setEditingPf] = useState<PowerFeed | null>(null);
   const [pfForm] = Form.useForm();
   const [cableModalOpen, setCableModalOpen] = useState(false);
-  const [editingCable, setEditingCable] = useState<any>(null);
+  const [editingCable, setEditingCable] = useState<Cable | null>(null);
   const [cableForm] = Form.useForm();
 
   // ===== 搜索过滤器 =====
@@ -100,9 +106,9 @@ export default function useDataCenter() {
     setLoading(true);
     try {
       const [rRes, rackRes, ovRes] = await Promise.all([
-        api.get('/api/dc/rooms'),
-        api.get('/api/dc/racks'),
-        api.get('/api/dc/overview'),
+        api.get('/dc/rooms'),
+        api.get('/dc/racks'),
+        api.get('/dc/overview'),
       ]);
       const newRooms = rRes.data.data || [];
       const newRacks = rackRes.data.data || [];
@@ -159,20 +165,20 @@ export default function useDataCenter() {
   };
 
   // ===== 设备导航 =====
-  const navigateToDevice = (device: any) => {
+  const navigateToDevice = (device: DeviceSummary) => {
     const routeMap: Record<string, string> = {
       server: '/servers',
       network_device: '/network-devices',
       vm_host: '/virtual-machines',
     };
-    navigate(routeMap[device.device_type] || '/dc-manage');
+    navigate(routeMap[device.device_type || ''] || '/dc-manage');
   };
 
   // ===== 加载各 Tab 数据 =====
   const loadDeviceGroups = useCallback(async () => {
     setDeviceGroupLoading(true);
     try {
-      const res = await api.get('/api/dc/devices');
+      const res = await api.get('/dc/devices');
       setDeviceGroups(res.data.data?.groups || []);
     } catch {
       setDeviceGroups([]);
@@ -184,9 +190,9 @@ export default function useDataCenter() {
   const loadLifecycles = async () => {
     setLifecyclesLoading(true);
     try {
-      const params: any = { limit: 500 };
+      const params: Record<string, unknown> = { limit: 500 };
       if (lifecycleFilter) params.action = lifecycleFilter;
-      const res = await api.get('/api/dc/lifecycle', { params });
+      const res = await api.get('/dc/lifecycle', { params });
       setLifecycles(res.data.data || []);
     } catch {
       message.error('加载生命周期记录失败');
@@ -198,7 +204,7 @@ export default function useDataCenter() {
   const loadPdus = async () => {
     setPdusLoading(true);
     try {
-      const res = await api.get('/api/dc/pdus');
+      const res = await api.get('/dc/pdus');
       setPdus(res.data.data || []);
     } catch {
       message.error('加载PDU/UPS数据失败');
@@ -209,7 +215,7 @@ export default function useDataCenter() {
 
   const loadExport = async () => {
     try {
-      const res = await api.get('/api/dc/export');
+      const res = await api.get('/dc/export');
       setExportData(res.data.data || null);
     } catch {
       message.error('加载导出数据失败');
@@ -220,7 +226,7 @@ export default function useDataCenter() {
   const loadManufacturers = async () => {
     setMfLoading(true);
     try {
-      const res = await api.get('/api/dc/manufacturers');
+      const res = await api.get('/dc/manufacturers');
       setManufacturers(res.data.data || []);
     } catch { setManufacturers([]); }
     finally { setMfLoading(false); }
@@ -229,7 +235,7 @@ export default function useDataCenter() {
   const loadDeviceTypes = async () => {
     setDtLoading(true);
     try {
-      const res = await api.get('/api/dc/device-types');
+      const res = await api.get('/dc/device-types');
       setDeviceTypes(res.data.data || []);
     } catch { setDeviceTypes([]); }
     finally { setDtLoading(false); }
@@ -238,7 +244,7 @@ export default function useDataCenter() {
   const loadPowerPanels = async () => {
     setPpLoading(true);
     try {
-      const res = await api.get('/api/dc/power-panels');
+      const res = await api.get('/dc/power-panels');
       setPowerPanels(res.data.data || []);
     } catch { setPowerPanels([]); }
     finally { setPpLoading(false); }
@@ -247,7 +253,7 @@ export default function useDataCenter() {
   const loadPowerFeeds = async () => {
     setPfLoading(true);
     try {
-      const res = await api.get('/api/dc/power-feeds');
+      const res = await api.get('/dc/power-feeds');
       setPowerFeeds(res.data.data || []);
     } catch { setPowerFeeds([]); }
     finally { setPfLoading(false); }
@@ -256,7 +262,7 @@ export default function useDataCenter() {
   const loadCables = async () => {
     setCableLoading(true);
     try {
-      const res = await api.get('/api/dc/cables');
+      const res = await api.get('/dc/cables');
       setCables(res.data.data || []);
     } catch { setCables([]); }
     finally { setCableLoading(false); }
@@ -267,10 +273,10 @@ export default function useDataCenter() {
     try {
       const values = await mfForm.validateFields();
       if (editingMf) {
-        await api.put(`/api/dc/manufacturers/${editingMf.id}`, values);
+        await api.put(`/dc/manufacturers/${editingMf.id}`, values);
         message.success('制造商更新成功');
       } else {
-        await api.post('/api/dc/manufacturers', values);
+        await api.post('/dc/manufacturers', values);
         message.success('制造商创建成功');
       }
       setMfModalOpen(false); mfForm.resetFields(); setEditingMf(null);
@@ -278,7 +284,7 @@ export default function useDataCenter() {
     } catch { /* antd 自动提示 */ }
   };
   const deleteManufacturer = async (id: string) => {
-    try { await api.delete(`/api/dc/manufacturers/${id}`); message.success('已删除'); loadManufacturers(); }
+    try { await api.delete(`/dc/manufacturers/${id}`); message.success('已删除'); loadManufacturers(); }
     catch { message.error('删除失败'); }
   };
 
@@ -286,10 +292,10 @@ export default function useDataCenter() {
     try {
       const values = await dtForm.validateFields();
       if (editingDt) {
-        await api.put(`/api/dc/device-types/${editingDt.id}`, values);
+        await api.put(`/dc/device-types/${editingDt.id}`, values);
         message.success('设备型号更新成功');
       } else {
-        await api.post('/api/dc/device-types', values);
+        await api.post('/dc/device-types', values);
         message.success('设备型号创建成功');
       }
       setDtModalOpen(false); dtForm.resetFields(); setEditingDt(null);
@@ -297,7 +303,7 @@ export default function useDataCenter() {
     } catch { /* antd 自动提示 */ }
   };
   const deleteDeviceType = async (id: string) => {
-    try { await api.delete(`/api/dc/device-types/${id}`); message.success('已删除'); loadDeviceTypes(); }
+    try { await api.delete(`/dc/device-types/${id}`); message.success('已删除'); loadDeviceTypes(); }
     catch { message.error('删除失败'); }
   };
 
@@ -305,10 +311,10 @@ export default function useDataCenter() {
     try {
       const values = await ppForm.validateFields();
       if (editingPp) {
-        await api.put(`/api/dc/power-panels/${editingPp.id}`, values);
+        await api.put(`/dc/power-panels/${editingPp.id}`, values);
         message.success('配电柜更新成功');
       } else {
-        await api.post('/api/dc/power-panels', values);
+        await api.post('/dc/power-panels', values);
         message.success('配电柜创建成功');
       }
       setPpModalOpen(false); ppForm.resetFields(); setEditingPp(null);
@@ -316,7 +322,7 @@ export default function useDataCenter() {
     } catch { /* antd 自动提示 */ }
   };
   const deletePowerPanel = async (id: string) => {
-    try { await api.delete(`/api/dc/power-panels/${id}`); message.success('已删除'); loadPowerPanels(); }
+    try { await api.delete(`/dc/power-panels/${id}`); message.success('已删除'); loadPowerPanels(); }
     catch { message.error('删除失败'); }
   };
 
@@ -324,10 +330,10 @@ export default function useDataCenter() {
     try {
       const values = await pfForm.validateFields();
       if (editingPf) {
-        await api.put(`/api/dc/power-feeds/${editingPf.id}`, values);
+        await api.put(`/dc/power-feeds/${editingPf.id}`, values);
         message.success('供电线路更新成功');
       } else {
-        await api.post('/api/dc/power-feeds', values);
+        await api.post('/dc/power-feeds', values);
         message.success('供电线路创建成功');
       }
       setPfModalOpen(false); pfForm.resetFields(); setEditingPf(null);
@@ -335,7 +341,7 @@ export default function useDataCenter() {
     } catch { /* antd 自动提示 */ }
   };
   const deletePowerFeed = async (id: string) => {
-    try { await api.delete(`/api/dc/power-feeds/${id}`); message.success('已删除'); loadPowerFeeds(); }
+    try { await api.delete(`/dc/power-feeds/${id}`); message.success('已删除'); loadPowerFeeds(); }
     catch { message.error('删除失败'); }
   };
 
@@ -343,10 +349,10 @@ export default function useDataCenter() {
     try {
       const values = await cableForm.validateFields();
       if (editingCable) {
-        await api.put(`/api/dc/cables/${editingCable.id}`, values);
+        await api.put(`/dc/cables/${editingCable.id}`, values);
         message.success('线缆更新成功');
       } else {
-        await api.post('/api/dc/cables', values);
+        await api.post('/dc/cables', values);
         message.success('线缆创建成功');
       }
       setCableModalOpen(false); cableForm.resetFields(); setEditingCable(null);
@@ -354,7 +360,7 @@ export default function useDataCenter() {
     } catch { /* antd 自动提示 */ }
   };
   const deleteCable = async (id: string) => {
-    try { await api.delete(`/api/dc/cables/${id}`); message.success('已删除'); loadCables(); }
+    try { await api.delete(`/dc/cables/${id}`); message.success('已删除'); loadCables(); }
     catch { message.error('删除失败'); }
   };
 
@@ -362,7 +368,7 @@ export default function useDataCenter() {
   const selectRack = async (rack: Rack) => {
     setSelectedRack(rack);
     try {
-      const res = await api.get(`/api/dc/slots/${rack.id}`);
+      const res = await api.get(`/dc/slots/${rack.id}`);
       setSlots(res.data.data || []);
     } catch {
       message.error('加载U位数据失败');
@@ -375,10 +381,10 @@ export default function useDataCenter() {
     try {
       const values = await roomForm.validateFields();
       if (editingRoom) {
-        await api.put(`/api/dc/rooms/${editingRoom.id}`, values);
+        await api.put(`/dc/rooms/${editingRoom.id}`, values);
         message.success('机房更新成功');
       } else {
-        await api.post('/api/dc/rooms', values);
+        await api.post('/dc/rooms', values);
         message.success('机房创建成功');
       }
       setRoomModalOpen(false);
@@ -392,7 +398,7 @@ export default function useDataCenter() {
 
   const deleteRoom = async (id: string) => {
     try {
-      await api.delete(`/api/dc/rooms/${id}`);
+      await api.delete(`/dc/rooms/${id}`);
       message.success('机房已删除');
       loadAll();
     } catch {
@@ -405,10 +411,10 @@ export default function useDataCenter() {
     try {
       const values = await rackForm.validateFields();
       if (editingRack) {
-        await api.put(`/api/dc/racks/${editingRack.id}`, values);
+        await api.put(`/dc/racks/${editingRack.id}`, values);
         message.success('机柜更新成功');
       } else {
-        await api.post('/api/dc/racks', values);
+        await api.post('/dc/racks', values);
         message.success('机柜创建成功');
       }
       setRackModalOpen(false);
@@ -422,7 +428,7 @@ export default function useDataCenter() {
 
   const deleteRack = async (id: string) => {
     try {
-      await api.delete(`/api/dc/racks/${id}`);
+      await api.delete(`/dc/racks/${id}`);
       message.success('机柜已删除');
       loadAll();
     } catch {
@@ -433,7 +439,7 @@ export default function useDataCenter() {
   // ===== U 位分配 =====
   const fetchAvailDevices = async () => {
     try {
-      const res = await api.get('/api/dc/devices/unallocated');
+      const res = await api.get('/dc/devices/unallocated');
       setAvailDevices(res.data.data || []);
     } catch {
       setAvailDevices([]);
@@ -443,7 +449,7 @@ export default function useDataCenter() {
   const assignSlot = async () => {
     try {
       const values = await slotForm.validateFields();
-      await api.post('/api/dc/slots', { ...values, rack_id: selectedRack?.id });
+      await api.post('/dc/slots', { ...values, rack_id: selectedRack?.id });
       message.success('设备分配成功');
       setSlotModalOpen(false);
       slotForm.resetFields();
@@ -455,7 +461,7 @@ export default function useDataCenter() {
 
   const removeSlot = async (slotId: string) => {
     try {
-      await api.delete(`/api/dc/slots/${slotId}`);
+      await api.delete(`/dc/slots/${slotId}`);
       message.success('设备已移除');
       if (selectedRack) selectRack(selectedRack);
     } catch {
@@ -487,7 +493,7 @@ export default function useDataCenter() {
     if (!selectedSlot) return;
     try {
       const values = await moveForm.validateFields();
-      await api.put(`/api/dc/slots/${selectedSlot.id}`, values);
+      await api.put(`/dc/slots/${selectedSlot.id}`, values);
       message.success('设备移位成功');
       setMoveModalOpen(false);
       moveForm.resetFields();
@@ -503,10 +509,10 @@ export default function useDataCenter() {
     try {
       const values = await pduForm.validateFields();
       if (editingPdu) {
-        await api.put(`/api/dc/pdus/${editingPdu.id}`, values);
+        await api.put(`/dc/pdus/${editingPdu.id}`, values);
         message.success('PDU/UPS更新成功');
       } else {
-        await api.post('/api/dc/pdus', values);
+        await api.post('/dc/pdus', values);
         message.success('PDU/UPS创建成功');
       }
       setPduModalOpen(false);
@@ -520,7 +526,7 @@ export default function useDataCenter() {
 
   const deletePdu = async (id: string) => {
     try {
-      await api.delete(`/api/dc/pdus/${id}`);
+      await api.delete(`/dc/pdus/${id}`);
       message.success('PDU/UPS已删除');
       loadPdus();
     } catch {
@@ -532,13 +538,13 @@ export default function useDataCenter() {
   const handleImport = async () => {
     setImportLoading(true);
     try {
-      await api.post('/api/dc/import', { data: JSON.parse(importText) });
+      await api.post('/dc/import', { data: JSON.parse(importText) });
       message.success('导入成功');
       setImportModalOpen(false);
       setImportText('');
       loadAll();
-    } catch (e: any) {
-      message.error(e.response?.data?.message || '导入失败，请检查JSON格式');
+    } catch (e) {
+      message.error((e as { response?: { data?: { message?: string } } }).response?.data?.message || '导入失败，请检查JSON格式');
     } finally {
       setImportLoading(false);
     }
@@ -547,7 +553,7 @@ export default function useDataCenter() {
   // ===== 导出 =====
   const handleExportDownload = async () => {
     try {
-      const res = await api.get('/api/dc/export', { responseType: 'blob' });
+      const res = await api.get('/dc/export', { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
       a.href = url;

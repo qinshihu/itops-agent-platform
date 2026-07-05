@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Migration } from './migrationFramework';
 
 const v018WorkflowEngineEnhancement: Migration = {

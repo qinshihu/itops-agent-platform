@@ -1,76 +1,46 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import db from '../../../models/database';
-export { createAuditLog } from '../services/auditService';
+import { auditLogRepository } from '../../../repositories';
+import type { AuditLogListFilters } from '../../../repositories';
 
 const router = Router();
 
 // 获取审计日志列表
 router.get('/', (req: Request, res: Response) => {
   try {
-    const { 
-      page = 1, 
-      limit = 50, 
-      action, 
-      resource_type, 
-      user_id, 
-      start_date, 
-      end_date 
+    const {
+      page = 1,
+      limit = 50,
+      action,
+      resource_type,
+      user_id,
+      start_date,
+      end_date
     } = req.query;
-    
-    let query = 'SELECT * FROM audit_logs WHERE 1=1';
-    const params: unknown[] = [];
-    
-    if (action) {
-      query += ' AND action = ?';
-      params.push(action);
-    }
-    
-    if (resource_type) {
-      query += ' AND resource_type = ?';
-      params.push(resource_type);
-    }
-    
-    if (user_id) {
-      query += ' AND user_id = ?';
-      params.push(user_id);
-    }
-    
-    if (start_date) {
-      query += ' AND created_at >= ?';
-      params.push(start_date);
-    }
-    
-    if (end_date) {
-      query += ' AND created_at <= ?';
-      params.push(end_date);
-    }
-    
-    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit as string));
-    params.push((parseInt(page as string) - 1) * parseInt(limit as string));
-    
-    const logs = db.prepare(query).all(...params);
-    
-    // 获取总数
-    let countQuery = 'SELECT COUNT(*) as total FROM audit_logs WHERE 1=1';
-    const countParams = params.slice(0, -2);
-    
-    if (action) countQuery += ' AND action = ?';
-    if (resource_type) countQuery += ' AND resource_type = ?';
-    if (user_id) countQuery += ' AND user_id = ?';
-    if (start_date) countQuery += ' AND created_at >= ?';
-    if (end_date) countQuery += ' AND created_at <= ?';
-    
-    const countResult = db.prepare(countQuery).get(...countParams) as { total: number };
-    
+
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+
+    const filters: AuditLogListFilters = {
+      limit: limitNum,
+      offset: (pageNum - 1) * limitNum,
+    };
+    if (action) filters.action = action as string;
+    if (resource_type) filters.resource_type = resource_type as string;
+    if (user_id) filters.user_id = user_id as string;
+    if (start_date) filters.start_date = start_date as string;
+    if (end_date) filters.end_date = end_date as string;
+
+    const logs = auditLogRepository.list(filters);
+    const total = auditLogRepository.count(filters);
+
     res.json({
       success: true,
       data: {
         logs,
-        total: countResult.total,
-        page: parseInt(page as string),
-        limit: parseInt(limit as string)
+        total,
+        page: pageNum,
+        limit: limitNum
       }
     });
   } catch (error) {
@@ -85,15 +55,15 @@ router.get('/', (req: Request, res: Response) => {
 router.get('/:id', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const log = db.prepare('SELECT * FROM audit_logs WHERE id = ?').get(id);
-    
+    const log = auditLogRepository.getById(id);
+
     if (!log) {
       return res.status(404).json({
         success: false,
         error: 'Audit log not found'
       });
     }
-    
+
     res.json({
       success: true,
       data: log
@@ -111,40 +81,17 @@ router.get('/:id', (req: Request, res: Response) => {
 // 获取审计统计信息
 router.get('/stats/summary', (_req: Request, res: Response) => {
   try {
-    // 按动作类型统计
-    const actionStats = db.prepare(`
-      SELECT action, COUNT(*) as count 
-      FROM audit_logs 
-      WHERE created_at >= datetime('now', '-7 days')
-      GROUP BY action
-      ORDER BY count DESC
-    `).all();
-    
-    // 按资源类型统计
-    const resourceStats = db.prepare(`
-      SELECT resource_type, COUNT(*) as count 
-      FROM audit_logs 
-      WHERE created_at >= datetime('now', '-7 days')
-      GROUP BY resource_type
-      ORDER BY count DESC
-    `).all();
-    
-    // 今日操作数
-    const todayStats = db.prepare(`
-      SELECT COUNT(*) as count 
-      FROM audit_logs 
-      WHERE created_at >= datetime('now', 'start of day')
-    `).get() as { count: number };
-    
-    // 失败操作数（audit_logs 暂无 status 字段，固定返回 0）
+    const actionStats = auditLogRepository.getActionStats();
+    const resourceStats = auditLogRepository.getResourceStats();
+    const todayCount = auditLogRepository.getTodayCount();
     const failureCount = 0;
-    
+
     res.json({
       success: true,
       data: {
         actionStats,
         resourceStats,
-        todayCount: todayStats.count,
+        todayCount,
         failureCount
       }
     });

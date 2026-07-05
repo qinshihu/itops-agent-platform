@@ -1,10 +1,10 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { db } from '../../../models/database';
 import bcrypt from 'bcryptjs';
 import type { SignOptions } from 'jsonwebtoken';
-import jwt, { JwtPayload } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
+import { userRepository, auditLogRepository } from '../../../repositories';
 import { env } from '../../../utils/env';
 import { tokenBlacklist } from '../services/tokenBlacklist';
 import { logger } from '../../../utils/logger';
@@ -30,7 +30,7 @@ router.post('/login', validateBody(authSchemas.login), async (req: Request, res:
       });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as { id: string; username: string; password: string; role: string; email: string; enabled: number; [key: string]: unknown } | undefined;
+    const user = userRepository.getForAuth(username);
 
     if (!user) {
       return res.status(401).json({
@@ -80,20 +80,17 @@ router.post('/login', validateBody(authSchemas.login), async (req: Request, res:
       { expiresIn: '7d' } as SignOptions
     );
 
-    db.prepare('UPDATE users SET updated_at = datetime(\'now\',\'localtime\') WHERE id = ?').run(user.id);
+    userRepository.touchLogin(user.id);
 
-    db.prepare(`
-      INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, details, ip_address, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
-    `).run(
-      randomUUID(),
-      user.id,
-      'login',
-      'auth',
-      'login',
-      JSON.stringify({ username }),
-      req.ip
-    );
+    auditLogRepository.insert({
+      id: randomUUID(),
+      user_id: user.id,
+      action: 'login',
+      resource_type: 'auth',
+      resource_id: 'login',
+      details: JSON.stringify({ username }),
+      ip_address: req.ip
+    });
 
     res.json({
       success: true,
@@ -106,7 +103,7 @@ router.post('/login', validateBody(authSchemas.login), async (req: Request, res:
           username: user.username,
           email: user.email,
           role: user.role,
-          passwordMustChange: Boolean((user as { password_must_change?: number }).password_must_change)
+          passwordMustChange: Boolean(user.password_must_change)
         }
       }
     });
@@ -147,7 +144,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
       });
     }
 
-    const user = db.prepare('SELECT id, username, email, role, enabled FROM users WHERE id = ?').get(decoded.id) as { id: string; username: string; email: string; role: string; enabled: number } | undefined;
+    const user = userRepository.getForWebSocket(decoded.id);
 
     if (!user?.enabled) {
       return res.status(401).json({
@@ -195,7 +192,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
 // 获取当前用户信息
 router.get('/me', authenticateToken, async (req: Request & { user?: { id: string } }, res: Response) => {
   try {
-    const user = db.prepare('SELECT id, username, email, role, enabled, created_at FROM users WHERE id = ?').get(req.user!.id) as { id: string; username: string; email: string; role: string; enabled: number; created_at: string } | undefined;
+    const user = userRepository.getProfile(req.user!.id);
 
     if (!user) {
       return res.status(401).json({
@@ -222,11 +219,11 @@ router.post('/logout', authenticateToken, async (req: Request, res: Response) =>
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      
+
       // 将token加入黑名单
       tokenBlacklist.addToBlacklist(token, 'user-logout', (req as { user?: { id: string } }).user?.id);
     }
-    
+
     res.json({
       success: true,
       message: '退出成功'
@@ -253,7 +250,7 @@ router.post('/change-password', authenticateToken, async (req: Request & { user?
     }
 
     // 查询用户
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user!.id) as { id: string; username: string; password: string; password_must_change: number } | undefined;
+    const user = userRepository.getById(req.user!.id);
 
     if (!user) {
       return res.status(401).json({
@@ -284,24 +281,21 @@ router.post('/change-password', authenticateToken, async (req: Request & { user?
     const hashedNewPassword = await bcrypt.hash(newPassword, 12);
 
     // 更新密码并清除 password_must_change 标志
-    db.prepare('UPDATE users SET password = ?, password_must_change = 0, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?').run(hashedNewPassword, user.id);
-    
+    userRepository.updatePassword(user.id, hashedNewPassword);
+
     // 清除用户缓存，确保下一次请求获取最新状态
     invalidateUserCache(user.id);
 
     // 记录审计日志
-    db.prepare(`
-      INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, details, ip_address, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
-    `).run(
-      randomUUID(),
-      user.id,
-      'change_password',
-      'auth',
-      'password',
-      JSON.stringify({ username: user.username }),
-      req.ip
-    );
+    auditLogRepository.insert({
+      id: randomUUID(),
+      user_id: user.id,
+      action: 'change_password',
+      resource_type: 'auth',
+      resource_id: 'password',
+      details: JSON.stringify({ username: user.username }),
+      ip_address: req.ip
+    });
 
     logger.info(`用户 ${user.username} 修改了密码`);
 

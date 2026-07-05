@@ -1,4 +1,4 @@
-import { db } from '../database';
+import db from '../database';
 import { randomUUID } from 'crypto';
 import { logger } from '../../utils/logger';
 
@@ -25,7 +25,7 @@ export function initializePresetReportTemplates() {
   ];
 
   const insertTemplate = db.prepare(`
-    INSERT INTO reports (id, name, type, content, variables, is_preset)
+    INSERT OR IGNORE INTO reports (id, name, type, content, variables, is_preset)
     VALUES (?, ?, 'template', ?, ?, ?)
   `);
 

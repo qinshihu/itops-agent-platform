@@ -27,13 +27,14 @@ export default function AiRemediations() {
   const { data: remediations, isLoading } = useQuery({
     queryKey: ['ai-remediations'],
     queryFn: async () => {
-      const res = await api.get('/api/ai-remediations?limit=50');
+      const res = await api.get('/ai-remediations?limit=50');
       return res.data.data as AiRemediation[];
     },
     refetchInterval: 5000, // Auto-refresh every 5 seconds
   });
 
   const getStatusBadge = (status: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const badges: Record<string, { icon: any; color: string; label: string }> = {
       pending: { icon: Clock, color: 'bg-gray-500/10 text-gray-500 border-gray-500/30', label: '待处理' },
       waiting_approval: { icon: Shield, color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30', label: '等待审批' },

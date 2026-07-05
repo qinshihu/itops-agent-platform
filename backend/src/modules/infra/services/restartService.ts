@@ -2,7 +2,16 @@ import type { Server } from 'http';
 import type { Server as SocketIOServer } from 'socket.io';
 import { logger } from '../../../utils/logger';
 import { schedulerService } from '../../workflow/services/schedulerService';
-import { backupService } from './backupService';
+
+const shutdownHooks: Array<() => Promise<void> | void> = [];
+
+/**
+ * 注册优雅关闭时的回调函数。
+ * 用于解除 restartService 对其他服务的直接依赖（避免循环依赖）。
+ */
+export function registerShutdownHook(hook: () => Promise<void> | void): void {
+  shutdownHooks.push(hook);
+}
 
 let httpServer: Server | null = null;
 let ioInstance: SocketIOServer | null = null;
@@ -38,7 +47,15 @@ export async function gracefulRestart(): Promise<void> {
     });
 
     schedulerService.shutdown();
-    backupService.stopAutoBackup();
+
+    // 执行所有注册的关闭钩子（如 backupService.stopAutoBackup）
+    for (const hook of shutdownHooks) {
+      try {
+        await hook();
+      } catch (err) {
+        logger.error('Error in shutdown hook', err as Error);
+      }
+    }
 
     logger.info('🔄 All services stopped, preparing for restart...');
     logger.info('💡 Please restart the application manually or use process manager');

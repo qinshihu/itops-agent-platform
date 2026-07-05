@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from 'react';
-import { X, CheckCircle2, AlertCircle, Loader2, Key, Lock, User, Radio, Shield } from 'lucide-react';
+import { X, CheckCircle2, AlertCircle, Loader2, Key, Lock, User, Radio, Shield as _Shield } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { useEscapeKey } from '../../../hooks/useEscapeKey';
+import { getAxiosErrorMessage } from '@/lib/errorHandler';
+import { logger } from '@/lib/logger';
 
 interface NetworkDevice {
   id?: string;
@@ -98,13 +100,13 @@ export default function AddDeviceModal({ device, onClose, onSuccess }: AddDevice
   // 获取 SNMP 凭证列表
   const { data: snmpCredentials = [] } = useQuery({
     queryKey: ['snmp-credentials'],
-    queryFn: () => api.get('/api/snmp/credentials').then(r => r.data.data || []),
+    queryFn: () => api.get('/snmp/credentials').then(r => r.data.data || []),
   });
 
   // 获取 SSH 凭证列表
   const { data: credentials = [] } = useQuery({
     queryKey: ['ssh-keys'],
-    queryFn: () => api.get('/api/ssh-keys').then(res => res.data.data)
+    queryFn: () => api.get('/ssh-keys').then(res => res.data.data)
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -136,17 +138,17 @@ export default function AddDeviceModal({ device, onClose, onSuccess }: AddDevice
       }
 
       if (isEditing && device?.id) {
-        await api.put(`/api/network-devices/${device.id}`, payload);
+        await api.put(`/network-devices/${device.id}`, payload);
         toast.success('设备更新成功');
       } else {
-        await api.post('/api/network-devices', payload);
+        await api.post('/network-devices', payload);
         toast.success('设备添加成功');
       }
       onSuccess();
-    } catch (error: any) {
-      console.error('Save device error:', error);
-      console.error('Error response:', error.response?.data);
-      toast.error(error.response?.data?.error || error.response?.data?.message || '操作失败');
+    } catch (error: unknown) {
+      logger.error('Save device error:', error);
+      logger.error('Error response:', (error as { response?: { data?: unknown } }).response?.data);
+      toast.error(getAxiosErrorMessage(error, '操作失败'));
     } finally {
       setIsSubmitting(false);
     }
@@ -178,7 +180,7 @@ export default function AddDeviceModal({ device, onClose, onSuccess }: AddDevice
     setTestingConnection(true);
     setTestResult(null);
     try {
-      const response = await api.post('/api/network-devices/test-connection', {
+      const response = await api.post('/network-devices/test-connection', {
         ip_address: formData.ip_address,
         ssh_port: formData.ssh_port,
         username: testUsername,
@@ -189,10 +191,10 @@ export default function AddDeviceModal({ device, onClose, onSuccess }: AddDevice
         success: response.data.success,
         message: response.data.error || response.data.message
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       setTestResult({
         success: false,
-        message: error.response?.data?.error || '连接测试失败'
+        message: getAxiosErrorMessage(error, '连接测试失败')
       });
     } finally {
       setTestingConnection(false);
@@ -207,17 +209,17 @@ export default function AddDeviceModal({ device, onClose, onSuccess }: AddDevice
     setTestingConnection(true);
     setTestResult(null);
     try {
-      const response = await api.post(`/api/snmp/credentials/${formData.snmp_credential_id}/test`, {
+      const response = await api.post(`/snmp/credentials/${formData.snmp_credential_id}/test`, {
         host: formData.ip_address // 凭证 host 为空时用设备 IP 兜底
       });
       setTestResult({
         success: response.data.code === 0,
         message: response.data.message || (response.data.code === 0 ? 'SNMP 连接成功' : 'SNMP 连接失败')
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       setTestResult({
         success: false,
-        message: error.response?.data?.message || 'SNMP 测试失败'
+        message: getAxiosErrorMessage(error, 'SNMP 测试失败')
       });
     } finally {
       setTestingConnection(false);

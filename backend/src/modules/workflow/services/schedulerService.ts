@@ -1,8 +1,10 @@
 import type { Job } from 'node-schedule';
 import { scheduleJob } from 'node-schedule';
 import { randomUUID } from 'crypto';
-import db, { performMaintenance } from '../../../models/database';
 import { logger } from '../../../utils/logger';
+// eslint-disable-next-line no-restricted-imports
+import { performMaintenance } from '../../../models/database';
+import { scheduledTasksRepo, workflowsRepo, tasksRepo, auditLogRepository } from '../../../repositories';
 import { executeWorkflow } from './workflowExecutor';
 import type { WorkflowParsed, WorkflowNode, WorkflowEdge } from '../../../types';
 import { serverInfoCollector } from '../../servers/services/serverInfoCollector';
@@ -31,7 +33,7 @@ class SchedulerService {
     
     try {
       // 从数据库加载所有启用的定时任务
-      const tasks = db.prepare('SELECT * FROM scheduled_tasks WHERE enabled = 1').all() as ScheduledTaskRecord[];
+      const tasks = scheduledTasksRepo.listEnabled() as ScheduledTaskRecord[];
       
       tasks.forEach(task => {
         this.scheduleTask(task);
@@ -132,28 +134,21 @@ class SchedulerService {
         } finally {
           this.runningTasks.delete(task.id);
           // 记录执行结果
-          db.prepare(`
-            UPDATE scheduled_tasks 
-            SET last_run = datetime('now','localtime'), last_status = ? 
-            WHERE id = ?
-          `).run(executionStatus, task.id);
+          scheduledTasksRepo.updateLastRun(task.id, executionStatus);
 
           // 记录审计日志
-          db.prepare(`
-            INSERT INTO audit_logs (id, action, resource_type, resource_id, details, created_at)
-            VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))
-          `).run(
-            randomUUID(),
-            'execute_scheduled_task',
-            'scheduled_task',
-            task.id,
-            JSON.stringify({
+          auditLogRepository.insert({
+            id: randomUUID(),
+            action: 'execute_scheduled_task',
+            resource_type: 'scheduled_task',
+            resource_id: task.id,
+            details: JSON.stringify({
               task_name: task.name,
               workflow_id: task.workflow_id,
               executed_at: new Date().toISOString(),
               status: executionStatus
-            })
-          );
+            }),
+          });
         }
       });
 
@@ -162,11 +157,7 @@ class SchedulerService {
       // 计算下次执行时间
       const nextRun = job.nextInvocation();
       if (nextRun) {
-        db.prepare(`
-          UPDATE scheduled_tasks 
-          SET next_run = ? 
-          WHERE id = ?
-        `).run(nextRun.toISOString(), task.id);
+        scheduledTasksRepo.updateNextRun(task.id, nextRun.toISOString());
       }
 
     } catch (error: unknown) {
@@ -187,17 +178,7 @@ class SchedulerService {
       this.runningWorkflows.add(workflowId);
 
       // 获取工作流信息
-      const workflow = db.prepare('SELECT * FROM workflows WHERE id = ?').get(workflowId) as {
-        id: string;
-        name: string;
-        description: string;
-        nodes: string;
-        edges: string;
-        agent_configs: string;
-        is_template: number;
-        created_at: string;
-        updated_at: string;
-      } | undefined;
+      const workflow = workflowsRepo.getById(workflowId);
       
       if (!workflow) {
         const error = new Error(`Workflow ${workflowId} not found for scheduled task ${task.name}`);
@@ -207,10 +188,7 @@ class SchedulerService {
 
       // 创建任务执行记录
       const taskId = randomUUID();
-      db.prepare(`
-        INSERT INTO tasks (id, workflow_id, name, status, created_at)
-        VALUES (?, ?, ?, 'pending', datetime('now','localtime'))
-      `).run(taskId, workflowId, `定时执行: ${workflow.name}`);
+      tasksRepo.createWithTimestamp({ id: taskId, workflow_id: workflowId, name: `定时执行: ${workflow.name}` });
 
       logger.info(`✅ Created task ${taskId} for workflow ${workflow.name}`);
       
@@ -218,9 +196,9 @@ class SchedulerService {
       const parsedWorkflow: WorkflowParsed = {
         id: workflow.id,
         name: workflow.name,
-        description: workflow.description,
-        nodes: typeof workflow.nodes === 'string' ? JSON.parse(workflow.nodes) as WorkflowNode[] : workflow.nodes,
-        edges: typeof workflow.edges === 'string' ? JSON.parse(workflow.edges) as WorkflowEdge[] : workflow.edges,
+        description: workflow.description ?? undefined,
+        nodes: (typeof workflow.nodes === 'string' ? JSON.parse(workflow.nodes) : (workflow.nodes ?? [])) as WorkflowNode[],
+        edges: (typeof workflow.edges === 'string' ? JSON.parse(workflow.edges) : (workflow.edges ?? [])) as WorkflowEdge[],
         agent_configs: workflow.agent_configs ? (typeof workflow.agent_configs === 'string' ? JSON.parse(workflow.agent_configs) as Record<string, unknown> : workflow.agent_configs) : {},
         is_template: workflow.is_template,
         created_at: workflow.created_at,

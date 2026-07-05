@@ -57,6 +57,7 @@ const queryClient = new QueryClient({
 });
 
 function App() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const resolveElement = (el: any) => {
     if (!el) return null;
     if (isValidElement(el)) return el;

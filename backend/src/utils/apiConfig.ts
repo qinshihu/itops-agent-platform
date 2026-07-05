@@ -1,9 +1,5 @@
-import type Database from 'better-sqlite3';
 import { credentialService } from '../modules/auth/services/credentialService';
-
-interface SettingsRecord {
-  value: string;
-}
+import { settingsRepository } from '../repositories';
 
 /**
  * Map a settings key to the corresponding credential provider name
@@ -40,7 +36,7 @@ function isPlaceholder(value: string): boolean {
 /**
  * Get API key from encrypted credential store first, then env vars, then settings table
  */
-export function getApiKey(database: Database.Database, keyName: string, envName: string): string | undefined {
+export function getApiKey(keyName: string, envName: string): string | undefined {
   // 1. Try credential service first (encrypted storage)
   try {
     const provider = settingKeyToProvider(keyName);
@@ -62,12 +58,9 @@ export function getApiKey(database: Database.Database, keyName: string, envName:
 
   // 3. Fall back to settings table (plaintext, backwards compatibility)
   try {
-    const result = database.prepare('SELECT value FROM settings WHERE key = ?').get(keyName);
-    if (result && (result as SettingsRecord).value) {
-      const value = (result as SettingsRecord).value;
-      if (value && !isPlaceholder(value)) {
-        return value;
-      }
+    const value = settingsRepository.getValue(keyName);
+    if (value && !isPlaceholder(value)) {
+      return value;
     }
   } catch {
     // Ignore database errors
@@ -85,11 +78,11 @@ export function getApiKey(database: Database.Database, keyName: string, envName:
 /**
  * Get model ID (prefer database, fall back to env vars)
  */
-export function getModelId(database: Database.Database, keyName: string, envName: string, defaultValue: string): string {
+export function getModelId(keyName: string, envName: string, defaultValue: string): string {
   try {
-    const result = database.prepare('SELECT value FROM settings WHERE key = ?').get(keyName);
-    if (result && (result as SettingsRecord).value) {
-      return (result as SettingsRecord).value;
+    const value = settingsRepository.getValue(keyName);
+    if (value) {
+      return value;
     }
   } catch {
     // Ignore database errors, fall back to environment variable
@@ -100,11 +93,11 @@ export function getModelId(database: Database.Database, keyName: string, envName
 /**
  * Get API base URL (prefer database, fall back to env vars)
  */
-export function getApiBase(database: Database.Database, keyName: string, envName: string, defaultValue: string): string {
+export function getApiBase(keyName: string, envName: string, defaultValue: string): string {
   try {
-    const result = database.prepare('SELECT value FROM settings WHERE key = ?').get(keyName);
-    if (result && (result as SettingsRecord).value) {
-      return (result as SettingsRecord).value;
+    const value = settingsRepository.getValue(keyName);
+    if (value) {
+      return value;
     }
   } catch {
     // Ignore database errors, fall back to environment variable

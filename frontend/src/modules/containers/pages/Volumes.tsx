@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, Select, Tag, Space, message, Popconfirm, Progress } from 'antd';
-import { Plus, Edit, Trash2, Search, RefreshCw, HardDrive } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, RefreshCw, HardDrive as _HardDrive } from 'lucide-react';
 import api from '../../../lib/api';
 
 interface Volume {
@@ -39,7 +39,7 @@ export default function Volumes() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/api/volumes', { params: { page, pageSize, search } });
+      const res = await api.get('/volumes', { params: { page, pageSize, search } });
       setData(res.data.data || []);
       setTotal(res.data.total || 0);
     } catch { message.error('加载失败'); }
@@ -52,10 +52,10 @@ export default function Volumes() {
     const values = await form.validateFields();
     try {
       if (editing) {
-        await api.put(`/api/volumes/${editing.id}`, values);
+        await api.put(`/volumes/${editing.id}`, values);
         message.success('更新成功');
       } else {
-        await api.post('/api/volumes', values);
+        await api.post('/volumes', values);
         message.success('创建成功');
       }
       setModalOpen(false);
@@ -66,18 +66,18 @@ export default function Volumes() {
   };
 
   const handleDelete = async (id: string) => {
-    try { await api.delete(`/api/volumes/${id}`); message.success('删除成功'); fetchData(); } catch { message.error('删除失败'); }
+    try { await api.delete(`/volumes/${id}`); message.success('删除成功'); fetchData(); } catch { message.error('删除失败'); }
   };
 
   const handleSync = async () => {
     try {
-      const res = await api.post('/api/volumes/sync', { serverId: 'mock-1' });
+      const res = await api.post('/volumes/sync', { serverId: 'mock-1' });
       message.success(`同步完成: ${res.data.data?.synced || 0} 个卷`);
       fetchData();
     } catch { message.error('同步失败'); }
   };
 
-  const openEdit = (record: any) => {
+  const openEdit = (record: Volume) => {
     setEditing(record);
     const vals = { ...record, tags: typeof record.tags === 'string' ? JSON.parse(record.tags || '[]') : (record.tags || []) };
     form.setFieldsValue(vals);

@@ -1,4 +1,4 @@
-import { db } from '../database';
+import db from '../database';
 import { randomUUID } from 'crypto';
 import { logger } from '../../utils/logger';
 
@@ -217,7 +217,7 @@ export function initializePresetKnowledge() {
   ];
 
   const insertKnowledge = db.prepare(`
-    INSERT INTO knowledge_base (id, title, category, content, tags, solutions, related_alerts, usage_count)
+    INSERT OR IGNORE INTO knowledge_base (id, title, category, content, tags, solutions, related_alerts, usage_count)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 

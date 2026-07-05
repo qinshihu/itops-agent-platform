@@ -4,7 +4,7 @@ import { dockerService } from '../services/dockerService';
 import { multiHostDockerService } from '../services/multiHostDockerService';
 import { requireRole } from '../../../middleware/auth';
 import Docker from 'dockerode';
-import { logger } from '../../../utils/logger';
+import { getErrorMessage, getErrorStatusCode } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -57,8 +57,8 @@ router.get('/endpoints', requireRole('admin', 'operator'), (_req: Request, res: 
       ...endpoints,
     ];
     res.json({ success: true, data: all });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -80,13 +80,14 @@ router.post('/endpoints', requireRole('admin', 'operator'), async (req: Request,
       tls_ca: tlsCa, tls_cert: tlsCert, tls_key: tlsKey,
     }).then(result => {
       const status = result.success ? 'active' : 'error';
+      // eslint-disable-next-line @typescript-eslint/no-require-imports, no-restricted-imports
       const db = require('../../../models/database').db;
       db.prepare('UPDATE docker_endpoints SET status=?, error_message=? WHERE id=?')
         .run(status, result.message || null, endpoint.id);
     }).catch(() => {});
     res.json({ success: true, data: endpoint });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -95,8 +96,8 @@ router.put('/endpoints/:id', requireRole('admin', 'operator'), async (req: Reque
   try {
     const endpoint = await multiHostDockerService.updateEndpoint(req.params.id, req.body);
     res.json({ success: true, data: endpoint });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -105,8 +106,8 @@ router.delete('/endpoints/:id', requireRole('admin', 'operator'), async (req: Re
   try {
     await multiHostDockerService.deleteEndpoint(req.params.id);
     res.json({ success: true });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -115,8 +116,8 @@ router.post('/endpoints/test', requireRole('admin', 'operator'), async (req: Req
   try {
     const result = await multiHostDockerService.testConnection(req.body);
     res.json({ success: true, data: result });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -126,8 +127,8 @@ router.post('/endpoints/:id/refresh', requireRole('admin', 'operator'), async (r
     await multiHostDockerService.refreshEndpointInfo(req.params.id);
     const endpoint = multiHostDockerService.getEndpoint(req.params.id);
     res.json({ success: true, data: endpoint });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -145,29 +146,29 @@ router.get('/', async (req: Request, res: Response) => {
     const status = (req.query.status as string || '').toLowerCase();
     const endpointId = req.query.endpointId as string | undefined;
 
-    let allContainers: any[];
+    let allContainers: Array<Record<string, unknown>>;
     if (endpointId && endpointId !== 'local') {
       const d = getDocker(req);
-      allContainers = await d.listContainers({ all: true });
+      allContainers = await d.listContainers({ all: true }) as unknown as Array<Record<string, unknown>>;
     } else {
-      allContainers = await dockerService.listContainers(true);
+      allContainers = await dockerService.listContainers(true) as unknown as Array<Record<string, unknown>>;
     }
 
     let filtered = allContainers;
     if (search) {
-      filtered = filtered.filter((c: any) =>
-        (c.name || c.Names?.[0] || '').toLowerCase().includes(search) ||
-        (c.image || c.Image || '').toLowerCase().includes(search)
+      filtered = filtered.filter((c) =>
+        (String(c.name || (c.Names as string[])?.[0] || '')).toLowerCase().includes(search) ||
+        (String(c.image || c.Image || '')).toLowerCase().includes(search)
       );
     }
     if (status) {
-      filtered = filtered.filter((c: any) => (c.state || c.State || '').toLowerCase() === status);
+      filtered = filtered.filter((c) => (String(c.state || c.State || '')).toLowerCase() === status);
     }
     const total = filtered.length;
     const data = filtered.slice((page - 1) * pageSize, page * pageSize);
     res.json({ success: true, data, total });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -181,8 +182,8 @@ router.get('/hosts', (req: Request, res: Response) => {
       ...endpoints.map(e => ({ id: e.id, name: e.name, host: e.host, status: e.status })),
     ];
     res.json({ success: true, data: all });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -197,8 +198,8 @@ router.get('/logs/:id', async (req: Request, res: Response) => {
     const stream = await container.logs({ stdout: true, stderr: true, tail, timestamps });
     const logs = typeof stream === 'string' ? stream : stream.toString('utf-8');
     res.json({ success: true, data: logs });
-  } catch (err: any) {
-    res.status(err.statusCode || 500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(getErrorStatusCode(err) || 500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -210,8 +211,8 @@ router.get('/stats/:id', async (req: Request, res: Response) => {
     const container = d.getContainer(req.params.id);
     const stats = await container.stats({ stream: false });
     res.json({ success: true, data: stats });
-  } catch (err: any) {
-    res.status(err.statusCode || 500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(getErrorStatusCode(err) || 500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -223,11 +224,11 @@ router.post('/run', requireRole('admin', 'operator'), async (req: Request, res: 
     const { image, name, ports, env, volumes, restartPolicy, memory, cpuShares } = req.body;
     if (!image) return res.status(400).json({ success: false, message: '缺少镜像名称' });
 
-    const config: any = { Image: image, name: name || undefined };
-    const hostConfig: any = {};
+    const config: Record<string, unknown> = { Image: image, name: name || undefined };
+    const hostConfig: Record<string, unknown> = {};
 
     if (ports && Array.isArray(ports)) {
-      const ep: any = {}; const pb: any = {};
+      const ep: Record<string, unknown> = {}; const pb: Record<string, unknown> = {};
       for (const m of ports) {
         const [hp, cp] = String(m).split(':');
         if (cp) { ep[`${cp}/tcp`] = {}; pb[`${cp}/tcp`] = [{ HostPort: hp }]; }
@@ -244,8 +245,8 @@ router.post('/run', requireRole('admin', 'operator'), async (req: Request, res: 
     const container = await d.createContainer(config);
     await container.start();
     res.json({ success: true, data: { id: container.id, name: name || container.id } });
-  } catch (err: any) {
-    res.status(err.statusCode || 500).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(getErrorStatusCode(err) || 500).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -257,8 +258,8 @@ router.get('/:id', async (req: Request, res: Response) => {
     const container = d.getContainer(req.params.id);
     const data = await container.inspect();
     res.json({ success: true, data });
-  } catch (err: any) {
-    res.status(err.statusCode || 404).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    res.status(getErrorStatusCode(err) || 404).json({ success: false, message: getErrorMessage(err) });
   }
 });
 
@@ -269,7 +270,7 @@ router.post('/:id/start', requireRole('admin', 'operator'), async (req: Request,
     const d = getDocker(req);
     await d.getContainer(req.params.id).start();
     res.json({ success: true, message: '容器已启动' });
-  } catch (err: any) { res.status(err.statusCode || 500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(getErrorStatusCode(err) || 500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 // POST /:id/stop
@@ -279,7 +280,7 @@ router.post('/:id/stop', requireRole('admin', 'operator'), async (req: Request, 
     const d = getDocker(req);
     await d.getContainer(req.params.id).stop();
     res.json({ success: true, message: '容器已停止' });
-  } catch (err: any) { res.status(err.statusCode || 500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(getErrorStatusCode(err) || 500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 // POST /:id/restart
@@ -289,7 +290,7 @@ router.post('/:id/restart', requireRole('admin', 'operator'), async (req: Reques
     const d = getDocker(req);
     await d.getContainer(req.params.id).restart();
     res.json({ success: true, message: '容器已重启' });
-  } catch (err: any) { res.status(err.statusCode || 500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(getErrorStatusCode(err) || 500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 // DELETE /:id
@@ -299,7 +300,7 @@ router.delete('/:id', requireRole('admin', 'operator'), async (req: Request, res
     const d = getDocker(req);
     await d.getContainer(req.params.id).remove({ force: true });
     res.json({ success: true });
-  } catch (err: any) { res.status(err.statusCode || 500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(getErrorStatusCode(err) || 500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 // ═══════════════════════════════════════════════════
@@ -312,7 +313,7 @@ router.get('/images/list', async (req: Request, res: Response) => {
     const d = getDocker(req);
     const images = await d.listImages();
     res.json({ success: true, data: images });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 router.post('/images/pull', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
@@ -323,10 +324,10 @@ router.post('/images/pull', requireRole('admin', 'operator'), async (req: Reques
     const d = getDocker(req);
     const stream = await d.pull(image);
     await new Promise<void>((resolve, reject) => {
-      d.modem.followProgress(stream, (err: any) => err ? reject(err) : resolve(), () => {});
+      d.modem.followProgress(stream, (err: Error | null) => err ? reject(err) : resolve(), () => {});
     });
     res.json({ success: true, message: `镜像 ${image} 拉取成功` });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 router.delete('/images/:id', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
@@ -336,7 +337,7 @@ router.delete('/images/:id', requireRole('admin', 'operator'), async (req: Reque
     const image = d.getImage(req.params.id);
     await image.remove({ force: true });
     res.json({ success: true });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 // ═══════════════════════════════════════════════════
@@ -349,7 +350,7 @@ router.get('/volumes/list', async (req: Request, res: Response) => {
     const d = getDocker(req);
     const result = await d.listVolumes();
     res.json({ success: true, data: result.Volumes || [] });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 router.post('/volumes', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
@@ -359,7 +360,7 @@ router.post('/volumes', requireRole('admin', 'operator'), async (req: Request, r
     const d = getDocker(req);
     const vol = await d.createVolume({ Name: name, Driver: driver || 'local', Labels: labels || {} });
     res.json({ success: true, data: vol });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 router.delete('/volumes/:id', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
@@ -369,7 +370,7 @@ router.delete('/volumes/:id', requireRole('admin', 'operator'), async (req: Requ
     const vol = d.getVolume(req.params.id);
     await vol.remove({ force: true });
     res.json({ success: true });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 // ═══════════════════════════════════════════════════
@@ -377,25 +378,25 @@ router.delete('/volumes/:id', requireRole('admin', 'operator'), async (req: Requ
 // ═══════════════════════════════════════════════════
 
 /** 将 Docker API 返回的 PascalCase 字段转为 camelCase，确保前端兼容 */
-function normalizeNetwork(raw: any): any {
+function normalizeNetwork(raw: Docker.NetworkInspectInfo): Record<string, unknown> {
   return {
-    id: raw.Id || raw.id,
-    name: raw.Name || raw.name,
-    driver: raw.Driver || raw.driver,
-    scope: raw.Scope || raw.scope,
-    internal: raw.Internal ?? raw.internal ?? false,
-    attachable: raw.Attachable ?? raw.attachable ?? false,
+    id: raw.Id || (raw as unknown as Record<string, unknown>).id,
+    name: raw.Name || (raw as unknown as Record<string, unknown>).name,
+    driver: raw.Driver || (raw as unknown as Record<string, unknown>).driver,
+    scope: raw.Scope || (raw as unknown as Record<string, unknown>).scope,
+    internal: raw.Internal ?? (raw as unknown as Record<string, unknown>).internal ?? false,
+    attachable: raw.Attachable ?? (raw as unknown as Record<string, unknown>).attachable ?? false,
     ipam: raw.IPAM ? {
-      driver: raw.IPAM.Driver || raw.IPAM.driver,
-      config: (raw.IPAM.Config || raw.IPAM.config || []).map((c: any) => ({
+      driver: raw.IPAM.Driver || (raw.IPAM as unknown as Record<string, unknown>).driver,
+      config: (((raw.IPAM as unknown as Record<string, unknown>).Config || (raw.IPAM as unknown as Record<string, unknown>).config || []) as Array<Record<string, unknown>>).map((c) => ({
         subnet: c.Subnet || c.subnet,
         gateway: c.Gateway || c.gateway,
       })),
-    } : raw.ipam || { driver: '', config: [] },
-    containers: raw.Containers || raw.containers || {},
-    options: raw.Options || raw.options || {},
-    labels: raw.Labels || raw.labels || {},
-    created: raw.Created || raw.created,
+    } : (raw as unknown as Record<string, unknown>).ipam || { driver: '', config: [] },
+    containers: raw.Containers || (raw as unknown as Record<string, unknown>).containers || {},
+    options: raw.Options || (raw as unknown as Record<string, unknown>).options || {},
+    labels: raw.Labels || (raw as unknown as Record<string, unknown>).labels || {},
+    created: raw.Created || (raw as unknown as Record<string, unknown>).created,
   };
 }
 
@@ -405,7 +406,7 @@ router.get('/networks/list', async (req: Request, res: Response) => {
     const d = getDocker(req);
     const networks = await d.listNetworks();
     res.json({ success: true, data: networks.map(normalizeNetwork) });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 router.get('/networks/:id', async (req: Request, res: Response) => {
@@ -415,7 +416,7 @@ router.get('/networks/:id', async (req: Request, res: Response) => {
     const net = d.getNetwork(req.params.id);
     const data = await net.inspect();
     res.json({ success: true, data: normalizeNetwork(data) });
-  } catch (err: any) { res.status(err.statusCode || 404).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(getErrorStatusCode(err) || 404).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 router.post('/networks', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
@@ -423,13 +424,13 @@ router.post('/networks', requireRole('admin', 'operator'), async (req: Request, 
   try {
     const { name, driver, subnet, gateway, internal, attachable } = req.body;
     const d = getDocker(req);
-    const opts: any = { Name: name, Driver: driver || 'bridge', Internal: !!internal, Attachable: !!attachable };
+    const opts: Docker.NetworkCreateOptions = { Name: name, Driver: driver || 'bridge', Internal: !!internal, Attachable: !!attachable };
     if (subnet) {
       opts.IPAM = { Config: [{ Subnet: subnet, Gateway: gateway || undefined }] };
     }
     const net = await d.createNetwork(opts);
     res.json({ success: true, data: net });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 router.delete('/networks/:id', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
@@ -439,7 +440,7 @@ router.delete('/networks/:id', requireRole('admin', 'operator'), async (req: Req
     const net = d.getNetwork(req.params.id);
     await net.remove();
     res.json({ success: true });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 router.post('/networks/:id/connect', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
@@ -449,7 +450,7 @@ router.post('/networks/:id/connect', requireRole('admin', 'operator'), async (re
     const net = d.getNetwork(req.params.id);
     await net.connect({ Container: req.body.containerId });
     res.json({ success: true, message: '容器已连接到网络' });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 router.post('/networks/:id/disconnect', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
@@ -459,7 +460,7 @@ router.post('/networks/:id/disconnect', requireRole('admin', 'operator'), async 
     const net = d.getNetwork(req.params.id);
     await net.disconnect({ Container: req.body.containerId });
     res.json({ success: true, message: '容器已断开网络' });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
 });
 
 export default router;

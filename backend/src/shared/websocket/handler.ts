@@ -3,11 +3,14 @@ import type { Server as SocketIOServer, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { env } from '../../utils/env';
 import { logger } from '../../utils/logger';
-import db from '../../models/database';
+import { userRepository } from '../../repositories/userRepository';
 import { terminalService } from '../../modules/infra/services/terminalService';
 import { containerMonitorService } from '../../modules/containers/services/containerMonitorService';
 import { containerLogService } from '../../modules/containers/services/containerLogService';
 import type { User } from '../../types';
+
+/** WebSocket 消息负载类型 */
+export type WSMessagePayload = Record<string, unknown>;
 
 interface SocketWithUser extends Socket {
   user?: User;
@@ -33,7 +36,7 @@ function authenticateSocket(socket: Socket, next: (err?: Error) => void) {
 
     const decoded = jwt.verify(token, env.JWT_SECRET) as { id: string };
     
-    const user = db.prepare('SELECT id, username, email, role, enabled FROM users WHERE id = ?').get(decoded.id) as User | undefined;
+    const user = userRepository.getForWebSocket(decoded.id) as User | undefined;
     
     if (!user?.enabled) {
       logger.error('❌ WebSocket 认证失败: 用户不存在或已禁用');
@@ -209,27 +212,21 @@ export function setupWebSocket(io: SocketIOServer) {
     });
   });
 
-  process.on('SIGTERM', () => {
-    logger.info('🔌 WebSocket server shutting down (SIGTERM)');
-  });
-
-  process.on('SIGINT', () => {
-    logger.info('🔌 WebSocket server shutting down (SIGINT)');
-  });
+  // Graceful shutdown 由 app.ts 统一管理（调用 io.close() + shutdownAllServices）
 }
 
-export function emitToTask(io: SocketIOServer, taskId: string, event: string, data: Record<string, unknown>) {
+export function emitToTask(io: SocketIOServer, taskId: string, event: string, data: WSMessagePayload) {
   io.to(`task:${taskId}`).emit(event, { taskId, ...data });
 }
 
-export function emitToAlerts(io: SocketIOServer, event: string, data: Record<string, unknown>) {
+export function emitToAlerts(io: SocketIOServer, event: string, data: WSMessagePayload) {
   io.to('alerts').emit(event, data);
 }
 
-export function broadcast(io: SocketIOServer, event: string, data: Record<string, unknown>) {
+export function broadcast(io: SocketIOServer, event: string, data: WSMessagePayload) {
   io.emit(event, data);
 }
 
-export function emitToDC(io: SocketIOServer, event: string, data: Record<string, unknown>) {
+export function emitToDC(io: SocketIOServer, event: string, data: WSMessagePayload) {
   io.to('dc-room').emit(event, data);
 }

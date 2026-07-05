@@ -76,7 +76,7 @@ export default function CostAnalysis() {
   const fetchContainers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get('/api/cost-analysis/containers');
+      const res = await api.get('/cost-analysis/containers');
       setContainers(res.data.data || []);
     } catch { /* ignore */ }
     finally { setLoading(false); }
@@ -85,7 +85,7 @@ export default function CostAnalysis() {
   const fetchVMs = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get('/api/cost-analysis/vms');
+      const res = await api.get('/cost-analysis/vms');
       setVms(res.data.data || []);
     } catch { /* ignore */ }
     finally { setLoading(false); }
@@ -94,7 +94,7 @@ export default function CostAnalysis() {
   const fetchRecommendations = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get('/api/cost-analysis/recommendations');
+      const res = await api.get('/cost-analysis/recommendations');
       setRecommendations(res.data.data || []);
     } catch { /* ignore */ }
     finally { setLoading(false); }
@@ -102,7 +102,7 @@ export default function CostAnalysis() {
 
   const fetchSummary = useCallback(async () => {
     try {
-      const res = await api.get('/api/cost-analysis/summary');
+      const res = await api.get('/cost-analysis/summary');
       setSummary(res.data.data || { containerMonthly: 0, vmMonthly: 0, totalMonthly: 0, idleWaste: 0 });
     } catch { /* ignore */ }
   }, []);

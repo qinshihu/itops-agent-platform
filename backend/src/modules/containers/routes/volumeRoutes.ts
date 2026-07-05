@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { dockerService } from '../services/dockerService';
 import { requireRole } from '../../../middleware/auth';
 import Docker from 'dockerode';
+import { getErrorMessage, getErrorStatusCode } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -40,8 +42,8 @@ router.get('/', async (req: Request, res: Response) => {
     const data = filtered.slice(offset, offset + pageSize);
 
     res.json({ success: true, data, total });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -57,9 +59,9 @@ router.post('/', requireRole('admin', 'operator'), async (req: Request, res: Res
 
     const volume = await dockerService.createVolume(name, driver || 'local', labels || {});
     res.json({ success: true, data: volume });
-  } catch (error: any) {
-    const status = error.statusCode || 500;
-    res.status(status).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    const status = getErrorStatusCode(error) || 500;
+    res.status(status).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -76,9 +78,9 @@ router.post('/prune', requireRole('admin', 'operator'), async (_req: Request, re
         spaceReclaimed: result.SpaceReclaimed || 0,
       },
     });
-  } catch (error: any) {
-    const status = error.statusCode || 500;
-    res.status(status).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    const status = getErrorStatusCode(error) || 500;
+    res.status(status).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -89,9 +91,9 @@ router.get('/:name', async (req: Request, res: Response) => {
   try {
     const volume = await dockerService.getVolume(req.params.name);
     res.json({ success: true, data: volume });
-  } catch (error: any) {
-    const status = error.statusCode || 404;
-    res.status(status).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    const status = getErrorStatusCode(error) || 404;
+    res.status(status).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -100,13 +102,13 @@ router.put('/:name', requireRole('admin', 'operator'), async (req: Request, res:
   if (!checkDockerAvailable(res)) return;
 
   try {
-    const { labels, driver } = req.body;
+    const { labels, _driver } = req.body;
     const volume = await dockerService.getVolume(req.params.name);
     if (!volume) return res.status(404).json({ success: false, message: '卷不存在' });
     // Docker volume 不支持直接修改，仅更新数据库记录
     res.json({ success: true, data: { ...volume, labels: labels || volume.labels } });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -117,8 +119,8 @@ router.post('/sync', requireRole('admin', 'operator'), async (req: Request, res:
   try {
     const allVolumes = await dockerService.listVolumes();
     res.json({ success: true, message: '卷数据同步完成', data: allVolumes });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -129,9 +131,9 @@ router.delete('/:name', requireRole('admin', 'operator'), async (req: Request, r
   try {
     await dockerService.removeVolume(req.params.name);
     res.json({ success: true });
-  } catch (error: any) {
-    const status = error.statusCode || 500;
-    res.status(status).json({ success: false, message: error.message });
+  } catch (error: unknown) {
+    const status = getErrorStatusCode(error) || 500;
+    res.status(status).json({ success: false, message: getErrorMessage(error) });
   }
 });
 

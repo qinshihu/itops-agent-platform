@@ -50,7 +50,7 @@ export default function RemediationPolicyEditor() {
   const { data: workflows } = useQuery({
     queryKey: ['workflows'],
     queryFn: async () => {
-      const res = await api.get('/api/workflows');
+      const res = await api.get('/workflows');
       return res.data.data;
     }
   });
@@ -58,7 +58,7 @@ export default function RemediationPolicyEditor() {
   const { data: policy, isLoading: isLoadingPolicy } = useQuery({
     queryKey: ['remediation-policy', id],
     queryFn: async () => {
-      const res = await api.get(`/api/remediation-policies/${id}`);
+      const res = await api.get(`/remediation-policies/${id}`);
       return res.data.data;
     },
     enabled: !isNew
@@ -97,9 +97,9 @@ export default function RemediationPolicyEditor() {
         alert_tags: formData.alert_tags ? JSON.stringify(formData.alert_tags.split(',').map(s => s.trim()).filter(Boolean)) : null,
       };
       if (isNew) {
-        await api.post('/api/remediation-policies', data);
+        await api.post('/remediation-policies', data);
       } else {
-        await api.put(`/api/remediation-policies/${id}`, data);
+        await api.put(`/remediation-policies/${id}`, data);
       }
     },
     onSuccess: () => {
@@ -110,7 +110,7 @@ export default function RemediationPolicyEditor() {
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      await api.delete(`/api/remediation-policies/${id}`);
+      await api.delete(`/remediation-policies/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['remediation-policies'] });

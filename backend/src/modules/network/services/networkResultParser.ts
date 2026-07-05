@@ -1,5 +1,4 @@
 import type { InspectionType, VendorType } from './vendorAdapter';
-import { logger } from '../../../utils/logger';
 
 export interface ParsedResult {
   type: InspectionType;

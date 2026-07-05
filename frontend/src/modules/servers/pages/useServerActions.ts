@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -6,6 +5,37 @@ import api from '../../../lib/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { useEscapeKey } from '../../../hooks/useEscapeKey';
 import type { Server, ServerGroup, CommandResult, CommandHistoryItem, ComplianceCheck } from './types';
+
+interface ApiError {
+  response?: {
+    data?: {
+      message?: string;
+      error?: string;
+    };
+  };
+  message?: string;
+}
+
+interface ServerImportItem {
+  name: string;
+  hostname: string;
+  port: number;
+  username: string;
+  password?: string;
+  private_key?: string;
+  use_ssh_key: number;
+  description: string;
+  tags: string[];
+  group_id?: string;
+}
+
+export interface ImportResult {
+  success: number;
+  failed: number;
+  skipped?: number;
+  details?: Array<{ name: string; hostname?: string; status?: string; error?: string }>;
+  errors?: string[];
+}
 
 export function useServerActions() {
   const navigate = useNavigate();
@@ -66,7 +96,7 @@ export function useServerActions() {
 
   // Import related
   const [importData, setImportData] = useState('');
-  const [importResult, setImportResult] = useState<any>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
   // Group sidebar
   const [showGroups, setShowGroups] = useState(false);
@@ -137,7 +167,7 @@ export function useServerActions() {
   const { data: agents } = useQuery({
     queryKey: ['agents'],
     queryFn: async () => {
-      const res = await api.get('/api/agents');
+      const res = await api.get('/agents');
       return res.data.data as Array<{ id: string; name: string; enabled: number; category?: string }>;
     },
     enabled: true,
@@ -146,7 +176,7 @@ export function useServerActions() {
   const { data: sshKeys } = useQuery({
     queryKey: ['ssh-keys'],
     queryFn: async () => {
-      const res = await api.get('/api/ssh-keys');
+      const res = await api.get('/ssh-keys');
       return res.data.data as Array<{ id: string; name: string; key_type: string; fingerprint: string | null; usage_count: number }>;
     },
   });
@@ -154,7 +184,7 @@ export function useServerActions() {
   const { data: groupsData } = useQuery({
     queryKey: ['server-groups'],
     queryFn: async () => {
-      const res = await api.get('/api/server-groups/tree');
+      const res = await api.get('/server-groups/tree');
       return res.data.data as ServerGroup[];
     },
   });
@@ -162,7 +192,7 @@ export function useServerActions() {
   const { data: servers, isLoading } = useQuery({
     queryKey: ['servers'],
     queryFn: async () => {
-      const res = await api.get('/api/servers');
+      const res = await api.get('/servers');
       return res.data.data as Server[];
     },
   });
@@ -204,7 +234,7 @@ export function useServerActions() {
   // 根据选中的标签或分组筛选服务器
   const safeServers = Array.isArray(servers) ? servers : [];
   const filteredServers = selectedGroupId
-    ? safeServers.filter((server: Server) => (server.groups || []).some((g: any) => g.id === selectedGroupId))
+    ? safeServers.filter((server: Server) => (server.groups || []).some((g: { id: string; name: string }) => g.id === selectedGroupId))
     : selectedTag
       ? safeServers.filter((server: Server) => (Array.isArray(server.tags) ? server.tags : []).includes(selectedTag))
       : safeServers;
@@ -213,7 +243,7 @@ export function useServerActions() {
     queryKey: ['commandHistory', selectedServer?.id],
     queryFn: async () => {
       if (!selectedServer) return [];
-      const res = await api.get(`/api/servers/${selectedServer.id}/command-history`);
+      const res = await api.get(`/servers/${selectedServer.id}/command-history`);
       return res.data.data as CommandHistoryItem[];
     },
     enabled: !!selectedServer && activeTab === 'command-history',
@@ -223,7 +253,7 @@ export function useServerActions() {
     queryKey: ['complianceHistory', selectedServer?.id],
     queryFn: async () => {
       if (!selectedServer) return [];
-      const res = await api.get(`/api/servers/${selectedServer.id}/compliance-history`);
+      const res = await api.get(`/servers/${selectedServer.id}/compliance-history`);
       return res.data.data as ComplianceCheck[];
     },
     enabled: !!selectedServer && activeTab === 'compliance-history',
@@ -231,13 +261,13 @@ export function useServerActions() {
 
   // ---------- Mutations ----------
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: typeof formData) => {
       const payload = {
         ...data,
         tags: data.tags ? data.tags.split(',').map((t: string) => t.trim()) : [],
         ssh_key_id: selectedSshKeyId || undefined,
       };
-      const res = await api.post('/api/servers', payload);
+      const res = await api.post('/servers', payload);
       return res.data;
     },
     onSuccess: () => {
@@ -246,13 +276,13 @@ export function useServerActions() {
       setIsModalOpen(false);
       toast.success('服务器已添加');
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast.error(err.response?.data?.message || err.response?.data?.error || '添加服务器失败');
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+    mutationFn: async ({ id, data }: { id: string; data: typeof formData }) => {
       const payload: Record<string, unknown> = {
         ...data,
         tags: data.tags ? data.tags.split(',').map((t: string) => t.trim()) : undefined,
@@ -263,7 +293,7 @@ export function useServerActions() {
       } else {
         delete payload.private_key;
       }
-      const res = await api.put(`/api/servers/${id}`, payload);
+      const res = await api.put(`/servers/${id}`, payload);
       return res.data;
     },
     onSuccess: () => {
@@ -273,14 +303,14 @@ export function useServerActions() {
       setSelectedServer(null);
       toast.success('服务器已更新');
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast.error(err.response?.data?.message || err.response?.data?.error || '更新服务器失败');
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/servers/${id}`);
+      await api.delete(`/servers/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['servers'] });
@@ -288,21 +318,21 @@ export function useServerActions() {
       setPendingDeleteServer(null);
       toast.success('服务器已删除');
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast.error(err.response?.data?.message || err.response?.data?.error || '删除服务器失败');
     },
   });
 
   const testConnectionMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.post(`/api/server-commands/${id}/test`);
+      const res = await api.post(`/server-commands/${id}/test`);
       return res.data;
     },
   });
 
   const executeCommandMutation = useMutation({
     mutationFn: async ({ id, command }: { id: string; command: string }) => {
-      const res = await api.post(`/api/server-commands/${id}/exec`, { command });
+      const res = await api.post(`/server-commands/${id}/exec`, { command });
       return res.data;
     },
     onSuccess: () => {
@@ -312,7 +342,7 @@ export function useServerActions() {
 
   const runComplianceMutation = useMutation({
     mutationFn: async ({ id, options }: { id: string; options?: { useAI?: boolean; concurrency?: number } }) => {
-      const res = await api.post(`/api/server-commands/${id}/compliance`, options || {});
+      const res = await api.post(`/server-commands/${id}/compliance`, options || {});
       return res.data;
     },
     onSuccess: () => {
@@ -322,7 +352,7 @@ export function useServerActions() {
 
   const collectInfoMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.post(`/api/server-management/${id}/collect-info`);
+      const res = await api.post(`/server-management/${id}/collect-info`);
       return res.data;
     },
     onSuccess: () => {
@@ -332,7 +362,7 @@ export function useServerActions() {
 
   const collectAllMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/api/server-management/collect-all');
+      const res = await api.post('/server-management/collect-all');
       return res.data;
     },
     onSuccess: () => {
@@ -342,7 +372,7 @@ export function useServerActions() {
 
   const collectMetricsMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.post(`/api/server-management/${id}/collect-metrics`);
+      const res = await api.post(`/server-management/${id}/collect-metrics`);
       return res.data;
     },
     onSuccess: () => {
@@ -352,7 +382,7 @@ export function useServerActions() {
 
   const collectAllMetricsMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/api/server-management/collect-all-metrics');
+      const res = await api.post('/server-management/collect-all-metrics');
       return res.data;
     },
     onSuccess: () => {
@@ -361,15 +391,15 @@ export function useServerActions() {
   });
 
   const importServersMutation = useMutation({
-    mutationFn: async (data: { servers: any[]; test_connection: boolean }) => {
-      const res = await api.post('/api/server-management/import', data);
+    mutationFn: async (data: { servers: ServerImportItem[]; test_connection: boolean }) => {
+      const res = await api.post('/server-management/import', data);
       return res.data;
     },
   });
 
   const createGroupMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await api.post('/api/server-groups', data);
+    mutationFn: async (data: typeof groupFormData) => {
+      const res = await api.post('/server-groups', data);
       return res.data;
     },
     onSuccess: () => {
@@ -382,8 +412,8 @@ export function useServerActions() {
   });
 
   const updateGroupMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const res = await api.put(`/api/server-groups/${id}`, data);
+    mutationFn: async ({ id, data }: { id: string; data: typeof groupFormData }) => {
+      const res = await api.put(`/server-groups/${id}`, data);
       return res.data;
     },
     onSuccess: () => {
@@ -426,7 +456,7 @@ export function useServerActions() {
 
   const handleEdit = (server: Server) => {
     setSelectedServer(server);
-    const serverSshKeyId = (server as any).ssh_key_id || '';
+    const serverSshKeyId = server.ssh_key_id || '';
     setSelectedSshKeyId(serverSshKeyId);
 
     if (serverSshKeyId && sshKeys) {
@@ -448,8 +478,8 @@ export function useServerActions() {
       use_ssh_key: !!server.use_ssh_key,
       description: server.description || '',
       tags: server.tags ? server.tags.join(', ') : '',
-      os_type: (server as any).os_type || 'linux',
-      vnc_port: (server as any).vnc_port || 5900,
+      os_type: (server.os_type === 'windows' ? 'windows' : 'linux'),
+      vnc_port: server.vnc_port || 5900,
       vnc_password: '',
     });
     setIsModalOpen(true);
@@ -547,7 +577,7 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
 
 用户需求：${aiPrompt}`;
 
-      const res = await api.post(`/api/agents/${enabledAgent.id}/test`, {
+      const res = await api.post(`/agents/${enabledAgent.id}/test`, {
         input: userInput,
         serverIds: [aiCommandServer.id],
       });
@@ -567,8 +597,8 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
         setAiGeneratedCommand(output);
         setAiCommandExplanation('AI 生成的命令，请确认后执行');
       }
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || '未知错误';
+    } catch (err) {
+      const errorMsg = (err as ApiError).response?.data?.error || (err as ApiError).response?.data?.message || (err as ApiError).message || '未知错误';
       setAiGenerationError(`生成失败：${errorMsg}`);
     } finally {
       setIsAiGenerating(false);
@@ -682,11 +712,11 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
         return;
       }
 
-      const result = await importServersMutation.mutateAsync({ servers, test_connection: true });
+      const result = await importServersMutation.mutateAsync({ servers: servers as ServerImportItem[], test_connection: true });
       setImportResult(result.data);
       toast.success(`导入成功: ${result.data.success} 成功, ${result.data.failed} 失败`);
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || '导入失败');
+    } catch (err) {
+      toast.error((err as ApiError).response?.data?.error || '导入失败');
     }
   };
 

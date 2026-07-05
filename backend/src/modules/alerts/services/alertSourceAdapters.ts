@@ -1,5 +1,76 @@
-import { logger } from '../../../utils/logger';
 import { normalizeSeverityLabel } from '../../../utils/alertSeverity';
+
+// ---- 告警源 Payload 类型 ----
+
+/** 通用 Webhook 请求体，涵盖 Prometheus / Grafana / Zabbix / Aliyun / Tencent 等告警源的所有已知字段 */
+interface WebhookBody {
+  // 通用 / 顶层
+  alerts?: unknown[];
+  status?: string;
+  receiver?: unknown;
+  signature?: string;
+  Signature?: string;
+  // Prometheus 专属
+  version?: string;
+  groupKey?: string;
+  // Grafana 专属
+  state?: string;
+  ruleName?: string;
+  ruleUID?: string;
+  message?: string;
+  evalMatches?: unknown[];
+  imageUrl?: string;
+  folder?: string;
+  orgId?: string;
+  // Zabbix 专属
+  TRIGGER?: WebhookBody;
+  HOST?: WebhookBody;
+  EVENT?: WebhookBody;
+  ITEM?: WebhookBody;
+  event?: WebhookBody;
+  eventid?: string;
+  triggerid?: string;
+  host?: string;
+  host_ip?: string;
+  trigger?: string;
+  severity?: string | number;
+  item?: string | WebhookBody;
+  value?: string;
+  clock?: string;
+  // Aliyun 专属
+  product?: string;
+  Product?: string;
+  productName?: string;
+  name?: string;
+  alertName?: string;
+  expression?: string;
+  triggerExpression?: string;
+  level?: string;
+  alertLevel?: string;
+  instanceId?: string;
+  resourceId?: string;
+  dimensions?: unknown;
+  resourceDimensions?: unknown;
+  description?: string;
+  content?: string;
+  alertId?: string;
+  ruleId?: string;
+  // Tencent 专属
+  alarmName?: string;
+  alarmType?: string;
+  policyName?: string;
+  policyId?: string;
+  alarmContent?: string;
+  detail?: string;
+  // Prometheus / Grafana 共用（单个 alert 子对象）
+  labels?: Record<string, string>;
+  annotations?: Record<string, string>;
+  startsAt?: string;
+  endsAt?: string;
+  generatorURL?: string;
+  // 通用兜底
+  [key: string]: unknown;
+}
 
 export interface NormalizedAlert {
   external_id?: string;
@@ -8,7 +79,7 @@ export interface NormalizedAlert {
   raw_severity?: string;
   title: string;
   content: string;
-  metadata: Record<string, unknown>;
+  metadata: WebhookBody;
   status: 'firing' | 'resolved';
   host?: string;
   labels?: Record<string, string>;
@@ -31,12 +102,12 @@ export function adaptPrometheus(payload: unknown): AlertAdapterResult {
     return { alerts, errors };
   }
 
-  const body = payload as { alerts?: unknown[]; status?: string; version?: string; groupKey?: string };
+  const body = payload as WebhookBody;
   const rawAlerts = Array.isArray(body.alerts) ? body.alerts : [];
 
   for (const raw of rawAlerts) {
     try {
-      const alert = raw as Record<string, unknown>;
+      const alert = raw as WebhookBody;
       const labels = (alert.labels || {}) as Record<string, string>;
       const annotations = (alert.annotations || {}) as Record<string, string>;
       const status = (alert.status as string) || 'firing';
@@ -51,7 +122,7 @@ export function adaptPrometheus(payload: unknown): AlertAdapterResult {
         metadata: {
           prometheus_version: body.version,
           group_key: body.groupKey,
-          receiver: (body as Record<string, unknown>).receiver,
+          receiver: body.receiver,
           labels,
           annotations,
           starts_at: alert.startsAt,
@@ -82,13 +153,13 @@ export function adaptZabbix(payload: unknown): AlertAdapterResult {
     return { alerts, errors };
   }
 
-  const body = payload as Record<string, unknown>;
+  const body = payload as WebhookBody;
 
   try {
-    const triggerObj = body.TRIGGER as Record<string, unknown> | undefined;
-    const hostObj = body.HOST as Record<string, unknown> | undefined;
-    const eventObj = body.event as Record<string, unknown> | undefined;
-    const itemObj = body.ITEM as Record<string, unknown> | undefined;
+    const triggerObj = body.TRIGGER;
+    const hostObj = body.HOST;
+    const eventObj = body.event;
+    const itemObj = body.ITEM;
 
     const trigger = (triggerObj?.NAME as string) || (body.trigger as string) || (eventObj?.name as string);
     if (!trigger) {
@@ -96,18 +167,18 @@ export function adaptZabbix(payload: unknown): AlertAdapterResult {
       return { alerts, errors };
     }
 
-    const host = (hostObj?.NAME as string) || (body.host as string) || ((eventObj?.host as Record<string, unknown>)?.name as string) || 'Unknown';
+    const host = (hostObj?.NAME as string) || (body.host as string) || ((eventObj?.host as unknown as WebhookBody)?.name as string) || 'Unknown';
     const hostIp = (hostObj?.IP as string) || (body.host_ip as string) || '';
     const rawSeverity = (triggerObj?.SEVERITY as string) || (triggerObj?.PRIORITY as string | number) || (body.severity as string | number) || ((eventObj?.severity as string));
     const severity = normalizeSeverityLabel(rawSeverity);
-    const eventId = (body.EVENT as Record<string, unknown>)?.ID || (eventObj?.id as string) || (body.eventid as string);
+    const eventId = body.EVENT?.ID || (eventObj?.id as string) || (body.eventid as string);
     const triggerId = (triggerObj?.ID as string) || (body.triggerid as string);
     const item = (itemObj?.NAME as string) || (body.item as string) || '';
-    const itemValue = (itemObj?.VALUE as string) || ((body.item as Record<string, unknown>)?.value as string) || (body.value as string) || '';
-    const eventTime = ((body.EVENT as Record<string, unknown>)?.TIME as string) || (eventObj?.clock as string) || (body.clock as string);
-    const eventDate = ((body.EVENT as Record<string, unknown>)?.DATE as string) || (eventObj?.date as string);
+    const itemValue = (itemObj?.VALUE as string) || ((body.item as WebhookBody)?.value as string) || (body.value as string) || '';
+    const eventTime = (body.EVENT?.TIME as string) || (eventObj?.clock as string) || (body.clock as string);
+    const eventDate = (body.EVENT?.DATE as string) || (eventObj?.date as string);
 
-    const eventValue = (body.EVENT as Record<string, unknown>)?.VALUE || (eventObj?.value as string) || (body.value as string);
+    const eventValue = body.EVENT?.VALUE || (eventObj?.value as string) || (body.value as string);
     const isResolved = eventValue === '0';
     const content = [
       `Host: ${host}`,
@@ -123,11 +194,11 @@ export function adaptZabbix(payload: unknown): AlertAdapterResult {
       external_id: eventId ? `zabbix-${eventId}` : undefined,
       source: 'zabbix',
       severity,
-      raw_severity: rawSeverity == null ? undefined : String(rawSeverity),
+      raw_severity: (rawSeverity === null || rawSeverity === undefined) ? undefined : String(rawSeverity),
       title: `[${severity.toUpperCase()}] ${trigger}`,
       content,
       metadata: {
-        raw_severity: rawSeverity == null ? null : String(rawSeverity),
+        raw_severity: (rawSeverity === null || rawSeverity === undefined) ? null : String(rawSeverity),
         zabbix_host: host,
         zabbix_host_ip: hostIp,
         zabbix_trigger_id: triggerId,
@@ -156,12 +227,12 @@ export function adaptGrafana(payload: unknown): AlertAdapterResult {
     return { alerts, errors };
   }
 
-  const body = payload as Record<string, unknown>;
+  const body = payload as WebhookBody;
   const rawAlerts = Array.isArray(body.alerts) ? body.alerts : [body];
 
   for (const raw of rawAlerts) {
     try {
-      const alert = raw as Record<string, unknown>;
+      const alert = raw as WebhookBody;
       const status = (alert.state || alert.status) as string;
       const isResolved = status === 'Normal' || status === 'OK' || status === 'Resolved';
 
@@ -175,7 +246,7 @@ export function adaptGrafana(payload: unknown): AlertAdapterResult {
         external_id: alert.ruleUID ? `grafana-${alert.ruleUID}` : undefined,
         source: 'grafana',
         severity: normalizeSeverityLabel(rawSeverity),
-        raw_severity: rawSeverity == null ? undefined : String(rawSeverity),
+        raw_severity: (rawSeverity === null || rawSeverity === undefined) ? undefined : String(rawSeverity),
         title,
         content,
         metadata: {
@@ -211,7 +282,7 @@ export function adaptAliyun(payload: unknown): AlertAdapterResult {
     return { alerts, errors };
   }
 
-  const body = payload as Record<string, unknown>;
+  const body = payload as WebhookBody;
 
   try {
     const product = (body.product || body.Product || body.productName) as string || 'Aliyun';
@@ -238,7 +309,7 @@ export function adaptAliyun(payload: unknown): AlertAdapterResult {
       external_id: body.alertId || body.ruleId ? `aliyun-${body.alertId || body.ruleId}` : undefined,
       source: 'aliyun',
       severity: normalizeSeverityLabel(level),
-      raw_severity: level == null ? undefined : String(level),
+      raw_severity: (level === null || level === undefined) ? undefined : String(level),
       title: `[${product}] ${name}`,
       content: contentParts,
       metadata: {
@@ -268,7 +339,7 @@ export function adaptTencentCloud(payload: unknown): AlertAdapterResult {
     return { alerts, errors };
   }
 
-  const body = payload as Record<string, unknown>;
+  const body = payload as WebhookBody;
 
   try {
     const alarmName = (body.alarmName || body.policyName || body.ruleName) as string || 'Tencent Cloud Alert';
@@ -294,7 +365,7 @@ export function adaptTencentCloud(payload: unknown): AlertAdapterResult {
       external_id: policyId ? `tencent-${policyId}` : undefined,
       source: 'tencent',
       severity: normalizeSeverityLabel(level),
-      raw_severity: level == null ? undefined : String(level),
+      raw_severity: (level === null || level === undefined) ? undefined : String(level),
       title: `[${alarmType}] ${alarmName}`,
       content: contentParts,
       metadata: {
@@ -316,12 +387,12 @@ export function adaptTencentCloud(payload: unknown): AlertAdapterResult {
 
 export function detectSourceType(payload: unknown): string {
   if (!payload || typeof payload !== 'object') return 'unknown';
-  const body = payload as Record<string, unknown>;
+  const body = payload as WebhookBody;
 
   if (body.alerts && Array.isArray(body.alerts)) {
     const firstAlert = body.alerts[0];
     if (firstAlert && typeof firstAlert === 'object') {
-      const alert = firstAlert as Record<string, unknown>;
+      const alert = firstAlert as WebhookBody;
       if (alert.labels || alert.annotations || alert.startsAt) return 'prometheus';
       if (alert.state || alert.ruleName || alert.ruleUID) return 'grafana';
     }

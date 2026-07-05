@@ -6,9 +6,10 @@ import { Bell, Database, Shield, Loader2, CheckCircle2, AlertCircle, BookOpen, U
 import clsx from 'clsx';
 import { useTranslation } from 'react-i18next';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 import ModelSettings from './settings/ModelSettings';
-import NotificationSettings from './settings/NotificationSettings';
-import BackupSettings from './settings/BackupSettings';
+import NotificationSettings from '../../notification/pages/NotificationSettings';
+import BackupSettings from '../../backup/pages/BackupSettings';
 import SecuritySettings from './settings/SecuritySettings';
 import GeneralSettings from './settings/GeneralSettings';
 
@@ -48,7 +49,7 @@ export default function Settings() {
   useQuery({
     queryKey: ['qanythingConfig'],
     queryFn: async () => {
-      const res = await api.get('/api/knowledge/qanything/config');
+      const res = await api.get('/knowledge/qanything/config');
       if (res.data.data) {
         const backendData = res.data.data;
         if (backendData.apiKey?.includes('****')) {
@@ -61,8 +62,8 @@ export default function Settings() {
   });
 
   const qanythingConfigMutation = useMutation({
-    mutationFn: async (config: any) => {
-      const res = await api.post('/api/knowledge/qanything/config', config);
+    mutationFn: async (config: Record<string, unknown>) => {
+      const res = await api.post('/knowledge/qanything/config', config);
       return res.data;
     },
     onMutate: () => {
@@ -76,9 +77,9 @@ export default function Settings() {
       setTimeout(() => setQanythingSaveStatus('idle'), 2000);
       setTimeout(() => setQanythingTestStatus('idle'), 3000);
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       setQanythingSaveStatus('error');
-      setQanythingTestMessage(err.response?.data?.error || '保存失败');
+      setQanythingTestMessage(getAxiosErrorMessage(err, '保存失败'));
       setQanythingTestStatus('error');
       setTimeout(() => setQanythingSaveStatus('idle'), 3000);
       setTimeout(() => setQanythingTestStatus('idle'), 5000);
@@ -87,7 +88,7 @@ export default function Settings() {
 
   const qanythingTestMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/api/knowledge/qanything/test');
+      const res = await api.post('/knowledge/qanything/test');
       return res.data;
     },
     onMutate: () => {
@@ -98,9 +99,9 @@ export default function Settings() {
       setQanythingTestStatus(data.success ? 'success' : 'error');
       setQanythingTestMessage(data.message);
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       setQanythingTestStatus('error');
-      setQanythingTestMessage(err.response?.data?.error || err.response?.data?.message || '连接失败');
+      setQanythingTestMessage(getAxiosErrorMessage(err, '连接失败'));
     },
   });
 
@@ -110,7 +111,7 @@ export default function Settings() {
       files.forEach((file) => {
         formData.append('files', file);
       });
-      const res = await api.post('/api/knowledge/qanything/upload-batch', formData, {
+      const res = await api.post('/knowledge/qanything/upload-batch', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       return res.data;
@@ -125,9 +126,9 @@ export default function Settings() {
       setUploadFiles([]);
       setTimeout(() => setUploadStatus('idle'), 5000);
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       setUploadStatus('error');
-      setUploadMessage(err.response?.data?.error || '上传失败');
+      setUploadMessage(getAxiosErrorMessage(err, '上传失败'));
       setTimeout(() => setUploadStatus('idle'), 5000);
     },
   });

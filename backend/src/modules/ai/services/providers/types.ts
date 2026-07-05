@@ -2,13 +2,26 @@
  * Provider 类型定义
  */
 
+// ── 语义化类型别名 ──
+
+/** Provider 初始化配置 */
+export type ProviderInitConfig = Record<string, unknown>;
+/** 方法示例输入 */
+export type MethodExampleInputs = Record<string, unknown>;
+/** 方法示例输出 */
+export type MethodExampleOutputs = Record<string, unknown>;
+/** Provider 设置项 */
+export type ProviderSettings = Record<string, unknown>;
+/** 执行结果元数据 */
+export type ProviderMetadata = Record<string, unknown>;
+
 // Provider 接口
 export interface Provider {
   name: string;
   description: string;
   version: string;
   methods: ProviderMethod[];
-  initialize?(config: Record<string, unknown>): Promise<void>;
+  initialize?(config: ProviderInitConfig): Promise<void>;
 }
 
 // Provider 方法定义
@@ -33,14 +46,14 @@ export interface MethodParameter {
 export interface MethodExample {
   title: string;
   description?: string;
-  inputs: Record<string, unknown>;
-  outputs?: Record<string, unknown>;
+  inputs: MethodExampleInputs;
+  outputs?: MethodExampleOutputs;
 }
 
 // Provider 配置
 export interface ProviderConfig {
   enabled: boolean;
-  config: Record<string, unknown>;
+  config: ProviderSettings;
 }
 
 // Provider 执行结果
@@ -48,5 +61,5 @@ export interface ProviderResult<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: ProviderMetadata;
 }

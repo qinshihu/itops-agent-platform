@@ -10,7 +10,7 @@ export interface WorkflowNodeTypeMeta {
   description: string;
   category: 'core' | 'execution' | 'verification' | 'decision' | 'knowledge';
   icon: string;
-  defaultConfig: Record<string, unknown>;
+  defaultConfig: Record<string, string | number | boolean | string[] | object[] | object>;
 }
 
 const NODE_REGISTRY: WorkflowNodeTypeMeta[] = [

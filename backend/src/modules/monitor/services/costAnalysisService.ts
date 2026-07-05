@@ -1,6 +1,6 @@
 import { logger } from '../../../utils/logger';
 import { dockerService } from '../../containers/services/dockerService';
-import { db } from '../../../models/database';
+import { virtualMachineRepository } from '../../../repositories';
 
 interface CostItem {
   id: string;
@@ -51,9 +51,11 @@ class CostAnalysisService {
       for (const c of containers) {
         try {
           const info = await dockerService.getContainer(c.id);
-          const cpuShares = info.hostConfig?.cpuShares || 1024;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const hostConfig = info.hostConfig as any;
+          const cpuShares = hostConfig?.cpuShares || 1024;
           const cpuCores = Math.max(cpuShares / 1024, 0.1);
-          const memoryMB = Math.round((info.hostConfig?.memory || 536870912) / (1024 * 1024));
+          const memoryMB = Math.round((hostConfig?.memory || 536870912) / (1024 * 1024));
           const cpuCost = cpuCores * RATES.container.cpuPerCorePerHour;
           const memCost = memoryMB * RATES.container.memoryPerMBPerHour;
           const hourlyRate = cpuCost + memCost;
@@ -66,7 +68,7 @@ class CostAnalysisService {
             monthlyEstimate,
           });
           totalMonthly += monthlyEstimate;
-        } catch {}
+        } catch { /* ignore */ }
       }
 
       return { data: items, totalMonthly };
@@ -78,7 +80,8 @@ class CostAnalysisService {
 
   async getVMCosts(): Promise<{ data: CostItem[]; totalMonthly: number }> {
     try {
-      const rows = db.prepare("SELECT * FROM virtual_machines WHERE status='running'").all() as any[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = virtualMachineRepository.list({ status: 'running' }) as any[];
       const items: CostItem[] = [];
       let totalMonthly = 0;
 
@@ -152,7 +155,7 @@ class CostAnalysisService {
     return { data: recommendations, totalSaving };
   }
 
-  async getSummary(): Promise<any> {
+  async getSummary(): Promise<unknown> {
     const [containerResult, vmResult, recommendationResult] = await Promise.all([
       this.getContainerCosts(),
       this.getVMCosts(),

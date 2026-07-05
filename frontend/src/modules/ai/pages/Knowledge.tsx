@@ -29,10 +29,10 @@ export default function Knowledge() {
   const { data: knowledge, isLoading } = useQuery({
     queryKey: ['knowledge', search, selectedCategory],
     queryFn: async () => {
-      const params: any = {};
+      const params: Record<string, unknown> = {};
       if (search) params.search = search;
       if (selectedCategory) params.category = selectedCategory;
-      const res = await api.get('/api/knowledge', { params });
+      const res = await api.get('/knowledge', { params });
       return res.data.data as Knowledge[];
     },
     staleTime: 60000,
@@ -40,7 +40,7 @@ export default function Knowledge() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/knowledge/${id}`);
+      await api.delete(`/knowledge/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['knowledge'] });
@@ -325,18 +325,19 @@ function KnowledgeModal({ entry, onClose }: { entry: Knowledge | null; onClose: 
   });
 
   const mutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: async (data: any) => {
-      const tagsArray = data.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
-      const solutionsArray = data.solutions.split('\n').map((s: string) => s.trim()).filter(Boolean);
+      const tagsArray = (data.tags as string).split(',').map((t: string) => t.trim()).filter(Boolean);
+      const solutionsArray = (data.solutions as string).split('\n').map((s: string) => s.trim()).filter(Boolean);
 
       if (entry) {
-        await api.put(`/api/knowledge/${entry.id}`, {
+        await api.put(`/knowledge/${entry.id}`, {
           ...data,
           tags: tagsArray,
           solutions: solutionsArray,
         });
       } else {
-        await api.post('/api/knowledge', {
+        await api.post('/knowledge', {
           ...data,
           tags: tagsArray,
           solutions: solutionsArray,

@@ -10,10 +10,10 @@
  * =============================================================================
  */
 
-import db from '../../../../../models/database';
 import { logger } from '../../../../../utils/logger';
 import { smartNotifier } from '../notification/smartNotifier';
 import type { DeviceRuntimeProfile } from '../types';
+import { getErrorMessage } from '../../../../../utils/errorHelpers';
 
 // ── 升级阶段定义 ──
 
@@ -243,8 +243,8 @@ class EscalationEngine {
                   `当前阶段: ${this.getStageLabel(nextStage.stage)}\n` +
                   `请及时人工介入。`,
         });
-      } catch (err: any) {
-        logger.warn(`[EscalationEngine] 升级通知发送失败: ${err.message}`);
+      } catch (err: unknown) {
+        logger.warn(`[EscalationEngine] 升级通知发送失败: ${getErrorMessage(err)}`);
       }
     }
   }
@@ -288,26 +288,6 @@ class EscalationEngine {
         stage: s.currentStage,
         elapsed: Math.round((now - s.processedAt) / 1000),
       }));
-  }
-
-  /** 升级历史表 */
-  ensureTable(): void {
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS escalation_history (
-          id TEXT PRIMARY KEY,
-          alert_id TEXT NOT NULL,
-          stage TEXT NOT NULL,
-          entered_at TEXT NOT NULL,
-          reason TEXT,
-          notified INTEGER DEFAULT 0,
-          resolved_at TEXT,
-          FOREIGN KEY (alert_id) REFERENCES alerts(id) ON DELETE CASCADE
-        )
-      `);
-    } catch (err: any) {
-      logger.warn(`[EscalationEngine] Failed to ensure table: ${err.message}`);
-    }
   }
 }
 

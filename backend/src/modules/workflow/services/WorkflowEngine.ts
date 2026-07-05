@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
 import { providerRegistry } from '../../ai/services/providers';
@@ -8,6 +9,7 @@ import type {
   StepExecution,
   StepDefinition
 } from './types';
+import type { WorkflowVariables } from './workflowExpressionEvaluator';
 
 /**
  * 工作流执行引擎
@@ -18,7 +20,7 @@ export class WorkflowEngine {
    */
   async execute(
     definition: WorkflowDefinition,
-    inputs: Record<string, unknown>,
+    inputs: WorkflowVariables,
     context: Partial<WorkflowContext> = {}
   ): Promise<WorkflowExecution> {
     const executionId = randomUUID();
@@ -311,7 +313,7 @@ export class WorkflowEngine {
    */
   private validateInputs(
     definition: WorkflowDefinition,
-    inputs: Record<string, unknown>
+    inputs: WorkflowVariables
   ): void {
     if (!definition.inputs) {
       return;
@@ -349,8 +351,8 @@ export class WorkflowEngine {
   private buildOutputs(
     definition: WorkflowDefinition,
     ctx: WorkflowContext
-  ): Record<string, unknown> {
-    const outputs: Record<string, unknown> = {};
+  ): WorkflowVariables {
+    const outputs: WorkflowVariables = {};
 
     if (definition.outputs) {
       for (const outputDef of definition.outputs) {
@@ -365,16 +367,16 @@ export class WorkflowEngine {
    * 解析参数
    */
   private resolveParams(
-    params: Record<string, unknown>,
+    params: WorkflowVariables,
     ctx: WorkflowContext
-  ): Record<string, unknown> {
-    const resolved: Record<string, unknown> = {};
+  ): WorkflowVariables {
+    const resolved: WorkflowVariables = {};
 
     for (const [key, value] of Object.entries(params)) {
       if (typeof value === 'string') {
         resolved[key] = this.evaluateExpression(value, ctx);
       } else if (value && typeof value === 'object') {
-        resolved[key] = this.resolveParams(value as Record<string, unknown>, ctx);
+        resolved[key] = this.resolveParams(value as WorkflowVariables, ctx);
       } else {
         resolved[key] = value;
       }

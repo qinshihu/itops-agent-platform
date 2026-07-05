@@ -1,10 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import multer from 'multer';
 import { qanythingService } from '../services/knowledge/qanythingService';
 import { authenticateToken } from '../../../middleware/auth';
 import { logger } from '../../../utils/logger';
-import db from '../../../models/database';
+import { settingsRepository } from '../../../repositories';
 
 const router = Router();
 
@@ -77,11 +78,9 @@ router.use(authenticateToken);
  */
 router.get('/config', (req: Request, res: Response) => {
   try {
-    const setting = db.prepare(
-      "SELECT value FROM settings WHERE key = 'qanything_config'"
-    ).get() as { value: string } | undefined;
+    const settingValue = settingsRepository.getValue('qanything_config');
 
-    if (!setting) {
+    if (!settingValue) {
       return res.json({
         success: true,
         data: {
@@ -95,7 +94,7 @@ router.get('/config', (req: Request, res: Response) => {
       });
     }
 
-    const config = JSON.parse(setting.value);
+    const config = JSON.parse(settingValue);
     // 不返回完整的 API Key，只显示部分
     const maskedApiKey = config.apiKey
       ? maskApiKey(config.apiKey)
@@ -122,14 +121,12 @@ router.post('/config', (req: Request, res: Response) => {
     const { enabled, apiBase, apiKey, kbId, mode, topK } = req.body;
 
     // 获取已有配置中的原始 API Key
-    const existingSetting = db.prepare(
-      "SELECT value FROM settings WHERE key = 'qanything_config'"
-    ).get() as { value: string } | undefined;
-    
+    const existingSettingValue = settingsRepository.getValue('qanything_config');
+
     let originalApiKey = '';
-    if (existingSetting) {
+    if (existingSettingValue) {
       try {
-        const existingConfig = JSON.parse(existingSetting.value);
+        const existingConfig = JSON.parse(existingSettingValue);
         originalApiKey = existingConfig.apiKey || '';
       } catch {
         // 忽略解析错误
@@ -154,9 +151,7 @@ router.post('/config', (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: validationError });
     }
 
-    db.prepare(
-      "INSERT OR REPLACE INTO settings (key, value) VALUES ('qanything_config', ?)"
-    ).run(JSON.stringify(config));
+    settingsRepository.upsert('qanything_config', JSON.stringify(config));
 
     qanythingService.clearConfigCache();
 

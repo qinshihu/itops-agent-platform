@@ -34,14 +34,14 @@ export default function RemediationExecutions() {
       if (statusFilter !== 'all') {
         params.status = statusFilter;
       }
-      const res = await api.get('/api/remediation-executions', { params });
+      const res = await api.get('/remediation-executions', { params });
       return res.data.data;
     }
   });
 
   const approveMutation = useMutation({
     mutationFn: async ({ id, action }: { id: string; action: 'approve' | 'reject' }) => {
-      await api.post(`/api/remediation-executions/${id}/approve`, { action });
+      await api.post(`/remediation-executions/${id}/approve`, { action });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['remediation-executions'] });
@@ -50,7 +50,7 @@ export default function RemediationExecutions() {
 
   const retryMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.post(`/api/remediation-executions/${id}/retry`);
+      await api.post(`/remediation-executions/${id}/retry`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['remediation-executions'] });
@@ -61,7 +61,7 @@ export default function RemediationExecutions() {
     queryKey: ['remediation-execution-detail', selectedExecutionId],
     queryFn: async () => {
       if (!selectedExecutionId) return null;
-      const res = await api.get(`/api/remediation-executions/${selectedExecutionId}`);
+      const res = await api.get(`/remediation-executions/${selectedExecutionId}`);
       return res.data.data;
     },
     enabled: !!selectedExecutionId
@@ -201,7 +201,7 @@ export default function RemediationExecutions() {
                 </tr>
               </thead>
               <tbody>
-                {data.executions.map((execution: any) => (
+                {data.executions.map((execution: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
                   <tr key={execution.id} className="border-b border-border/30 hover:bg-slate-700/20 transition-colors">
                     <td className="py-3 px-4">
                       <div className="text-sm text-text-primary">{formatTime(execution.created_at)}</div>

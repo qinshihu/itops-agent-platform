@@ -1,4 +1,4 @@
-import { db } from '../database';
+﻿import db from '../database';
 import { randomUUID } from 'crypto';
 import { logger } from '../../utils/logger';
 
@@ -42,7 +42,7 @@ export function initializePresetScheduledTasks() {
   ];
 
   const insertScheduledTask = db.prepare(`
-    INSERT INTO scheduled_tasks (id, name, description, schedule, enabled, workflow_id)
+    INSERT OR IGNORE INTO scheduled_tasks (id, name, description, schedule, enabled, workflow_id)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
   

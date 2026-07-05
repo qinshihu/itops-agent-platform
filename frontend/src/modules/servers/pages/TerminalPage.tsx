@@ -34,7 +34,7 @@ export default function TerminalPage() {
 
   const { data: serversData, isLoading } = useQuery<{ success: boolean; data: ServerItem[] }>({
     queryKey: ['servers'],
-    queryFn: () => api.get('/api/servers').then((r) => r.data),
+    queryFn: () => api.get('/servers').then((r) => r.data),
   });
 
   const servers = useMemo(() => {

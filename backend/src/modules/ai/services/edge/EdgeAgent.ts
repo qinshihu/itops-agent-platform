@@ -11,18 +11,10 @@ import type {
   HeartbeatRequest,
   SkillExecutionResponse,
   PluginHealth,
-  PromSample
+  PromSample,
+  SkillParams
 } from './types';
-import {
-  EdgeAgentStatus,
-  AgentCommand,
-  AgentCommandType,
-  HeartbeatResponse,
-  RegisterAgentRequest,
-  RegisterAgentResponse,
-  TunnelEvent,
-  SkillExecutionRequest
-} from './types';
+import { EdgeAgentStatus } from './types';
 
 // 系统指标收集器
 interface Collector {
@@ -35,7 +27,7 @@ interface Collector {
 // Skill 执行器
 interface SkillExecutor {
   name: string;
-  execute(params: Record<string, unknown>): Promise<SkillExecutionResponse>;
+  execute(params: SkillParams): Promise<SkillExecutionResponse>;
 }
 
 /**
@@ -323,7 +315,7 @@ export class EdgeAgent extends EventEmitter {
   /**
    * 执行 Skill（内部调用，模拟服务端远程调用）
    */
-  async executeSkill(skillName: string, params: Record<string, unknown>): Promise<SkillExecutionResponse> {
+  async executeSkill(skillName: string, params: SkillParams): Promise<SkillExecutionResponse> {
     const executor = this.skillExecutors.get(skillName);
     if (!executor) {
       return {

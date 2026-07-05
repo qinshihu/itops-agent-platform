@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import type { Socket } from 'socket.io-client';
 import { io } from 'socket.io-client';
+import { logger } from '@/lib/logger';
 import { Play, Pause, XCircle, Clock, CheckCircle, XCircle as XIcon, FileText, Activity, List, FileCheck } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import clsx from 'clsx';
@@ -13,7 +13,15 @@ import MarkdownOutput from '../../../shared/components/MarkdownOutput';
 
 const wsUrl = window.location.origin;
 
-interface Task {
+// ── Local display types (parsed JSON from API) ──
+
+interface TaskLogEntry {
+  type: string;
+  content: string;
+  timestamp: Date;
+}
+
+interface TaskDisplay {
   id: string;
   name: string;
   workflow_id: string;
@@ -21,35 +29,48 @@ interface Task {
   start_time: string;
   end_time: string;
   current_node_id: string;
-  node_results: any;
-  logs: any[];
+  node_results?: Record<string, Record<string, unknown>>;
+  logs: TaskLogEntry[];
   created_at: string;
   execution_order?: string[];
   report_id?: string;
 }
 
-interface Workflow {
+interface WorkflowDisplay {
   id: string;
   name: string;
-  nodes: any[];
+  nodes: Record<string, unknown>[];
+}
+
+interface Report {
+  id: string;
+  name: string;
+  content: string;
+  created_at: string;
+  format?: string;
+  task_id?: string;
+}
+
+interface _SocketTaskEvent {
+  taskId: string;
+  status?: string;
 }
 
 export default function Tasks() {
   const { token } = useAuth();
   const [searchParams] = useSearchParams();
   const taskIdFromQuery = searchParams.get('taskId');
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedTask, setSelectedTask] = useState<TaskDisplay | null>(null);
   const [executingNodeId, setExecutingNodeId] = useState<string | null>(null);
-  const [taskLogs, setTaskLogs] = useState<any[]>([]);
+  const [taskLogs, setTaskLogs] = useState<TaskLogEntry[]>([]);
   const [activeTab, setActiveTab] = useState<'logs' | 'nodes' | 'related_reports'>('logs');
-  const [showReportDetail, setShowReportDetail] = useState<any>(null);
+  const [showReportDetail, setShowReportDetail] = useState<Report | null>(null);
 
   const { data: tasks, refetch: refetchTasks } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
-      const res = await api.get('/api/tasks');
-      const taskData = res.data.data as Task[];
-      // 解析每个任务的 execution_order、node_results 和 logs 字段
+      const res = await api.get('/tasks');
+      const taskData = res.data.data as TaskDisplay[];
       return taskData.map(task => {
         const parsedTask = { ...task };
         if (task.execution_order && typeof task.execution_order === 'string') {
@@ -60,7 +81,6 @@ export default function Tasks() {
           }
         }
         
-        // 解析 node_results
         if (task.node_results && typeof task.node_results === 'string') {
           try {
             parsedTask.node_results = JSON.parse(task.node_results);
@@ -69,7 +89,6 @@ export default function Tasks() {
           }
         }
         
-        // 解析 logs（如果是字符串的话）
         if (task.logs && typeof task.logs === 'string') {
           try {
             parsedTask.logs = JSON.parse(task.logs);
@@ -86,16 +105,16 @@ export default function Tasks() {
   const { data: reports } = useQuery({
     queryKey: ['reports'],
     queryFn: async () => {
-      const res = await api.get('/api/reports');
-      return res.data.data || [];
+      const res = await api.get('/reports');
+      return (res.data.data || []) as Report[];
     },
   });
 
   const { data: workflows } = useQuery({
     queryKey: ['workflows'],
     queryFn: async () => {
-      const res = await api.get('/api/workflows');
-      return res.data.data as Workflow[];
+      const res = await api.get('/workflows');
+      return (res.data.data || []) as WorkflowDisplay[];
     },
   });
 
@@ -127,20 +146,22 @@ export default function Tasks() {
       setExecutingNodeId(nodeData.nodeId);
     };
 
-    const handleNodeThinking = (data: any) => {
-      if (selectedTask?.id === data.taskId) {
+    const handleNodeThinking = (data: unknown) => {
+      const eventData = data as { taskId: string; content: string };
+      if (selectedTask?.id === eventData.taskId) {
         setTaskLogs((prev) => [
           ...prev,
-          { type: 'thinking', content: data.content, timestamp: new Date() },
+          { type: 'thinking', content: eventData.content, timestamp: new Date() },
         ]);
       }
     };
 
-    const handleNodeOutput = (data: any) => {
-      if (selectedTask?.id === data.taskId) {
+    const handleNodeOutput = (data: unknown) => {
+      const eventData = data as { taskId: string; output: string };
+      if (selectedTask?.id === eventData.taskId) {
         setTaskLogs((prev) => [
           ...prev,
-          { type: 'output', content: data.output, timestamp: new Date() },
+          { type: 'output', content: eventData.output, timestamp: new Date() },
         ]);
       }
     };
@@ -202,25 +223,21 @@ export default function Tasks() {
     };
   }, [selectedTask, refetchTasks, token]);
 
-  // 用于同步 selectedTask 到 ref，避免 useEffect 依赖
-  const selectedTaskRef = useRef<Task | null>(selectedTask);
+  const selectedTaskRef = useRef<TaskDisplay | null>(selectedTask);
   useEffect(() => {
     selectedTaskRef.current = selectedTask;
   }, [selectedTask]);
 
-  // 当任务列表更新时，自动更新当前选中的任务
   useEffect(() => {
     const currentSelectedTask = selectedTaskRef.current;
     if (currentSelectedTask && tasks) {
       const updatedTask = tasks.find(t => t.id === currentSelectedTask.id);
       if (updatedTask) {
-        // 检查是否真的有变化，避免重复更新
         const hasChanged = 
           updatedTask.status !== currentSelectedTask.status || 
           JSON.stringify(updatedTask.node_results) !== JSON.stringify(currentSelectedTask.node_results);
         
         if (hasChanged) {
-          // 直接解析并设置更新后的任务
           const parsedTask = { ...updatedTask };
           if (updatedTask.execution_order && typeof updatedTask.execution_order === 'string') {
             try {
@@ -230,7 +247,6 @@ export default function Tasks() {
             }
           }
           
-          // 解析 node_results
           if (updatedTask.node_results && typeof updatedTask.node_results === 'string') {
             try {
               parsedTask.node_results = JSON.parse(updatedTask.node_results);
@@ -239,10 +255,9 @@ export default function Tasks() {
             }
           }
           
-          // 解析历史日志，只在任务完成时才更新，避免覆盖实时日志
-          let parsedLogs: any[] = [];
+          let parsedLogs: TaskLogEntry[] = [];
           if (updatedTask.logs && Array.isArray(updatedTask.logs)) {
-            parsedLogs = updatedTask.logs.map((log: any) => ({
+            parsedLogs = updatedTask.logs.map((log: TaskLogEntry) => ({
               ...log,
               timestamp: log.timestamp ? new Date(log.timestamp) : new Date()
             }));
@@ -250,18 +265,17 @@ export default function Tasks() {
             try {
               const jsonLogs = JSON.parse(updatedTask.logs);
               if (Array.isArray(jsonLogs)) {
-                parsedLogs = jsonLogs.map((log: any) => ({
+                parsedLogs = jsonLogs.map((log: TaskLogEntry) => ({
                   ...log,
                   timestamp: log.timestamp ? new Date(log.timestamp) : new Date()
                 }));
               }
             } catch {
-              // 解析失败，使用空数组
+              // parse failure, use empty
             }
           }
           
           setSelectedTask(parsedTask);
-          // 只在任务完成时才更新日志，否则会覆盖实时日志
           if (updatedTask.status === 'completed' || updatedTask.status === 'failed') {
             setTaskLogs(parsedLogs);
           }
@@ -270,11 +284,9 @@ export default function Tasks() {
     }
   }, [tasks]);
   
-  const handleSelectTask = (task: Task) => {
-    // 解析 execution_order、node_results、logs 字段
+  const handleSelectTask = (task: TaskDisplay) => {
     const parsedTask = { ...task };
     
-    // 解析 execution_order
     if (task.execution_order && typeof task.execution_order === 'string') {
       try {
         parsedTask.execution_order = JSON.parse(task.execution_order);
@@ -283,7 +295,6 @@ export default function Tasks() {
       }
     }
     
-    // 解析 node_results
     if (task.node_results && typeof task.node_results === 'string') {
       try {
         parsedTask.node_results = JSON.parse(task.node_results);
@@ -292,10 +303,9 @@ export default function Tasks() {
       }
     }
     
-    // 解析历史日志，将 ISO 字符串转换为 Date 对象
-    let parsedLogs: any[] = [];
+    let parsedLogs: TaskLogEntry[] = [];
     if (task.logs && Array.isArray(task.logs)) {
-      parsedLogs = task.logs.map((log: any) => ({
+      parsedLogs = task.logs.map((log: TaskLogEntry) => ({
         ...log,
         timestamp: log.timestamp ? new Date(log.timestamp) : new Date()
       }));
@@ -303,13 +313,13 @@ export default function Tasks() {
       try {
         const jsonLogs = JSON.parse(task.logs);
         if (Array.isArray(jsonLogs)) {
-          parsedLogs = jsonLogs.map((log: any) => ({
+          parsedLogs = jsonLogs.map((log: TaskLogEntry) => ({
             ...log,
             timestamp: log.timestamp ? new Date(log.timestamp) : new Date()
           }));
         }
       } catch {
-        // 解析失败，使用空数组
+        // parse failure, use empty
       }
     }
     
@@ -328,21 +338,21 @@ export default function Tasks() {
 
   const pauseMutation = useMutation({
     mutationFn: async (taskId: string) => {
-      await api.put(`/api/tasks/${taskId}/pause`);
+      await api.put(`/tasks/${taskId}/pause`);
     },
     onSuccess: () => refetchTasks(),
   });
 
   const resumeMutation = useMutation({
     mutationFn: async (taskId: string) => {
-      await api.put(`/api/tasks/${taskId}/resume`);
+      await api.put(`/tasks/${taskId}/resume`);
     },
     onSuccess: () => refetchTasks(),
   });
 
   const cancelMutation = useMutation({
     mutationFn: async (taskId: string) => {
-      await api.put(`/api/tasks/${taskId}/cancel`);
+      await api.put(`/tasks/${taskId}/cancel`);
     },
     onSuccess: () => refetchTasks(),
   });
@@ -353,7 +363,7 @@ export default function Tasks() {
   
   const handleDownloadReport = async (reportId: string, format: 'markdown' | 'pdf' | 'word' = 'markdown') => {
     try {
-      const response = await api.get(`/api/reports/${reportId}/export?format=${format}`, { responseType: 'blob' });
+      const response = await api.get(`/reports/${reportId}/export?format=${format}`, { responseType: 'blob' });
       const blob = response.data;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -364,7 +374,7 @@ export default function Tasks() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      console.error('Download failed:', error);
+      logger.error('Download failed:', error);
     }
   };
 
@@ -457,10 +467,9 @@ export default function Tasks() {
                   {(() => {
                     const workflow = getTaskWorkflow(selectedTask.workflow_id);
                     const nodes = workflow?.nodes || [];
-                    const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+                    const nodeMap = new Map(nodes.map((node) => [String(node.id), node]));
                     const executionOrder = selectedTask.execution_order;
                     
-                    // 按照执行顺序排序节点
                     let orderedNodes;
                     if (executionOrder && executionOrder.length > 0) {
                       orderedNodes = executionOrder
@@ -471,12 +480,12 @@ export default function Tasks() {
                     }
 
                     return orderedNodes.map((node, index) => {
-                      const result = selectedTask.node_results?.[node.id];
+                      const result = selectedTask.node_results?.[node.id as string];
                       const isRunning = executingNodeId === node.id;
-                      const status = result?.status || (isRunning ? 'running' : 'pending');
+                      const status = (result as Record<string, unknown>)?.status || (isRunning ? 'running' : 'pending');
 
                       return (
-                        <div key={node.id} className="flex items-center gap-2">
+                        <div key={String(node.id)} className="flex items-center gap-2">
                           <div
                             className={clsx(
                               'px-4 py-2 rounded-lg border-2 transition-all flex items-center gap-2',
@@ -486,9 +495,9 @@ export default function Tasks() {
                               status === 'pending' && 'border-status-pending'
                             )}
                           >
-                            <span className="text-lg">{node.data?.avatar || '🤖'}</span>
+                            <span className="text-lg">{((node as Record<string, unknown>).data as Record<string, unknown>)?.avatar as string || '🤖'}</span>
                             <span className="text-sm font-medium text-text-primary whitespace-nowrap">
-                              {node.data?.label}
+                              {((node as Record<string, unknown>).data as Record<string, unknown>)?.label as string}
                             </span>
                             {status === 'completed' && (
                               <CheckCircle className="w-4 h-4 text-status-success" />
@@ -509,7 +518,6 @@ export default function Tasks() {
               </div>
 
               <div className="flex-1 overflow-hidden flex flex-col">
-                {/* 标签页导航 */}
                 <div className="flex border-b border-border px-6 pt-4">
                   <button
                     onClick={() => setActiveTab('logs')}
@@ -555,7 +563,6 @@ export default function Tasks() {
                   </button>
                 </div>
 
-                {/* 标签页内容 */}
                 <div className="flex-1 overflow-y-auto p-6">
                   {activeTab === 'logs' && (
                     <div className="space-y-2">
@@ -606,7 +613,7 @@ export default function Tasks() {
                       {(() => {
                         const workflow = getTaskWorkflow(selectedTask.workflow_id);
                         const nodes = workflow?.nodes || [];
-                        const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+                        const nodeMap = new Map(nodes.map((node) => [String(node.id), node]));
                         const executionOrder = selectedTask.execution_order;
                         
                         let orderedNodes;
@@ -628,13 +635,13 @@ export default function Tasks() {
                         }
 
                         return orderedNodes.map((node, index) => {
-                          const result = selectedTask.node_results?.[node.id];
+                          const result = selectedTask.node_results?.[node.id as string];
                           const isRunning = executingNodeId === node.id;
-                          const status = result?.status || (isRunning ? 'running' : 'pending');
+                          const status = (result as Record<string, unknown>)?.status || (isRunning ? 'running' : 'pending');
 
                           return (
                             <div
-                              key={node.id}
+                              key={String(node.id)}
                               className={clsx(
                                 'rounded-xl border-2 overflow-hidden transition-all',
                                 status === 'completed' && 'border-status-success/30 bg-status-success/5',
@@ -643,15 +650,14 @@ export default function Tasks() {
                                 status === 'pending' && 'border-border bg-background/50'
                               )}
                             >
-                              {/* 节点头部 */}
                               <div className="flex items-center justify-between p-4 border-b border-border">
                                 <div className="flex items-center gap-3">
                                   <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-surface">
-                                    <span className="text-xl">{node.data?.avatar || '🤖'}</span>
+                                    <span className="text-xl">{((node as Record<string, unknown>).data as Record<string, unknown>)?.avatar as string || '🤖'}</span>
                                   </div>
                                   <div>
                                     <h4 className="font-medium text-text-primary flex items-center gap-2">
-                                      {node.data?.label || '未知节点'}
+                                      {((node as Record<string, unknown>).data as Record<string, unknown>)?.label as string || '未知节点'}
                                       {status === 'completed' && (
                                         <CheckCircle className="w-4 h-4 text-status-success" />
                                       )}
@@ -683,29 +689,28 @@ export default function Tasks() {
                                 </span>
                               </div>
 
-                              {/* 节点结果 */}
                               {result && (
                                 <div className="p-4">
-                                  {result.output && (
+                                  {(result as Record<string, unknown>).output !== null && (
                                     <div className="mb-3">
                                       <h5 className="text-sm font-medium text-text-secondary mb-2">输出结果</h5>
                                       <div className="bg-surface rounded-lg p-3 border border-border">
-                                        <MarkdownOutput content={result.output} />
+                                        <MarkdownOutput content={(result as Record<string, unknown>).output as string} />
                                       </div>
                                     </div>
                                   )}
-                                  {result.error && (
+                                  {(result as Record<string, unknown>).error !== null && (
                                     <div>
                                       <h5 className="text-sm font-medium text-status-failed mb-2">错误信息</h5>
                                       <div className="bg-status-failed/5 rounded-lg p-3 border border-status-failed/20">
-                                        <p className="text-sm text-status-failed">{result.error}</p>
+                                        <p className="text-sm text-status-failed">{(result as Record<string, unknown>).error as string}</p>
                                       </div>
                                     </div>
                                   )}
-                                  {result.metadata?.executionTime && (
+                                  {(result as Record<string, unknown>).metadata !== null && (
                                     <div className="mt-3 pt-3 border-t border-border">
                                       <p className="text-xs text-text-secondary">
-                                        执行时间: {new Date(result.metadata.executionTime).toLocaleString()}
+                                        执行时间: {new Date(((result as Record<string, unknown>).metadata as Record<string, unknown>).executionTime as string).toLocaleString()}
                                       </p>
                                     </div>
                                   )}
@@ -721,11 +726,10 @@ export default function Tasks() {
                   {activeTab === 'related_reports' && (
                     <div className="space-y-4">
                       {(() => {
-                        // 首先通过 report_id 查找精确匹配的报告
-                        let relatedReports: any[] = [];
+                        let relatedReports: Report[] = [];
                         
                         if (selectedTask.report_id) {
-                          const exactReport = reports?.find((report: any) => 
+                          const exactReport = reports?.find((report: Report) => 
                             report.id === selectedTask.report_id
                           );
                           if (exactReport) {
@@ -733,9 +737,8 @@ export default function Tasks() {
                           }
                         }
                         
-                        // 如果没有精确匹配，再用旧的模糊匹配方式
                         if (relatedReports.length === 0) {
-                          relatedReports = reports?.filter((report: any) => 
+                          relatedReports = reports?.filter((report: Report) => 
                             report.name?.includes(selectedTask.name) || 
                             report.content?.includes(selectedTask.id) ||
                             report.task_id === selectedTask.id
@@ -751,7 +754,7 @@ export default function Tasks() {
                           );
                         }
                         
-                        return relatedReports.map((report: any) => (
+                        return relatedReports.map((report: Report) => (
                           <div
                             key={report.id}
                             className="bg-surface border border-border rounded-lg p-4 hover:border-primary/50 transition-all cursor-pointer"
@@ -799,7 +802,6 @@ export default function Tasks() {
         </div>
       </div>
       
-      {/* 报告详情模态框 */}
       {showReportDetail && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-surface border border-border rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">

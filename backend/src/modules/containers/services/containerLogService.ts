@@ -34,6 +34,7 @@ class ContainerLogService {
     
     try {
       const container = this.docker.getContainer(containerId);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const logOptions: any = {
         stdout: true,
         stderr: true,
@@ -44,8 +45,10 @@ class ContainerLogService {
       
       const stream = await container.logs(logOptions);
       
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.streams.set(roomId, { stream: stream as any, containerId });
       
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (stream as any).on('data', (chunk: Buffer) => {
         if (this.io) {
           // Docker 日志前 8 字节是 header，需要去掉
@@ -58,11 +61,13 @@ class ContainerLogService {
         }
       });
       
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (stream as any).on('error', (err: Error) => {
         logger.error(`Log stream error for ${containerId}:`, err.message);
         this.stopLogStream(roomId);
       });
       
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (stream as any).on('end', () => {
         logger.info(`Log stream ended for ${containerId}`);
         this.stopLogStream(roomId);
@@ -82,8 +87,9 @@ class ContainerLogService {
     const entry = this.streams.get(roomId);
     if (entry) {
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (entry.stream as any).destroy();
-      } catch {}
+      } catch { /* ignore */ }
       this.streams.delete(roomId);
       logger.info(`📜 Log stream stopped for room: ${roomId}`);
     }
@@ -94,7 +100,8 @@ class ContainerLogService {
    */
   stopAll(): void {
     this.streams.forEach((entry) => {
-      try { (entry.stream as any).destroy(); } catch {}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      try { (entry.stream as any).destroy(); } catch { /* ignore */ }
     });
     this.streams.clear();
   }

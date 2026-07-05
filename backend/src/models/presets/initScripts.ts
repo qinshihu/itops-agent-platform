@@ -1,4 +1,4 @@
-import { db } from '../database';
+import db from '../database';
 import { randomUUID } from 'crypto';
 import { logger } from '../../utils/logger';
 
@@ -63,7 +63,7 @@ export function initializePresetScripts() {
   ];
 
   const insertScript = db.prepare(`
-    INSERT INTO scripts (id, name, description, content, language, tags)
+    INSERT OR IGNORE INTO scripts (id, name, description, content, language, tags)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
 

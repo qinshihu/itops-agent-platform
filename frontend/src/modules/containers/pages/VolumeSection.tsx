@@ -28,7 +28,7 @@ export function VolumeSection({ endpointId }: VolumeSectionProps) {
   const { data: volumes = [], isLoading: volumesLoading, error: volumesError } = useQuery<VolumeItem[]>({
     queryKey: volumesQueryKey,
     queryFn: async () => {
-      const res = await api.get('/api/containers/volumes/list', {
+      const res = await api.get('/containers/volumes/list', {
         params: { endpointId: endpointId !== 'local' ? endpointId : undefined },
       });
       return res.data.data || [];
@@ -39,7 +39,7 @@ export function VolumeSection({ endpointId }: VolumeSectionProps) {
 
   const createVolumeMutation = useMutation({
     mutationFn: () =>
-      api.post('/api/containers/volumes', { name: volName, driver: volDriver }, {
+      api.post('/containers/volumes', { name: volName, driver: volDriver }, {
         params: { endpointId: endpointId !== 'local' ? endpointId : undefined },
       }),
     onSuccess: () => {
@@ -54,7 +54,7 @@ export function VolumeSection({ endpointId }: VolumeSectionProps) {
 
   const deleteVolumeMutation = useMutation({
     mutationFn: (id: string) =>
-      api.delete(`/api/containers/volumes/${id}`, {
+      api.delete(`/containers/volumes/${id}`, {
         params: { endpointId: endpointId !== 'local' ? endpointId : undefined },
       }),
     onSuccess: () => {

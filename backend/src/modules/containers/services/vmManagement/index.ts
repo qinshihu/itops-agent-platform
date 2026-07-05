@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * =============================================================================
  * 虚拟机管理 - 统一管理服务
@@ -6,7 +7,7 @@
 
 import { randomUUID } from 'crypto';
 import { logger } from '../../../../utils/logger';
-import { db } from '../../../../models/database';
+import { vmPlatformRepository, vmAuditLogRepository } from '../../../../repositories';
 import type {
   VirtualMachine,
   VMStats,
@@ -21,11 +22,6 @@ import type {
   CreateSnapshotRequest,
   RestoreSnapshotRequest,
   HypervisorType} from '../../../../types/vmManagement';
-import {
-  ResourcePool,
-  MigrateVMRequest,
-  ReconfigureVMRequest
-} from '../../../../types/vmManagement';
 import type { VMAdapter } from './vmAdapter';
 import { VMwareAdapter } from './vmwareAdapter';
 import { KVMAdapter } from './kvmAdapter';
@@ -59,8 +55,8 @@ export class VMManagementService {
 
   private loadPlatformConfigs() {
     try {
-      const rows = db.prepare('SELECT * FROM vm_platforms WHERE status = ?').all('active') as any[];
-      
+      const rows = vmPlatformRepository.listByStatus('active');
+
       for (const row of rows) {
         try {
           const config = row.config ? JSON.parse(row.config) : {};
@@ -70,7 +66,7 @@ export class VMManagementService {
           if (row.encrypted_password && row.encrypted_password_iv) {
             try {
               password = credentialService.decryptCredential(row.encrypted_password, row.encrypted_password_iv);
-            } catch (e) {
+            } catch (_e) {
               logger.warn('⚠️ 无法解密平台密码');
             }
           }
@@ -150,28 +146,20 @@ export class VMManagementService {
     };
     
     try {
-      db.prepare(
-        `INSERT INTO vm_platforms (
-          id, name, hypervisor_type, host, port, username,
-          encrypted_password, encrypted_password_iv, config,
-          status, tags, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
+      vmPlatformRepository.create({
         id,
-        config.name,
-        config.hypervisorType,
-        config.host,
-        config.port || null,
-        config.username || null,
-        encryptedPassword || null,
-        encryptedPasswordIV || null,
-        config.config ? JSON.stringify(config.config) : null,
-        config.status,
-        config.tags ? JSON.stringify(config.tags) : null,
-        now,
-        now
-      );
-      
+        name: config.name,
+        hypervisor_type: config.hypervisorType,
+        host: config.host,
+        port: config.port || null,
+        username: config.username || null,
+        encrypted_password: encryptedPassword || null,
+        encrypted_password_iv: encryptedPasswordIV || null,
+        config: config.config ? JSON.stringify(config.config) : null,
+        status: config.status,
+        tags: config.tags ? JSON.stringify(config.tags) : null,
+      });
+
       // 创建适配器
       const adapterConfig = config.config || {};
       adapterConfig.host = config.host;
@@ -214,33 +202,27 @@ export class VMManagementService {
     const now = new Date().toISOString();
     
     try {
-      db.prepare(
-        `UPDATE vm_platforms
-        SET name = ?, hypervisor_type = ?, host = ?, port = ?, username = ?,
-            encrypted_password = ?, encrypted_password_iv = ?, config = ?,
-            status = ?, tags = ?, updated_at = ?
-        WHERE id = ?`
-      ).run(
-        updates.name || existing.name,
-        updates.hypervisorType || existing.hypervisorType,
-        updates.host || existing.host,
-        updates.port || existing.port || null,
-        updates.username !== undefined ? updates.username : existing.username,
-        encryptedPassword || null,
-        encryptedPasswordIV || null,
-        updates.config ? JSON.stringify(updates.config) : existing.config,
-        updates.status || existing.status,
-        updates.tags ? JSON.stringify(updates.tags) : existing.tags,
-        now,
-        platformId
-      );
-      
+      const fields: Record<string, unknown> = {};
+      if (updates.name !== undefined) fields.name = updates.name;
+      if (updates.hypervisorType !== undefined) fields.hypervisor_type = updates.hypervisorType;
+      if (updates.host !== undefined) fields.host = updates.host;
+      if (updates.port !== undefined) fields.port = updates.port || null;
+      if (updates.username !== undefined) fields.username = updates.username;
+      if (updates.encryptedPassword !== undefined) {
+        fields.encrypted_password = encryptedPassword || null;
+        fields.encrypted_password_iv = encryptedPasswordIV || null;
+      }
+      if (updates.config !== undefined) fields.config = updates.config ? JSON.stringify(updates.config) : null;
+      if (updates.status !== undefined) fields.status = updates.status;
+      if (updates.tags !== undefined) fields.tags = updates.tags ? JSON.stringify(updates.tags) : null;
+      vmPlatformRepository.update(platformId, fields);
+
       // 重新创建适配器
       if (this.adapters.has(platformId)) {
         this.adapters.delete(platformId);
       }
       
-      const updatedConfig = { ...existing, ...updates, updatedAt: now };
+      const _updatedConfig = { ...existing, ...updates, updatedAt: now };
       
       const adapterConfig = updates.config || {};
       adapterConfig.host = updates.host || existing.host;
@@ -273,7 +255,7 @@ export class VMManagementService {
         this.adapters.delete(platformId);
       }
       
-      db.prepare('DELETE FROM vm_platforms WHERE id = ?').run(platformId);
+      vmPlatformRepository.delete(platformId);
       logger.info('🗑️ 删除虚拟化平台');
     } catch (error) {
       logger.error('❌ 删除虚拟化平台失败:', error);
@@ -283,22 +265,22 @@ export class VMManagementService {
 
   getPlatformConfig(platformId: string): VMPlatformConfig | null {
     try {
-      const row = db.prepare('SELECT * FROM vm_platforms WHERE id = ?').get(platformId) as any;
+      const row = vmPlatformRepository.getById(platformId);
       if (!row) return null;
-      
+
       return {
         id: row.id,
         name: row.name,
-        hypervisorType: row.hypervisor_type,
+        hypervisorType: row.hypervisor_type as HypervisorType,
         host: row.host,
-        port: row.port,
-        username: row.username,
-        encryptedPassword: row.encrypted_password,
-        encryptedPasswordIV: row.encrypted_password_iv,
+        port: row.port ?? undefined,
+        username: row.username ?? undefined,
+        encryptedPassword: row.encrypted_password ?? undefined,
+        encryptedPasswordIV: row.encrypted_password_iv ?? undefined,
         config: row.config ? JSON.parse(row.config) : undefined,
-        status: row.status,
-        lastConnected: row.last_connected,
-        errorMessage: row.error_message,
+        status: row.status as VMPlatformConfig['status'],
+        lastConnected: row.last_connected ?? undefined,
+        errorMessage: row.error_message ?? undefined,
         tags: row.tags ? JSON.parse(row.tags) : undefined,
         createdAt: row.created_at,
         updatedAt: row.updated_at
@@ -311,20 +293,20 @@ export class VMManagementService {
 
   listPlatformConfigs(): VMPlatformConfig[] {
     try {
-      const rows = db.prepare('SELECT * FROM vm_platforms ORDER BY name').all() as any[];
+      const rows = vmPlatformRepository.list();
       return rows.map(row => ({
         id: row.id,
         name: row.name,
-        hypervisorType: row.hypervisor_type,
+        hypervisorType: row.hypervisor_type as HypervisorType,
         host: row.host,
-        port: row.port,
-        username: row.username,
-        encryptedPassword: row.encrypted_password,
-        encryptedPasswordIV: row.encrypted_password_iv,
+        port: row.port ?? undefined,
+        username: row.username ?? undefined,
+        encryptedPassword: row.encrypted_password ?? undefined,
+        encryptedPasswordIV: row.encrypted_password_iv ?? undefined,
         config: row.config ? JSON.parse(row.config) : undefined,
-        status: row.status,
-        lastConnected: row.last_connected,
-        errorMessage: row.error_message,
+        status: row.status as VMPlatformConfig['status'],
+        lastConnected: row.last_connected ?? undefined,
+        errorMessage: row.error_message ?? undefined,
         tags: row.tags ? JSON.parse(row.tags) : undefined,
         createdAt: row.created_at,
         updatedAt: row.updated_at
@@ -339,20 +321,24 @@ export class VMManagementService {
     try {
       const adapter = this.getAdapter(platformId);
       const success = await adapter.testConnection();
-      
+
       if (success) {
-        db.prepare('UPDATE vm_platforms SET status = ?, last_connected = ?, error_message = ? WHERE id = ?')
-          .run('active', new Date().toISOString(), null, platformId);
+        vmPlatformRepository.update(platformId, {
+          status: 'active',
+          last_connected: new Date().toISOString(),
+          error_message: null,
+        });
       } else {
-        db.prepare('UPDATE vm_platforms SET status = ?, error_message = ? WHERE id = ?')
-          .run('error', '连接测试失败', platformId);
+        vmPlatformRepository.update(platformId, {
+          status: 'error',
+          error_message: '连接测试失败',
+        });
       }
-      
+
       return { success };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      db.prepare('UPDATE vm_platforms SET status = ?, error_message = ? WHERE id = ?')
-        .run('error', message, platformId);
+      vmPlatformRepository.update(platformId, { status: 'error', error_message: message });
       return { success: false, message };
     }
   }
@@ -366,7 +352,7 @@ export class VMManagementService {
     operation: string,
     userId: string | null,
     username: string | null,
-    parameters: any,
+    parameters: Record<string, unknown> | null,
     result: string,
     status: 'success' | 'failed',
     errorMessage?: string,
@@ -374,53 +360,29 @@ export class VMManagementService {
     completedAt?: string
   ) {
     try {
-      const id = randomUUID();
-      db.prepare(
-        `INSERT INTO vm_audit_logs (
-          id, platform_id, vm_id, vm_name, operation, user_id, username,
-          parameters, result, status, error_message, started_at, completed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        id,
-        platformId,
-        vmId,
-        vmName,
+      vmAuditLogRepository.create({
+        id: randomUUID(),
+        platform_id: platformId,
+        vm_id: vmId,
+        vm_name: vmName,
         operation,
-        userId,
+        user_id: userId,
         username,
-        parameters ? JSON.stringify(parameters) : null,
+        parameters: parameters ? JSON.stringify(parameters) : null,
         result,
         status,
-        errorMessage || null,
-        startedAt || null,
-        completedAt || null
-      );
+        error_message: errorMessage || null,
+        started_at: startedAt || null,
+        completed_at: completedAt || null,
+      });
     } catch (error) {
       logger.error('❌ 记录审计日志失败:', error);
     }
   }
 
-  getAuditLogs(platformId?: string, vmId?: string, limit = 100): any[] {
+  getAuditLogs(platformId?: string, vmId?: string, limit = 100): Array<Record<string, unknown>> {
     try {
-      let query = 'SELECT * FROM vm_audit_logs';
-      const params: any[] = [];
-      
-      if (platformId) {
-        query += ' WHERE platform_id = ?';
-        params.push(platformId);
-        if (vmId) {
-          query += ' AND vm_id = ?';
-          params.push(vmId);
-        }
-      } else if (vmId) {
-        query += ' WHERE vm_id = ?';
-        params.push(vmId);
-      }
-      
-      query += ' ORDER BY started_at DESC LIMIT ?';
-      params.push(limit);
-      
-      const rows = db.prepare(query).all(...params) as any[];
+      const { rows } = vmAuditLogRepository.list({ platform_id: platformId, vm_id: vmId, page: 1, limit });
       return rows.map(row => ({
         id: row.id,
         platformId: row.platform_id,

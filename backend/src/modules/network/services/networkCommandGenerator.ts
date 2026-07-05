@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { VendorType, InspectionType} from './vendorAdapter';
 import { createVendorAdapter } from './vendorAdapter';
 import { qanythingService } from '../../ai/services/knowledge/qanythingService';
@@ -156,7 +157,7 @@ ${ragContext ? `知识库参考文档：\n${ragContext}\n` : ''}
     return [];
   }
 
-  private getFallbackCommands(vendor: VendorType, description: string): GeneratedCommand[] {
+  private getFallbackCommands(vendor: VendorType, _description: string): GeneratedCommand[] {
     const adapter = createVendorAdapter(vendor);
     const allCommands = adapter.getCommands();
     

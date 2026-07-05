@@ -1,14 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Shield, Lock, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Shield as _Shield, Lock, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { validatePassword, getPasswordStrength } from '../../../../utils/passwordValidator';
 import api from '../../../../lib/api';
+import { getAxiosErrorMessage } from '@/lib/errorHandler';
 
 export default function SecuritySettings() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
   const [searchParams] = useSearchParams();
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
@@ -39,7 +40,7 @@ export default function SecuritySettings() {
     }
 
     try {
-      const response = await api.post('/api/auth/change-password', {
+      const response = await api.post('/auth/change-password', {
         currentPassword,
         newPassword
       });
@@ -63,8 +64,8 @@ export default function SecuritySettings() {
         setPasswordStatus('error');
         setTimeout(() => setPasswordStatus('idle'), 3000);
       }
-    } catch (err: any) {
-      setPasswordError(err.response?.data?.error || err.response?.data?.message || '密码修改失败');
+    } catch (err: unknown) {
+      setPasswordError(getAxiosErrorMessage(err, '密码修改失败'));
       setPasswordStatus('error');
       setTimeout(() => setPasswordStatus('idle'), 3000);
     }

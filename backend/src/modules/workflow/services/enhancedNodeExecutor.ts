@@ -1,16 +1,14 @@
-/**
+﻿/**
  * Phase 1: 增强节点执行器
  * 将 AARS 的 verification/risk_assess/decision/knowledge/rollback 能力
  * 移植为工作流标准节点执行逻辑
  */
 
-import { randomUUID } from 'crypto';
-import db from '../../../models/database';
+import { serversRepo, settingsRepository } from '../../../repositories';
 import { logger } from '../../../utils/logger';
-import { notificationService } from '../../infra/services/notificationService';
 import { createAuditLog } from '../../infra/services/auditService';
 import { executeCommand } from '../../servers/services/sshService';
-import { knowledgeEngine } from '../../../core/KnowledgeEngine';
+import { knowledgeEngine } from '../../ai/services/KnowledgeEngine';
 import type { NodeResult, ExecutionContext } from '../../../types';
 import type {
   VerificationNodeConfig,
@@ -23,6 +21,7 @@ import type {
   KnowledgeNodeConfig,
   RollbackNodeConfig,
 } from './enhancedNodeTypes';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 // ─────────────────────────────────────────────
 // 1. verification 节点：5级验证门禁链
@@ -66,8 +65,8 @@ export async function executeVerificationNode(
         passed = result.passed;
         detail = result.detail;
         if (passed) break;
-      } catch (err: any) {
-        detail = `检查异常: ${err.message || String(err)}`;
+      } catch (err: unknown) {
+        detail = `检查异常: ${getErrorMessage(err) || String(err)}`;
         logger.warn(`verification gate ${gate.stage} attempt ${attempt + 1}/${gate.maxRetries + 1}: ${detail}`);
       }
     }
@@ -113,7 +112,7 @@ async function runGateCheck(stage: VerificationStage, serverId?: string): Promis
     return { passed: false, detail: '未指定服务器，无法执行验证' };
   }
 
-  const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(serverId) as Record<string, unknown> | undefined;
+  const server = serversRepo.getById(serverId) as { id: string; hostname: string; port: number; username: string; use_ssh_key: number; private_key?: string; password?: string } | undefined;
   if (!server) {
     return { passed: false, detail: `服务器 ${serverId} 不存在` };
   }
@@ -134,12 +133,12 @@ async function runGateCheck(stage: VerificationStage, serverId?: string): Promis
       default:
         return { passed: true, detail: '未知验证阶段，默认通过' };
     }
-  } catch (err: any) {
-    return { passed: false, detail: `SSH 执行失败: ${err.message || String(err)}` };
+  } catch (err: unknown) {
+    return { passed: false, detail: `SSH 执行失败: ${getErrorMessage(err) || String(err)}` };
   }
 }
 
-async function checkServiceHealth(server: Record<string, unknown>): Promise<{ passed: boolean; detail: string }> {
+async function checkServiceHealth(server: { id: string; hostname: string; port: number; username: string; use_ssh_key: number; private_key?: string; password?: string }): Promise<{ passed: boolean; detail: string }> {
   try {
     // 检查系统关键服务：sshd, cron, rsyslog/systemd-journald
     const result = await executeCommand(
@@ -161,7 +160,7 @@ async function checkServiceHealth(server: Record<string, unknown>): Promise<{ pa
   }
 }
 
-async function checkMetricRecovery(server: Record<string, unknown>): Promise<{ passed: boolean; detail: string }> {
+async function checkMetricRecovery(server: { id: string; hostname: string; port: number; username: string; use_ssh_key: number; private_key?: string; password?: string }): Promise<{ passed: boolean; detail: string }> {
   try {
     const result = await executeCommand(
       server.id as string,
@@ -192,7 +191,7 @@ async function checkMetricRecovery(server: Record<string, unknown>): Promise<{ p
   }
 }
 
-async function checkBaselineComparison(server: Record<string, unknown>): Promise<{ passed: boolean; detail: string }> {
+async function checkBaselineComparison(server: { id: string; hostname: string; port: number; username: string; use_ssh_key: number; private_key?: string; password?: string }): Promise<{ passed: boolean; detail: string }> {
   try {
     // 简单基线对比：获取当前负载和最近一次记录的负载
     const result = await executeCommand(
@@ -204,11 +203,9 @@ async function checkBaselineComparison(server: Record<string, unknown>): Promise
     const currentLoad = output ? parseFloat(output.split(/\s+/)[0]) : 0;
 
     // 从数据库获取上次基线
-    const lastBaseline = db.prepare(
-      "SELECT value FROM settings WHERE key = ? ORDER BY updated_at DESC LIMIT 1"
-    ).get(`aars_baseline:${server.id}:last_loadavg`) as { value: string } | undefined;
+    const lastBaselineValue = settingsRepository.getValue(`aars_baseline:${server.id}:last_loadavg`);
 
-    const baselineValue = lastBaseline ? parseFloat(lastBaseline.value) : currentLoad;
+    const baselineValue = lastBaselineValue ? parseFloat(lastBaselineValue) : currentLoad;
     const threshold = baselineValue * 1.5; // 基线 +50%
 
     if (currentLoad <= threshold) {
@@ -220,7 +217,7 @@ async function checkBaselineComparison(server: Record<string, unknown>): Promise
   }
 }
 
-async function checkImpactAssessment(server: Record<string, unknown>): Promise<{ passed: boolean; detail: string }> {
+async function checkImpactAssessment(server: { id: string; hostname: string; port: number; username: string; use_ssh_key: number; private_key?: string; password?: string }): Promise<{ passed: boolean; detail: string }> {
   try {
     // 检查关键进程和端口是否正常
     const result = await executeCommand(
@@ -280,7 +277,7 @@ export function executeRiskAssessNode(
   previousResults: string[]
 ): NodeResult {
   const severity = config.alertSeverity || 'medium';
-  const title = config.alertTitle || '未知告警';
+  const _title = config.alertTitle || '未知告警';
 
   // 从上下文或变量中提取修复计划信息
   const planOutput = config.planSourceNodeId
@@ -393,7 +390,7 @@ export function executeDecisionNode(
   let riskLevel = 'medium';
 
   if (config.riskSourceNodeId && nodeResults[config.riskSourceNodeId]?.metadata) {
-    const meta = nodeResults[config.riskSourceNodeId].metadata as Record<string, unknown> || {};
+    const meta = nodeResults[config.riskSourceNodeId].metadata as Record<string, string | number | boolean> || {};
     riskScore = (meta.overallRiskScore as number) || 0.5;
     riskLevel = (meta.riskLevel as string) || 'medium';
   }
@@ -520,8 +517,8 @@ export async function executeRollbackNode(
       const result = await executeCommand(serverId, cmd, { timeout: cmdTimeout });
       const output = result.stdout || result.stderr || '';
       results.push({ command: cmd, success: true, output: output.substring(0, 500) });
-    } catch (err: any) {
-      results.push({ command: cmd, success: false, output: err.message || String(err) });
+    } catch (err: unknown) {
+      results.push({ command: cmd, success: false, output: getErrorMessage(err) || String(err) });
       // 回滚命令失败不中断，继续执行后续
     }
   }
@@ -535,7 +532,7 @@ export async function executeRollbackNode(
     action: 'rollback_executed',
     resource_type: 'rollback',
     resource_id: serverId,
-    details: { commands: rollbackCommands, results: results.map((r: { command: string; success: boolean; output: string }) => ({ success: r.success })) },
+    details: { commands: JSON.stringify(rollbackCommands), results: JSON.stringify(results.map((r: { command: string; success: boolean; output: string }) => ({ success: r.success }))) },
   });
 
   return {

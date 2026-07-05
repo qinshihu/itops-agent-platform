@@ -1,6 +1,6 @@
 import { ShieldCheck, Settings } from 'lucide-react';
 import clsx from 'clsx';
-import type { Server, CommandResult, ComplianceCheck } from './types';
+import type { Server, CommandResult, ComplianceCheck as _ComplianceCheck } from './types';
 
 interface ComplianceSectionProps {
   selectedServer: Server;

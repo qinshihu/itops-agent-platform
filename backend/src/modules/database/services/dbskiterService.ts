@@ -171,7 +171,7 @@ export async function executeDbskiter(options: DbskiterOptions): Promise<Dbskite
     const pythonCmd = await getPythonCommand();
 
     // 安全日志：隐藏密码
-    const safeArgs = args.map((arg, i) =>
+    const safeArgs = args.map((arg, _i) =>
         arg === '--password' ? '--password ' : arg
     );
     logger.info(`🗄️ 执行 dbskiter: ${pythonCmd} -m dbskiter ${safeArgs.join(' ')}`);

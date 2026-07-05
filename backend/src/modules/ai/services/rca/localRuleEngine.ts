@@ -417,7 +417,7 @@ class LocalRuleEngine {
     return Math.min(0.95, keywordMatchRatio * 0.7 + lengthFactor * 0.3);
   }
 
-  private generateGenericAnalysis(alertTitle: string, alertContent: string): RuleAnalysisResult {
+  private generateGenericAnalysis(alertTitle: string, _alertContent: string): RuleAnalysisResult {
     const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
     return {

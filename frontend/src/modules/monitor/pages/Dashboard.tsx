@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Bot, GitBranch, Play, Bell, TrendingUp, TrendingDown, Minus, Clock, Server, BookOpen, Zap, Activity, Shield } from 'lucide-react';
+import { Bot, GitBranch, Play, Bell, _TrendingUp, _TrendingDown, _Minus, Clock, Server, BookOpen, Zap, Activity, Shield } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../../../lib/api';
@@ -87,7 +87,7 @@ export default function Dashboard() {
   const { data: agents, isLoading: agentsLoading } = useQuery({
     queryKey: ['agents'],
     queryFn: async () => {
-      const res = await api.get('/api/agents');
+      const res = await api.get('/agents');
       return res.data.data as Agent[];
     },
     staleTime: 60000,
@@ -96,7 +96,7 @@ export default function Dashboard() {
   const { data: servers, isLoading: serversLoading } = useQuery({
     queryKey: ['servers'],
     queryFn: async () => {
-      const res = await api.get('/api/servers');
+      const res = await api.get('/servers');
       return res.data.data as Server[];
     },
     staleTime: 60000,
@@ -105,7 +105,7 @@ export default function Dashboard() {
   const { data: workflows, isLoading: workflowsLoading } = useQuery({
     queryKey: ['workflows'],
     queryFn: async () => {
-      const res = await api.get('/api/workflows');
+      const res = await api.get('/workflows');
       return res.data.data as Workflow[];
     },
     staleTime: 120000,
@@ -114,7 +114,7 @@ export default function Dashboard() {
   const { data: knowledge, isLoading: knowledgeLoading } = useQuery({
     queryKey: ['knowledge'],
     queryFn: async () => {
-      const res = await api.get('/api/knowledge');
+      const res = await api.get('/knowledge');
       return res.data.data as Knowledge[];
     },
     staleTime: 120000,
@@ -123,7 +123,7 @@ export default function Dashboard() {
   const { data: tasks, isLoading: tasksLoading } = useQuery({
     queryKey: ['tasks', { limit: 5 }],
     queryFn: async () => {
-      const res = await api.get('/api/tasks', { params: { limit: 5 } });
+      const res = await api.get('/tasks', { params: { limit: 5 } });
       return res.data.data as Task[];
     },
     staleTime: 30000,
@@ -132,7 +132,7 @@ export default function Dashboard() {
   const { data: alerts, isLoading: alertsLoading } = useQuery({
     queryKey: ['alerts', { limit: 5 }],
     queryFn: async () => {
-      const res = await api.get('/api/alerts', { params: { limit: 5 } });
+      const res = await api.get('/alerts', { params: { limit: 5 } });
       return res.data.data as Alert[];
     },
     staleTime: 30000,

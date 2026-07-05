@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Plus, Trash2, Search, Loader2, CheckCircle2, AlertCircle, Play, Key, Radio,
+  Plus, _Trash2, Search, Loader2, CheckCircle2, AlertCircle, Play, _Key, Radio,
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 
 const VERSIONS = ['v1', 'v2c', 'v3'];
 const AUTH_PROTOCOLS = ['MD5', 'SHA'];
@@ -30,7 +31,7 @@ export default function SnmpCredentials() {
 
   const { data: credentials = [], isLoading: credsLoading } = useQuery({
     queryKey: ['snmp-credentials'],
-    queryFn: () => api.get('/api/snmp/credentials').then(r => r.data.data || []),
+    queryFn: () => api.get('/snmp/credentials').then(r => r.data.data || []),
   });
 
   const [showForm, setShowForm] = useState(false);
@@ -46,7 +47,7 @@ export default function SnmpCredentials() {
   const [testResult, setTestResult] = useState<{ host: string; status: 'testing' | 'success' | 'fail'; msg?: string } | null>(null);
 
   const testConn = useMutation({
-    mutationFn: () => api.post('/api/snmp/test', {
+    mutationFn: () => api.post('/snmp/test', {
       host: form.host, port: form.port, version: form.version, community: form.community,
     }),
     onMutate: () => setTestResult({ host: form.host, status: 'testing' }),
@@ -57,8 +58,8 @@ export default function SnmpCredentials() {
         setTestResult({ host: form.host, status: 'fail', msg: res.data.message || '连接失败' });
       }
     },
-    onError: (err: any) => {
-      setTestResult({ host: form.host, status: 'fail', msg: err.response?.data?.message || err.message });
+    onError: (err: unknown) => {
+      setTestResult({ host: form.host, status: 'fail', msg: getAxiosErrorMessage(err) });
     },
   });
 
@@ -71,7 +72,7 @@ export default function SnmpCredentials() {
         snmp_priv_protocol: form.privProtocol || undefined, snmp_priv_key: form.privKey || undefined,
         host: form.host || undefined,
       };
-      return editingId ? api.put(`/api/snmp/credentials/${editingId}`, body) : api.post('/api/snmp/credentials', body);
+      return editingId ? api.put(`/snmp/credentials/${editingId}`, body) : api.post('/snmp/credentials', body);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['snmp-credentials'] });
@@ -80,21 +81,21 @@ export default function SnmpCredentials() {
   });
 
   const deleteCred = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/snmp/credentials/${id}`),
+    mutationFn: (id: string) => api.delete(`/snmp/credentials/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['snmp-credentials'] }),
   });
 
   const [credTestResults, setCredTestResults] = useState<Record<string, { status: 'testing' | 'success' | 'fail'; msg?: string }>>({});
 
   const testCred = useMutation({
-    mutationFn: (cred: SnmpCredential) => api.post(`/api/snmp/credentials/${cred.id}/test`, { host: cred.host || undefined }),
+    mutationFn: (cred: SnmpCredential) => api.post(`/snmp/credentials/${cred.id}/test`, { host: cred.host || undefined }),
     onMutate: (cred) => setCredTestResults(prev => ({ ...prev, [cred.id]: { status: 'testing' } })),
     onSuccess: (res, cred) => {
       setCredTestResults(prev => ({ ...prev, [cred.id]: res.data?.code === 0 ? { status: 'success' } : { status: 'fail', msg: res.data?.message || '连接失败' } }));
       setTimeout(() => setCredTestResults(prev => { const n = { ...prev }; delete n[cred.id]; return n; }), 3000);
     },
-    onError: (err: any, cred) => {
-      setCredTestResults(prev => ({ ...prev, [cred.id]: { status: 'fail', msg: err.response?.data?.message || err.message } }));
+    onError: (err: unknown, cred) => {
+      setCredTestResults(prev => ({ ...prev, [cred.id]: { status: 'fail', msg: getAxiosErrorMessage(err) } }));
       setTimeout(() => setCredTestResults(prev => { const n = { ...prev }; delete n[cred.id]; return n; }), 3000);
     },
   });

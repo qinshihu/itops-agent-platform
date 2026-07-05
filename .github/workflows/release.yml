@@ -30,7 +30,6 @@ jobs:
   quality-gates:
     name: Quality Gates
     runs-on: ubuntu-latest
-    continue-on-error: true
     outputs:
       backend_ok: ${{ steps.backend-check.outputs.ok }}
       frontend_ok: ${{ steps.frontend-check.outputs.ok }}
@@ -67,19 +66,22 @@ jobs:
         working-directory: ./frontend
         run: npm run build
 
-      - name: Backend tests (non-blocking)
+      - name: Backend tests with coverage
         working-directory: ./backend
-        run: npm test --if-present
-        continue-on-error: true
+        run: npm run test:coverage
         env:
-          JWT_SECRET: test-secret-for-ci
+          JWT_SECRET: test-secret-for-ci-must-be-32-chars-long
           DOUBAO_API_KEY: test-api-key
+
+      - name: Frontend tests
+        working-directory: ./frontend
+        run: npm run test:coverage
 
       - name: Set quality check results
         id: quality
         run: |
-          echo "Backend: ✅ TypeScript OK"
-          echo "Frontend: ✅ TypeScript OK + Build OK"
+          echo "Backend: ✅ TypeScript + Tests OK"
+          echo "Frontend: ✅ TypeScript + Build + Tests OK"
           echo "ok=true" >> $GITHUB_OUTPUT
 
   # Phase 2: Build and Push Backend
@@ -87,7 +89,7 @@ jobs:
     name: Build & Push Backend
     needs: [quality-gates]
     runs-on: ubuntu-latest
-    if: always() && (github.event_name == 'workflow_dispatch' && inputs.push_to_registry || startsWith(github.ref, 'refs/tags/'))
+    if: needs.quality-gates.result == 'success' && (github.event_name == 'workflow_dispatch' && inputs.push_to_registry || startsWith(github.ref, 'refs/tags/'))
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -144,7 +146,7 @@ jobs:
     name: Build & Push Frontend
     needs: [quality-gates]
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && inputs.push_to_registry || startsWith(github.ref, 'refs/tags/')
+    if: needs.quality-gates.result == 'success' && (github.event_name == 'workflow_dispatch' && inputs.push_to_registry || startsWith(github.ref, 'refs/tags/'))
     steps:
       - name: Checkout
         uses: actions/checkout@v4

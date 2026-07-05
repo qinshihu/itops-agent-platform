@@ -1,13 +1,18 @@
 import { logger } from '../../../utils/logger';
-import { db } from '../../../models/database';
+import { k8sContextRepository } from '../../../repositories/k8sContextRepository';
 import { randomUUID } from 'crypto';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let k8s: any = null;
 try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   k8s = require('@kubernetes/client-node');
 } catch {
   logger.warn('⚠️ @kubernetes/client-node not installed, K8s management disabled. Install with: npm install @kubernetes/client-node');
 }
+
+// ── 本地类型定义 ──
 
 interface K8sContext {
   id: string;
@@ -23,8 +28,97 @@ interface K8sContext {
   updatedAt: string;
 }
 
+interface K8sContextRow {
+  id: string;
+  name: string;
+  cluster_url: string | null;
+  namespace: string;
+  auth_type: string;
+  config: string;
+  status: string;
+  node_count: number;
+  pod_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** K8s API 响应中的通用资源对象（允许深层属性访问） */
+type K8sResource = Record<string, unknown>;
+
+interface K8sClientBundle {
+  kc: K8sResource;
+  coreApi: K8sResource;
+  appsApi: K8sResource;
+}
+
+interface K8sNamespaceInfo {
+  name: string;
+  status: string;
+  createdAt: string;
+}
+
+interface K8sPodInfo {
+  name: string;
+  namespace: string;
+  status: string;
+  nodeName: string;
+  podIP: string;
+  containers: { name: string; image: string }[];
+  containerStatuses: { name: string; ready: unknown; restartCount: unknown; state: string }[];
+  restartCount: number;
+  totalContainers: number;
+  readyContainers: number;
+  labels: Record<string, string>;
+  createdAt: string;
+}
+
+interface K8sDeploymentInfo {
+  name: string;
+  namespace: string;
+  replicas: number;
+  readyReplicas: number;
+  availableReplicas: number;
+  image: string;
+  strategy: string;
+  containers: K8sResource[];
+  createdAt: string;
+}
+
+interface K8sServiceInfo {
+  name: string;
+  namespace: string;
+  type: string;
+  clusterIP: string;
+  ports: { name: string; port: unknown; targetPort: unknown; protocol: string; nodePort: unknown }[];
+  createdAt: string;
+}
+
+interface K8sNodeInfo {
+  name: string;
+  status: string;
+  roles: string[];
+  version: string;
+  os: string;
+  cpu: string;
+  memory: string;
+  createdAt: string;
+}
+
+interface K8sPodDetail {
+  name: string;
+  namespace: string;
+  status: string;
+  podIP: string;
+  hostIP: string;
+  containers: unknown[];
+  containerStatuses: unknown;
+  labels: Record<string, string>;
+  conditions: unknown;
+  createdAt: string;
+}
+
 class KubernetesService {
-  private clients: Map<string, { kc: any; coreApi: any; appsApi: any }> = new Map();
+  private clients: Map<string, K8sClientBundle> = new Map();
   private contexts: Map<string, K8sContext> = new Map();
   private available = false;
 
@@ -34,37 +128,20 @@ class KubernetesService {
       return;
     }
     this.available = true;
-    // Tables and contexts initialized via ensureTables() called from app.ts
+    // 表结构由 migration v047 维护；本服务的运行时上下文加载由 initialize() 负责。
   }
 
-  ensureTables() {
-    this.initTables();
+  /**
+   * 启动时加载已激活的 K8s 集群上下文
+   * （原 ensureTables() 的运行时部分，schema 已下沉到 migration v047）
+   */
+  initialize() {
     this.loadContexts();
-  }
-
-  private initTables() {
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS k8s_contexts (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          cluster_url TEXT,
-          namespace TEXT DEFAULT 'default',
-          auth_type TEXT DEFAULT 'kubeconfig',
-          config TEXT,
-          status TEXT DEFAULT 'inactive',
-          node_count INTEGER DEFAULT 0,
-          pod_count INTEGER DEFAULT 0,
-          created_at TEXT DEFAULT (datetime('now','localtime')),
-          updated_at TEXT DEFAULT (datetime('now','localtime'))
-        )
-      `);
-    } catch {}
   }
 
   private loadContexts() {
     try {
-      const rows = db.prepare('SELECT * FROM k8s_contexts WHERE status = ?').all('active') as any[];
+      const rows = k8sContextRepository.listActive();
       for (const row of rows) {
         try {
           const kc = new k8s.KubeConfig();
@@ -74,27 +151,32 @@ class KubernetesService {
             coreApi: kc.makeApiClient(k8s.CoreV1Api),
             appsApi: kc.makeApiClient(k8s.AppsV1Api),
           });
-          this.contexts.set(row.id, this.rowToContext(row));
-        } catch (err: any) {
-          logger.error(`Failed to load K8s context ${row.name}:`, err.message);
+          this.contexts.set(row.id, {
+            id: row.id, name: row.name, clusterUrl: row.cluster_url || '',
+            namespace: row.namespace, authType: row.auth_type, config: row.config || '',
+            status: row.status, nodeCount: row.node_count, podCount: row.pod_count,
+            createdAt: row.created_at, updatedAt: row.updated_at,
+          });
+        } catch (err: unknown) {
+          logger.error(`Failed to load K8s context ${row.name}:`, getErrorMessage(err));
         }
       }
       logger.info(`📋 Loaded ${this.clients.size} K8s cluster(s)`);
-    } catch (err: any) {
-      logger.error('Failed to load K8s contexts:', err.message);
+    } catch (err: unknown) {
+      logger.error('Failed to load K8s contexts:', getErrorMessage(err));
     }
   }
 
-  private rowToContext(row: any): K8sContext {
+  private rowToContext(row: K8sContextRow): K8sContext {
     return {
-      id: row.id, name: row.name, clusterUrl: row.cluster_url,
-      namespace: row.namespace, authType: row.auth_type, config: row.config,
+      id: row.id, name: row.name, clusterUrl: row.cluster_url || '',
+      namespace: row.namespace, authType: row.auth_type, config: row.config || '',
       status: row.status, nodeCount: row.node_count, podCount: row.pod_count,
       createdAt: row.created_at, updatedAt: row.updated_at,
     };
   }
 
-  getClient(contextId: string) {
+  getClient(contextId: string): K8sClientBundle {
     const client = this.clients.get(contextId);
     if (!client) throw Object.assign(new Error(`K8s 集群未连接: ${contextId}`), { statusCode: 503 });
     return client;
@@ -118,17 +200,17 @@ class KubernetesService {
 
     const contextName = kc.getCurrentContext();
     const cluster = kc.getCurrentCluster();
-    const user = kc.getCurrentUser();
+    const _user = kc.getCurrentUser();
 
     const id = randomUUID();
     const now = new Date().toISOString();
     const name = contextName || `k8s-${id.substring(0, 8)}`;
     const clusterUrl = cluster?.server || '';
 
-    db.prepare(`
-      INSERT INTO k8s_contexts (id, name, cluster_url, namespace, auth_type, config, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
-    `).run(id, name, clusterUrl, 'default', 'kubeconfig', configContent, now, now);
+    k8sContextRepository.insert({
+      id, name, cluster_url: clusterUrl, namespace: 'default',
+      auth_type: 'kubeconfig', config: configContent, created_at: now, updated_at: now,
+    });
 
     // 立即加载客户端
     try {
@@ -141,8 +223,7 @@ class KubernetesService {
       // 更新集群信息
       const nodes = await kc.makeApiClient(k8s.CoreV1Api).listNode().catch(() => ({ body: { items: [] } }));
       const pods = await kc.makeApiClient(k8s.CoreV1Api).listPodForAllNamespaces().catch(() => ({ body: { items: [] } }));
-      db.prepare('UPDATE k8s_contexts SET node_count=?, pod_count=?, updated_at=? WHERE id=?')
-        .run(nodes.body.items.length, pods.body.items.length, now, id);
+      k8sContextRepository.updateCounts(id, nodes.body.items.length, pods.body.items.length);
 
       const ctx: K8sContext = {
         id, name, clusterUrl, namespace: 'default', authType: 'kubeconfig',
@@ -153,16 +234,16 @@ class KubernetesService {
       this.contexts.set(id, ctx);
       logger.info(`✅ K8s cluster connected: ${name} (${clusterUrl})`);
       return ctx;
-    } catch (err: any) {
-      db.prepare('UPDATE k8s_contexts SET status=?, updated_at=? WHERE id=?').run('error', now, id);
-      throw new Error(`连接集群失败: ${err.message}`);
+    } catch (err: unknown) {
+      k8sContextRepository.updateStatus(id, 'error');
+      throw new Error(`连接集群失败: ${getErrorMessage(err)}`);
     }
   }
 
   async deleteContext(contextId: string): Promise<void> {
     this.clients.delete(contextId);
     this.contexts.delete(contextId);
-    db.prepare('DELETE FROM k8s_contexts WHERE id = ?').run(contextId);
+    k8sContextRepository.deleteById(contextId);
   }
 
   async testContext(configContent: string): Promise<{ success: boolean; message: string }> {
@@ -174,109 +255,109 @@ class KubernetesService {
       const res = await api.listNode();
       const cluster = kc.getCurrentCluster();
       return { success: true, message: `${cluster?.server || 'Unknown'}, ${res.body.items.length} nodes` };
-    } catch (err: any) {
-      return { success: false, message: err.message };
+    } catch (err: unknown) {
+      return { success: false, message: getErrorMessage(err) };
     }
   }
 
   // ── 核心 API ──
-  async listNamespaces(contextId?: string): Promise<any[]> {
+  async listNamespaces(contextId?: string): Promise<K8sNamespaceInfo[]> {
     const { coreApi } = this.getClient(contextId || this.contexts.keys().next().value || '');
-    const res = await coreApi.listNamespace();
-    return (res.body.items || []).map((ns: any) => ({
-      name: ns.metadata?.name || '',
-      status: ns.status?.phase || '',
-      createdAt: ns.metadata?.creationTimestamp,
+    const res = await (coreApi as Record<string, (...args: unknown[]) => unknown>).listNamespace() as { body: { items: K8sResource[] } };
+    return (res.body.items || []).map((ns: K8sResource) => ({
+      name: (ns.metadata as K8sResource)?.name as string || '',
+      status: (ns.status as K8sResource)?.phase as string || '',
+      createdAt: (ns.metadata as K8sResource)?.creationTimestamp as string,
     }));
   }
 
-  async listPods(namespace = 'default', contextId?: string): Promise<any[]> {
+  async listPods(namespace = 'default', contextId?: string): Promise<K8sPodInfo[]> {
     const { coreApi } = this.getClient(contextId || this.contexts.keys().next().value || '');
-    const res = await coreApi.listNamespacedPod(namespace);
-    return (res.body.items || []).map((pod: any) => ({
-      name: pod.metadata?.name || '',
-      namespace: pod.metadata?.namespace || '',
-      status: pod.status?.phase || 'Unknown',
-      nodeName: pod.spec?.nodeName || '',
-      podIP: pod.status?.podIP || '',
-      containers: (pod.spec?.containers || []).map((c: any) => ({ name: c.name, image: c.image || '' })),
-      containerStatuses: (pod.status?.containerStatuses || []).map((cs: any) => ({
-        name: cs.name, ready: cs.ready, restartCount: cs.restartCount,
-        state: cs.state ? Object.keys(cs.state)[0] : 'unknown',
+    const res = await (coreApi as Record<string, (...args: unknown[]) => unknown>).listNamespacedPod(namespace) as { body: { items: K8sResource[] } };
+    return (res.body.items || []).map((pod: K8sResource) => ({
+      name: (pod.metadata as K8sResource)?.name as string || '',
+      namespace: (pod.metadata as K8sResource)?.namespace as string || '',
+      status: (pod.status as K8sResource)?.phase as string || 'Unknown',
+      nodeName: (pod.spec as K8sResource)?.nodeName as string || '',
+      podIP: (pod.status as K8sResource)?.podIP as string || '',
+      containers: ((pod.spec as K8sResource)?.containers as K8sResource[] || []).map((c: K8sResource) => ({ name: c.name as string, image: (c.image as string) || '' })),
+      containerStatuses: ((pod.status as K8sResource)?.containerStatuses as K8sResource[] || []).map((cs: K8sResource) => ({
+        name: cs.name as string, ready: cs.ready, restartCount: cs.restartCount,
+        state: cs.state ? Object.keys(cs.state as object)[0] : 'unknown',
       })),
-      restartCount: (pod.status?.containerStatuses || []).reduce((sum: number, cs: any) => sum + cs.restartCount, 0),
-      totalContainers: (pod.spec?.containers || []).length,
-      readyContainers: (pod.status?.containerStatuses || []).filter((cs: any) => cs.ready).length,
-      labels: pod.metadata?.labels || {},
-      createdAt: pod.metadata?.creationTimestamp,
+      restartCount: ((pod.status as K8sResource)?.containerStatuses as K8sResource[] || []).reduce((sum: number, cs: K8sResource) => sum + (cs.restartCount as number), 0),
+      totalContainers: ((pod.spec as K8sResource)?.containers as K8sResource[] || []).length,
+      readyContainers: ((pod.status as K8sResource)?.containerStatuses as K8sResource[] || []).filter((cs: K8sResource) => cs.ready).length,
+      labels: ((pod.metadata as K8sResource)?.labels as Record<string, string>) || {},
+      createdAt: (pod.metadata as K8sResource)?.creationTimestamp as string,
     }));
   }
 
-  async listDeployments(namespace = 'default', contextId?: string): Promise<any[]> {
+  async listDeployments(namespace = 'default', contextId?: string): Promise<K8sDeploymentInfo[]> {
     const { appsApi } = this.getClient(contextId || this.contexts.keys().next().value || '');
-    const res = await appsApi.listNamespacedDeployment(namespace);
-    return (res.body.items || []).map((deploy: any) => ({
-      name: deploy.metadata?.name || '',
-      namespace: deploy.metadata?.namespace || '',
-      replicas: deploy.spec?.replicas || 0,
-      readyReplicas: deploy.status?.readyReplicas || 0,
-      availableReplicas: deploy.status?.availableReplicas || 0,
-      image: (deploy.spec?.template?.spec?.containers?.[0]?.image || '').split('/').pop() || '',
-      strategy: deploy.spec?.strategy?.type || 'RollingUpdate',
-      containers: (deploy.spec?.template?.spec?.containers || []).map((c: any) => ({ name: c.name, image: c.image || '' })),
-      createdAt: deploy.metadata?.creationTimestamp,
+    const res = await (appsApi as Record<string, (...args: unknown[]) => unknown>).listNamespacedDeployment(namespace) as { body: { items: K8sResource[] } };
+    return (res.body.items || []).map((deploy: K8sResource) => ({
+      name: (deploy.metadata as K8sResource)?.name as string || '',
+      namespace: (deploy.metadata as K8sResource)?.namespace as string || '',
+      replicas: (deploy.spec as K8sResource)?.replicas as number || 0,
+      readyReplicas: (deploy.status as K8sResource)?.readyReplicas as number || 0,
+      availableReplicas: (deploy.status as K8sResource)?.availableReplicas as number || 0,
+      image: (((((deploy.spec as K8sResource)?.template as K8sResource)?.spec as K8sResource)?.containers as K8sResource[] | undefined)?.[0]?.image as string) || '',
+      strategy: ((deploy.spec as K8sResource)?.strategy as K8sResource)?.type as string || 'RollingUpdate',
+      containers: (((deploy.spec as K8sResource)?.template as K8sResource)?.spec as K8sResource)?.containers as K8sResource[] || [],
+      createdAt: (deploy.metadata as K8sResource)?.creationTimestamp as string,
     }));
   }
 
-  async listServices(namespace = 'default', contextId?: string): Promise<any[]> {
+  async listServices(namespace = 'default', contextId?: string): Promise<K8sServiceInfo[]> {
     const { coreApi } = this.getClient(contextId || this.contexts.keys().next().value || '');
-    const res = await coreApi.listNamespacedService(namespace);
-    return (res.body.items || []).map((svc: any) => ({
-      name: svc.metadata?.name || '',
-      namespace: svc.metadata?.namespace || '',
-      type: svc.spec?.type || 'ClusterIP',
-      clusterIP: svc.spec?.clusterIP || '',
-      ports: (svc.spec?.ports || []).map((p: any) => ({
-        name: p.name || '', port: p.port, targetPort: p.targetPort,
-        protocol: p.protocol || 'TCP', nodePort: p.nodePort,
+    const res = await (coreApi as Record<string, (...args: unknown[]) => unknown>).listNamespacedService(namespace) as { body: { items: K8sResource[] } };
+    return (res.body.items || []).map((svc: K8sResource) => ({
+      name: (svc.metadata as K8sResource)?.name as string || '',
+      namespace: (svc.metadata as K8sResource)?.namespace as string || '',
+      type: (svc.spec as K8sResource)?.type as string || 'ClusterIP',
+      clusterIP: (svc.spec as K8sResource)?.clusterIP as string || '',
+      ports: ((svc.spec as K8sResource)?.ports as K8sResource[] || []).map((p: K8sResource) => ({
+        name: (p.name as string) || '', port: p.port, targetPort: p.targetPort,
+        protocol: (p.protocol as string) || 'TCP', nodePort: p.nodePort,
       })),
-      createdAt: svc.metadata?.creationTimestamp,
+      createdAt: (svc.metadata as K8sResource)?.creationTimestamp as string,
     }));
   }
 
-  async listNodes(contextId?: string): Promise<any[]> {
+  async listNodes(contextId?: string): Promise<K8sNodeInfo[]> {
     const { coreApi } = this.getClient(contextId || this.contexts.keys().next().value || '');
-    const res = await coreApi.listNode();
-    return (res.body.items || []).map((node: any) => ({
-      name: node.metadata?.name || '',
-      status: node.status?.conditions?.find((c: any) => c.type === 'Ready')?.status === 'True' ? 'Ready' : 'NotReady',
-      roles: node.metadata?.labels?.['node-role.kubernetes.io/control-plane'] ? ['control-plane'] : ['worker'],
-      version: node.status?.nodeInfo?.kubeletVersion || '',
-      os: node.status?.nodeInfo?.osImage || '',
-      cpu: node.status?.capacity?.cpu || '0',
-      memory: node.status?.capacity?.memory || '0',
-      createdAt: node.metadata?.creationTimestamp,
+    const res = await (coreApi as Record<string, (...args: unknown[]) => unknown>).listNode() as { body: { items: K8sResource[] } };
+    return (res.body.items || []).map((node: K8sResource) => ({
+      name: (node.metadata as K8sResource)?.name as string || '',
+      status: ((node.status as K8sResource)?.conditions as K8sResource[])?.find((c: K8sResource) => c.type === 'Ready')?.status === 'True' ? 'Ready' : 'NotReady',
+      roles: ((node.metadata as K8sResource)?.labels as Record<string, string> | undefined)?.['node-role.kubernetes.io/control-plane'] ? ['control-plane'] : ['worker'],
+      version: ((node.status as K8sResource)?.nodeInfo as K8sResource)?.kubeletVersion as string || '',
+      os: ((node.status as K8sResource)?.nodeInfo as K8sResource)?.osImage as string || '',
+      cpu: ((node.status as K8sResource)?.capacity as K8sResource)?.cpu as string || '0',
+      memory: ((node.status as K8sResource)?.capacity as K8sResource)?.memory as string || '0',
+      createdAt: (node.metadata as K8sResource)?.creationTimestamp as string,
     }));
   }
 
-  async getPod(namespace: string, name: string, contextId?: string): Promise<any> {
+  async getPod(namespace: string, name: string, contextId?: string): Promise<K8sPodDetail> {
     const { coreApi } = this.getClient(contextId || this.contexts.keys().next().value || '');
-    const res = await coreApi.readNamespacedPod(name, namespace);
-    const pod = res.body;
+    const res = await (coreApi as Record<string, (...args: unknown[]) => unknown>).readNamespacedPod(name, namespace) as { body: K8sResource };
+    const pod = res.body as K8sResource;
     return {
-      name: pod.metadata?.name || '',
-      namespace: pod.metadata?.namespace || '',
-      status: pod.status?.phase || 'Unknown',
-      podIP: pod.status?.podIP || '',
-      hostIP: pod.status?.hostIP || '',
-      containers: (pod.spec?.containers || []).map((c: any) => ({
-        name: c.name, image: c.image || '',
+      name: (pod.metadata as K8sResource)?.name as string || '',
+      namespace: (pod.metadata as K8sResource)?.namespace as string || '',
+      status: (pod.status as K8sResource)?.phase as string || 'Unknown',
+      podIP: (pod.status as K8sResource)?.podIP as string || '',
+      hostIP: (pod.status as K8sResource)?.hostIP as string || '',
+      containers: ((pod.spec as K8sResource)?.containers as K8sResource[] || []).map((c: K8sResource) => ({
+        name: c.name, image: (c.image as string) || '',
         ports: c.ports || [], resources: c.resources || {},
       })),
-      containerStatuses: pod.status?.containerStatuses || [],
-      labels: pod.metadata?.labels || {},
-      conditions: pod.status?.conditions || [],
-      createdAt: pod.metadata?.creationTimestamp,
+      containerStatuses: (pod.status as K8sResource)?.containerStatuses || [],
+      labels: ((pod.metadata as K8sResource)?.labels as Record<string, string>) || {},
+      conditions: (pod.status as K8sResource)?.conditions || [],
+      createdAt: (pod.metadata as K8sResource)?.creationTimestamp as string,
     };
   }
 
@@ -288,14 +369,14 @@ class KubernetesService {
 
   async deletePod(namespace: string, name: string, contextId?: string): Promise<void> {
     const { coreApi } = this.getClient(contextId || this.contexts.keys().next().value || '');
-    await coreApi.deleteNamespacedPod(name, namespace);
+    await (coreApi as Record<string, (...args: unknown[]) => unknown>).deleteNamespacedPod(name, namespace);
     logger.info(`Deleted pod ${namespace}/${name}`);
   }
 
   async scaleDeployment(namespace: string, name: string, replicas: number, contextId?: string): Promise<void> {
     const { appsApi } = this.getClient(contextId || this.contexts.keys().next().value || '');
     const patch = [{ op: 'replace', path: '/spec/replicas', value: replicas }];
-    await appsApi.patchNamespacedDeploymentScale(name, namespace, patch, undefined, undefined, undefined, undefined, {
+    await (appsApi as Record<string, (...args: unknown[]) => unknown>).patchNamespacedDeploymentScale(name, namespace, patch, undefined, undefined, undefined, undefined, {
       headers: { 'Content-Type': 'application/json-patch+json' },
     });
     logger.info(`Scaled deployment ${namespace}/${name} to ${replicas}`);

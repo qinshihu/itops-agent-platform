@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * =============================================================================
  * ITOps Agent Platform - SNMP 轮询巡检服务
@@ -13,11 +14,12 @@
  * =============================================================================
  */
 
-import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
 import { decrypt } from '../../auth/services/encryptionService';
 import type { SnmpVersion } from './snmpService';
 import { snmpService } from './snmpService';
+import { getErrorMessage } from '../../../utils/errorHelpers';
+import { snmpPollingRepo, snmpInspectionRepo, networkDeviceRepository, snmpCredentialsRepo } from '../../../repositories';
 
 // ====================== 类型定义 ======================
 
@@ -70,32 +72,12 @@ class SnmpPollingService {
 
   /** 确保快照表存在 */
   private ensureSnapshotTable(): void {
-    const tables = db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='snmp_polling_snapshots'"
-    ).all();
-    if (tables.length === 0) {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS snmp_polling_snapshots (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          device_id TEXT NOT NULL,
-          interface_index INTEGER NOT NULL,
-          in_octets TEXT DEFAULT '0',
-          out_octets TEXT DEFAULT '0',
-          in_errors INTEGER DEFAULT 0,
-          out_errors INTEGER DEFAULT 0,
-          last_poll_at TEXT,
-          UNIQUE(device_id, interface_index)
-        )
-      `);
-      logger.info('✅ Created snmp_polling_snapshots table');
-    }
+    snmpPollingRepo.ensureTable();
   }
 
   /** 获取设备最近的快照 */
   private getSnapshots(deviceId: string): Map<number, SnmpSnapshotRow> {
-    const rows = db.prepare(
-      'SELECT * FROM snmp_polling_snapshots WHERE device_id = ?'
-    ).all(deviceId) as SnmpSnapshotRow[];
+    const rows = snmpPollingRepo.getByDeviceId(deviceId);
     const map = new Map<number, SnmpSnapshotRow>();
     for (const row of rows) {
       map.set(row.interface_index, row);
@@ -106,31 +88,13 @@ class SnmpPollingService {
   /** 保存接口快照 */
   private saveSnapshots(deviceId: string, interfaces: SnmpInterfaceMetric[]): void {
     const now = new Date().toISOString();
-    const upsert = db.prepare(`
-      INSERT INTO snmp_polling_snapshots (device_id, interface_index, in_octets, out_octets, in_errors, out_errors, last_poll_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(device_id, interface_index) DO UPDATE SET
-        in_octets = excluded.in_octets,
-        out_octets = excluded.out_octets,
-        in_errors = excluded.in_errors,
-        out_errors = excluded.out_errors,
-        last_poll_at = excluded.last_poll_at
-    `);
-
-    const tx = db.transaction(() => {
-      for (const iface of interfaces) {
-        upsert.run(
-          deviceId,
-          iface.index,
-          String(iface.inOctets),
-          String(iface.outOctets),
-          iface.inErrors,
-          iface.outErrors,
-          now
-        );
-      }
-    });
-    tx();
+    snmpPollingRepo.upsertBatch(deviceId, interfaces.map(i => ({
+      index: i.index,
+      inOctets: i.inOctets,
+      outOctets: i.outOctets,
+      inErrors: i.inErrors,
+      outErrors: i.outErrors,
+    })), now);
   }
 
   /** 计算接口速率（bps），基于当前值和上一轮快照的差值 */
@@ -163,23 +127,21 @@ class SnmpPollingService {
     const startTime = Date.now();
 
     // 获取设备信息
-    const device = db.prepare(
-      `SELECT nd.*, sc.snmp_version, sc.community, sc.snmp_user, sc.snmp_auth_protocol,
-              sc.snmp_auth_key, sc.snmp_priv_protocol, sc.snmp_priv_key
-       FROM network_devices nd
-       LEFT JOIN snmp_credentials sc ON nd.snmp_credential_id = sc.id
-       WHERE nd.id = ? AND nd.snmp_enabled = 1`
-    ).get(deviceId) as any;
-
-    if (!device) {
+    const device = networkDeviceRepository.getById(deviceId);
+    if (!device?.snmp_enabled) {
       logger.warn(`SNMP poll skipped: device ${deviceId} not found or SNMP disabled`);
       return null;
     }
 
+    // 获取 SNMP 凭证
+    const snmpCred = device.snmp_credential_id
+      ? snmpCredentialsRepo.getById(device.snmp_credential_id)
+      : null;
+
     const host = device.ip_address;
     const port = device.snmp_port || 161;
-    const version: SnmpVersion = device.snmp_version || 'v2c';
-    const community = device.community ? decrypt(device.community) : 'public';
+    const version: SnmpVersion = (snmpCred?.snmp_version as SnmpVersion) || 'v2c';
+    const community = snmpCred?.community ? decrypt(snmpCred.community) : 'public';
 
     try {
       // 并行获取系统信息和接口列表
@@ -288,7 +250,7 @@ class SnmpPollingService {
 
       this.saveInspectionResult(deviceId, result);
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error(`SNMP inspect failed for device ${deviceId}:`, error);
       const result: SnmpInspectionResult = {
         reachable: false,
@@ -299,7 +261,7 @@ class SnmpPollingService {
         interfaceCount: 0,
         upCount: 0,
         downCount: 0,
-        alerts: [`❌ 巡检异常: ${error.message}`],
+        alerts: [`❌ 巡检异常: ${getErrorMessage(error)}`],
         pollDurationMs: Date.now() - startTime,
       };
       this.saveInspectionResult(deviceId, result);
@@ -314,34 +276,26 @@ class SnmpPollingService {
       ? `SNMP 可达 | ${result.interfaceCount} 个接口（${result.upCount} UP / ${result.downCount} DOWN）${result.alerts.length > 0 ? ' | ' + result.alerts.length + ' 条告警' : ''}`
       : 'SNMP 连接失败';
     const status = result.reachable ? 'completed' : 'failed';
-    const alertsJson = result.alerts.length > 0 ? JSON.stringify(result.alerts) : '[]';
+    const _alertsJson = result.alerts.length > 0 ? JSON.stringify(result.alerts) : '[]';
 
-    db.prepare(`
-      INSERT INTO network_inspection_history
-        (id, device_id, inspection_type, status, commands_executed, commands_failed, results, summary, duration_ms)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    snmpInspectionRepo.insertSnmpResult({
       id,
-      deviceId,
-      'snmp',
+      device_id: deviceId,
+      inspection_type: 'snmp',
       status,
-      result.interfaceCount,          // commands_executed = 接口数
-      result.alerts.length,           // commands_failed = 告警数
-      JSON.stringify(result),         // results = 全量 JSON
+      commands_executed: result.interfaceCount,
+      commands_failed: result.alerts.length,
+      results: JSON.stringify(result),
       summary,
-      result.pollDurationMs
-    );
+      duration_ms: result.pollDurationMs,
+    });
 
-    // 更新设备的上次巡检时间与摘要
-    db.prepare('UPDATE network_devices SET last_inspection_at = datetime(?), last_inspection_result = ? WHERE id = ?')
-      .run(new Date().toISOString(), summary, deviceId);
+    networkDeviceRepository.updateInspectionResult(deviceId, summary);
   }
 
   /** 轮询所有启用 SNMP 的设备 */
   async pollAll(): Promise<void> {
-    const devices = db.prepare(
-      'SELECT id, name, ip_address FROM network_devices WHERE snmp_enabled = 1'
-    ).all() as { id: string; name: string; ip_address: string }[];
+    const devices = networkDeviceRepository.listSnmpEnabledBasic();
 
     if (devices.length === 0) {
       logger.debug('SNMP poll: no devices with SNMP enabled');
@@ -362,7 +316,7 @@ class SnmpPollingService {
         });
         // 设备间留 200ms 间隔，避免 SNMP 拥塞
         await new Promise(r => setTimeout(r, 200));
-      } catch (err) {
+      } catch (_err) {
         results.push({ device: device.name, ip: device.ip_address, ok: false });
       }
     }

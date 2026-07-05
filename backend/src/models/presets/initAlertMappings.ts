@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 预设告警映射
  * 
  * 将不同来源/级别/关键词的告警自动关联到对应的工作流。
@@ -6,7 +6,7 @@
  *   alert_source + alert_severity + alert_title_pattern 全部匹配 → 触发对应 workflow
  *   任意字段为 null 表示「匹配任意」
  */
-import { db } from '../database';
+import db from '../database';
 import { randomUUID } from 'crypto';
 import { logger } from '../../utils/logger';
 

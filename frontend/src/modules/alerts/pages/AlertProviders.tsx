@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo as _useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, Plus, Edit, Trash2, Copy, CheckCircle, Link, Globe, Zap, Info, TestTube } from 'lucide-react';
+import { RefreshCw, Plus, Edit, Trash2, Copy, CheckCircle, Link, Globe, _Zap, Info, TestTube } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '@/lib/errorHandler';
 
 interface AlertProvider {
   id: string;
@@ -13,7 +14,7 @@ interface AlertProvider {
     properties: Record<string, {
       type: string;
       description: string;
-      default?: any;
+      default?: unknown;
       enum?: string[];
     }>;
     required?: string[];
@@ -24,6 +25,7 @@ interface AlertProviderConfig {
   id: string;
   provider_id: string;
   name: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   config: Record<string, any>;
   enabled: boolean;
   created_at: string;
@@ -87,7 +89,7 @@ function getFormFields(provider: AlertProvider): Array<{
   type: string;
   description: string;
   required: boolean;
-  default?: any;
+  default?: unknown;
   enum?: string[];
 }> {
   if (!provider?.configSchema?.properties) return [];
@@ -110,19 +112,20 @@ export default function AlertProviders() {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [editingConfig, setEditingConfig] = useState<AlertProviderConfig | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<AlertProvider | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [configFormData, setConfigFormData] = useState<Record<string, any>>({});
   const [configName, setConfigName] = useState('');
   const [configEnabled, setConfigEnabled] = useState(true);
   const [copied, setCopied] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [showGuide, setShowGuide] = useState(false);
+  const [_showGuide, _setShowGuide] = useState(false);
 
   const { data: providers, isLoading } = useQuery({
     queryKey: ['alert-providers', selectedType],
     queryFn: async () => {
       const params = selectedType ? { type: selectedType } : undefined;
-      const res = await api.get('/api/alerts/providers/list', { params });
+      const res = await api.get('/alerts/providers/list', { params });
       return res.data.data as AlertProvider[];
     },
   });
@@ -130,14 +133,14 @@ export default function AlertProviders() {
   const { data: configs } = useQuery({
     queryKey: ['alert-provider-configs'],
     queryFn: async () => {
-      const res = await api.get('/api/alerts/providers/configs');
+      const res = await api.get('/alerts/providers/configs');
       return res.data.data as AlertProviderConfig[];
     },
   });
 
   const createConfigMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await api.post('/api/alerts/providers/configs', data);
+    mutationFn: async (data: Record<string, unknown>) => {
+      const res = await api.post('/alerts/providers/configs', data);
       return res.data;
     },
     onSuccess: () => {
@@ -148,8 +151,8 @@ export default function AlertProviders() {
   });
 
   const updateConfigMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const res = await api.put(`/api/alerts/providers/configs/${id}`, data);
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      const res = await api.put(`/alerts/providers/configs/${id}`, data);
       return res.data;
     },
     onSuccess: () => {
@@ -161,7 +164,7 @@ export default function AlertProviders() {
 
   const deleteConfigMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/alerts/providers/configs/${id}`);
+      await api.delete(`/alerts/providers/configs/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['alert-provider-configs'] });
@@ -205,11 +208,12 @@ export default function AlertProviders() {
     setConfigEnabled(true);
     setTestResult(null);
     // 初始化表单默认值
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const defaults: Record<string, any> = {};
     if (provider.configSchema?.properties) {
       Object.entries(provider.configSchema.properties).forEach(([key, prop]) => {
-        if ((prop as any).default !== undefined) {
-          defaults[key] = (prop as any).default;
+        if (prop.default !== undefined) {
+          defaults[key] = prop.default;
         } else if (prop.type === 'number') {
           defaults[key] = 0;
         } else if (prop.type === 'boolean') {
@@ -242,22 +246,22 @@ export default function AlertProviders() {
       // 对于 webhook 类型，测试 webhook 端点是否可达
       if (selectedProvider.type === 'webhook' || selectedProvider.type === 'prometheus' || selectedProvider.type === 'grafana') {
         const webhookUrl = getWebhookUrl(selectedProvider.id);
-        const res = await api.post('/api/alerts/providers/fetch', {
+        const _res = await api.post('/alerts/providers/fetch', {
           provider: selectedProvider.id,
           config: configFormData,
         });
         setTestResult({ ok: true, message: `Provider "${selectedProvider.name}" 配置有效，Webhook 地址: ${webhookUrl}` });
       } else {
-        const res = await api.post('/api/alerts/providers/fetch', {
+        const _res2 = await api.post('/alerts/providers/fetch', {
           provider: selectedProvider.id,
           config: configFormData,
         });
         setTestResult({ ok: true, message: '连接测试成功，Provider 配置有效' });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTestResult({
         ok: false,
-        message: err?.response?.data?.message || err?.message || '连接测试失败，请检查配置',
+        message: getAxiosErrorMessage(err, '连接测试失败，请检查配置'),
       });
     } finally {
       setTesting(false);

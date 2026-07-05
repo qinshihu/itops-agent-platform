@@ -7,7 +7,7 @@ import multiAgentRoutes from './routes/multiAgentRoutes';
 import aiModelRoutes from './routes/aiModelRoutes';
 import aiRemediationRoutes from './routes/aiRemediationRoutes';
 import knowledgeQAnythingRoutes from './routes/knowledgeQAnythingRoutes';
-import { mcpGateway } from '../../services/mcp';
+import { mcpGateway } from '../mcp/services';
 
 const router = Router();
 
