@@ -51,7 +51,7 @@
   <img src="https://img.shields.io/badge/Node.js-22-339933?logo=nodedotjs" alt="Node.js">
   <img src="https://img.shields.io/badge/Docker-🐳-2496ED?logo=docker" alt="Docker">
   <br/>
-  <a href="https://star-history.com/#qinshihu/itops-agent-platform&Date">
+  <a href="https://www.star-history.com/?repos=qinshihu%2Fitops-agent-platform&type=date&legend=top-left">
     <img src="https://api.star-history.com/svg?repos=qinshihu/itops-agent-platform&type=Date" alt="Star History Chart" width="480" />
   </a>
 </p>
