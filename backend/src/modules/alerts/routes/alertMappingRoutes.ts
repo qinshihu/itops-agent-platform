@@ -3,6 +3,8 @@ import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { alertRepository } from '../../../repositories';
 import { workflowRepository } from '../../../repositories';
+import { validateBody, validateParams } from '../../../middleware/validation';
+import { alertMappingSchemas } from '../../../shared/schemas/apiValidation';
 
 const router = Router();
 
@@ -36,13 +38,9 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/', (req: Request, res: Response) => {
+router.post('/', validateBody(alertMappingSchemas.createMapping), (req: Request, res: Response) => {
   try {
     const { alert_source, alert_severity, alert_title_pattern, workflow_id, enabled = 1 } = req.body;
-
-    if (!workflow_id) {
-      return res.status(400).json({ success: false, error: 'Workflow ID is required' });
-    }
 
     if (!workflowRepository.workflows.existsById(workflow_id)) {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
@@ -65,7 +63,7 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', validateParams(alertMappingSchemas.mappingId), validateBody(alertMappingSchemas.updateMapping), (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { alert_source, alert_severity, alert_title_pattern, workflow_id, enabled } = req.body;
@@ -99,7 +97,7 @@ router.put('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', validateParams(alertMappingSchemas.mappingId), (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 

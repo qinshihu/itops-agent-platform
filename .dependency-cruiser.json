@@ -1,25 +1,8 @@
 {
-  "description": "daima 项目架构约束规则 — 参照 ongrid 的 .go-arch-lint.yml 模式",
-  "comment": [
-    "规则优先级（从高到低）：",
-    "1. core/ 不得依赖任何 modules/ 模块（业务无关）",
-    "2. modules/ 之间禁止直接 import 对方的 routes.ts（防止路由耦合）",
-    "3. modules/ 只能通过 services/ 跨模块通信",
-    "4. app.ts 是唯一的组装层，可以依赖所有模块",
-    "5. 前端模块禁止跨模块直接 import 页面组件"
-  ],
 
   "options": {
     "doNotFollow": {
       "path": "node_modules"
-    },
-    "tsPreCompilationDeps": true,
-    "tsConfig": {
-      "fileName": "./backend/tsconfig.json"
-    },
-    "enhancedResolveOptions": {
-      "exportsFields": ["exports"],
-      "conditionNames": ["require", "node"]
     },
     "reporterOptions": {
       "dot": {
@@ -41,6 +24,17 @@
       },
       "to": {
         "path": "^src/modules/"
+      }
+    },
+    {
+      "name": "repositories-禁止依赖-modules",
+      "severity": "error",
+      "comment": "repositories/ 层是纯数据访问层，不能反向依赖 modules/ 业务层",
+      "from": {
+        "path": "^src/repositories"
+      },
+      "to": {
+        "path": "^src/modules"
       }
     },
     {
@@ -96,32 +90,22 @@
   "allowedSeverity": "warn",
   "allowed": [
     {
-      "name": "core-内部允许互通",
-      "comment": "core/ 内部模块之间允许互相引用",
       "from": { "path": "^src/core/" },
       "to": { "path": "^src/core/" }
     },
     {
-      "name": "modules-可依赖core",
-      "comment": "所有业务模块可以依赖 core/ 基础设施",
       "from": { "path": "^src/modules/" },
       "to": { "path": "^src/core/" }
     },
     {
-      "name": "app-可依赖所有模块",
-      "comment": "app.ts 是组装层（composition root），可以依赖所有模块",
       "from": { "path": "^src/app\\.ts$" },
       "to": { "path": "^src/" }
     },
     {
-      "name": "frontend-可依赖shared",
-      "comment": "前端模块可以依赖 shared/ 共享组件",
       "from": { "path": "^frontend/src/modules/" },
       "to": { "path": "^frontend/src/shared/" }
     },
     {
-      "name": "modules-服务层跨模块调用",
-      "comment": "modules 之间通过 services/ 跨模块通信（允许但不推荐频繁使用）",
       "from": { "path": "^src/modules/([^/]+)/services/" },
       "to": { "path": "^src/modules/([^/]+)/services/" }
     }

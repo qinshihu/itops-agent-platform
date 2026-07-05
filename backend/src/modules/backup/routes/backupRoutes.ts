@@ -3,6 +3,8 @@ import { Router } from 'express';
 import { backupService } from '../services';
 import { logger } from '../../../utils/logger';
 import { requireRole } from '../../../middleware/auth';
+import { validateBody, validateParams } from '../../../middleware/validation';
+import { backupSchemas, commonSchemas } from '../../../shared/schemas/apiValidation';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -56,7 +58,7 @@ router.get('/config', requireRole('admin'), (req: Request, res: Response) => {
   }
 });
 
-router.put('/config', requireRole('admin'), (req: Request, res: Response) => {
+router.put('/config', requireRole('admin'), validateBody(backupSchemas.updateConfig), (req: Request, res: Response) => {
   try {
     const config = backupService.updateConfig(req.body);
     res.json({ success: true, data: config });
@@ -108,7 +110,7 @@ router.delete('/:id', requireRole('admin'), (req: Request, res: Response) => {
   }
 });
 
-router.post('/restore/:id', requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/restore/:id', requireRole('admin'), validateParams(commonSchemas.idParam), async (req: Request, res: Response) => {
   try {
     const result = await backupService.restoreBackup(req.params.id);
     res.json({ 

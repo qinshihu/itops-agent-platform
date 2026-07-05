@@ -27,7 +27,7 @@ router.get('/:id', authenticateToken, (req: Request, res: Response) => {
     }
     res.json({ success: true, data: record });
   } catch (error) {
-    console.error('Failed to get AI remediation:', error);
+    logger.error('Failed to get AI remediation:', error);
     res.status(500).json({ success: false, message: 'Failed to get AI remediation' });
   }
 });

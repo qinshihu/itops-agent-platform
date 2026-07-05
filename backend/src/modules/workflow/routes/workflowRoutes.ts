@@ -5,6 +5,8 @@ import { workflowRepository } from '../../../repositories';
 import type { WorkflowParsed } from '../../../types';
 import { requireRole } from '../../../middleware/auth';
 import { workflowProviderRegistry } from '../services/workflowProviderRegistry';
+import { validateBody, validateParams } from '../../../middleware/validation';
+import { workflowSchemas, workflowExtendedSchemas } from '../../../shared/schemas/apiValidation';
 
 const router = Router();
 
@@ -40,7 +42,7 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/', requireRole('admin', 'operator'), (req: Request, res: Response) => {
+router.post('/', requireRole('admin', 'operator'), validateBody(workflowSchemas.createWorkflow), (req: Request, res: Response) => {
   try {
     const { name, description, nodes, edges, agent_configs, is_template } = req.body;
     const id = randomUUID();
@@ -62,7 +64,7 @@ router.post('/', requireRole('admin', 'operator'), (req: Request, res: Response)
   }
 });
 
-router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
+router.put('/:id', requireRole('admin', 'operator'), validateParams(workflowSchemas.workflowId), validateBody(workflowExtendedSchemas.updateWorkflow), (req: Request, res: Response) => {
   try {
     const { name, description, nodes, edges, agent_configs, is_template } = req.body;
 
@@ -96,12 +98,9 @@ router.delete('/:id', requireRole('admin', 'operator'), (req: Request, res: Resp
   }
 });
 
-router.post('/import', requireRole('admin', 'operator'), (req: Request, res: Response) => {
+router.post('/import', requireRole('admin', 'operator'), validateBody(workflowExtendedSchemas.importWorkflow), (req: Request, res: Response) => {
   try {
     const workflowData = req.body.workflow;
-    if (!workflowData) {
-      return res.status(400).json({ success: false, error: 'Invalid format: workflow data required' });
-    }
 
     const id = randomUUID();
     workflowRepository.workflows.create({

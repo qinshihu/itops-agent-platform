@@ -36,6 +36,25 @@ export const networkDeviceCoreRepo = {
   },
 
   /**
+   * MCP 工具查询（支持 device_type/manufacturer/status 过滤 + limit）
+   * 对应：toolDefinitions network.device.list
+   */
+  listWithFilters(filters: { deviceType?: string; vendor?: string; status?: string; limit?: number }): NetworkDeviceWithCredentialName[] {
+    let query = `
+      SELECT nd.*, sc.name AS snmp_credential_name
+      FROM network_devices nd
+      LEFT JOIN snmp_credentials sc ON nd.snmp_credential_id = sc.id
+      WHERE 1=1
+    `;
+    const params: unknown[] = [];
+    if (filters.deviceType) { query += ' AND nd.device_type = ?'; params.push(filters.deviceType); }
+    if (filters.vendor) { query += ' AND nd.manufacturer = ?'; params.push(filters.vendor); }
+    if (filters.status) { query += ' AND nd.status = ?'; params.push(filters.status); }
+    query += ` LIMIT ${filters.limit || 50}`;
+    return db.prepare(query).all(...params) as NetworkDeviceWithCredentialName[];
+  },
+
+  /**
    * 列出 SNMP 启用设备的基础信息（id/name/ip_address）
    * 对应 snmpPollingService.ts S21
    */

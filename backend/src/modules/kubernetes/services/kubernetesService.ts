@@ -221,8 +221,14 @@ class KubernetesService {
       });
 
       // 更新集群信息
-      const nodes = await kc.makeApiClient(k8s.CoreV1Api).listNode().catch(() => ({ body: { items: [] } }));
-      const pods = await kc.makeApiClient(k8s.CoreV1Api).listPodForAllNamespaces().catch(() => ({ body: { items: [] } }));
+      const nodes = await kc.makeApiClient(k8s.CoreV1Api).listNode().catch((err: unknown) => {
+        logger.warn('Failed to list K8s nodes:', getErrorMessage(err));
+        return { body: { items: [] } };
+      });
+      const pods = await kc.makeApiClient(k8s.CoreV1Api).listPodForAllNamespaces().catch((err: unknown) => {
+        logger.warn('Failed to list K8s pods:', getErrorMessage(err));
+        return { body: { items: [] } };
+      });
       k8sContextRepository.updateCounts(id, nodes.body.items.length, pods.body.items.length);
 
       const ctx: K8sContext = {

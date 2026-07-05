@@ -4,6 +4,8 @@ import { randomUUID } from 'crypto';
 import { workflowRepository } from '../../../repositories';
 import { executeWorkflow } from '../services/workflowExecutor';
 import type { WorkflowParsed } from '../../../types';
+import { validateBody, validateParams } from '../../../middleware/validation';
+import { taskSchemas, taskExtendedSchemas } from '../../../shared/schemas/apiValidation';
 
 const router = Router();
 
@@ -47,7 +49,7 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', validateBody(taskSchemas.createTask), async (req: Request, res: Response) => {
   try {
     const { workflow_id, name, input, context } = req.body;
 
@@ -85,7 +87,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id/pause', (req: Request, res: Response) => {
+router.put('/:id/pause', validateParams(taskSchemas.taskId), (req: Request, res: Response) => {
   try {
     const task = workflowRepository.tasks.getById(req.params.id);
     if (!task) {
@@ -113,7 +115,7 @@ router.put('/:id/resume', (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id/cancel', (req: Request, res: Response) => {
+router.put('/:id/cancel', validateParams(taskSchemas.taskId), (req: Request, res: Response) => {
   try {
     const task = workflowRepository.tasks.getById(req.params.id);
     if (!task) {
@@ -127,7 +129,7 @@ router.put('/:id/cancel', (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id/intervene', (req: Request, res: Response) => {
+router.put('/:id/intervene', validateParams(taskSchemas.taskId), validateBody(taskExtendedSchemas.intervene), (req: Request, res: Response) => {
   try {
     const { node_id, action, data } = req.body;
 

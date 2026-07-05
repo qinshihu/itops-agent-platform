@@ -1,8 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-// eslint-disable-next-line no-restricted-imports
-import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
 import { randomUUID } from 'crypto';
+import { serversRepo, alertRepository, auditLogRepository, reportsRepo } from '../../../repositories';
 
 export interface ImportResult {
   success: boolean;
@@ -101,30 +99,6 @@ export async function importServersFromCSV(csvContent: string): Promise<ImportRe
       }
     }
 
-    const insertStmt = db.prepare(`
-      INSERT INTO servers (id, name, hostname, port, username, password, private_key, use_ssh_key, description, tags, enabled)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const transaction = db.transaction((rows: any[]) => {
-      for (const row of rows) {
-        insertStmt.run(
-          row.id,
-          row.name,
-          row.hostname,
-          row.port || 22,
-          row.username,
-          row.password || null,
-          row.private_key || null,
-          row.use_ssh_key ? 1 : 0,
-          row.description || null,
-          row.tags || null,
-          row.enabled !== undefined ? row.enabled : 1
-        );
-      }
-    });
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows: any[] = [];
     for (let i = 1; i < lines.length; i++) {
@@ -150,8 +124,7 @@ export async function importServersFromCSV(csvContent: string): Promise<ImportRe
           continue;
         }
 
-        const existing = db.prepare('SELECT id FROM servers WHERE hostname = ? AND name = ?').get(row.hostname, row.name);
-        if (existing) {
+        if (serversRepo.existsByHostnameAndName(row.hostname, row.name)) {
           result.errors.push(`Line ${i + 1}: Server already exists (hostname: ${row.hostname}, name: ${row.name})`);
           result.failed++;
           continue;
@@ -165,7 +138,7 @@ export async function importServersFromCSV(csvContent: string): Promise<ImportRe
     }
 
     if (rows.length > 0) {
-      transaction(rows);
+      serversRepo.bulkCreate(rows);
       result.imported = rows.length;
     }
 
@@ -216,13 +189,7 @@ function parseCSVLine(line: string): string[] {
 }
 
 export function exportServers(format: 'csv' | 'json' = 'csv'): { content: string; filename: string; mimeType: string } {
-  const servers = db.prepare(`
-    SELECT id, name, hostname, port, username, description, tags, enabled, 
-           os, cpu_cores, memory_gb, disk_gb, ip_address, created_at
-    FROM servers 
-    ORDER BY created_at DESC
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  `).all() as any[];
+  const servers = serversRepo.listAllForExport();
 
   if (format === 'json') {
     return {
@@ -249,13 +216,7 @@ export function exportServers(format: 'csv' | 'json' = 'csv'): { content: string
 }
 
 export function exportAlerts(format: 'csv' | 'json' = 'csv'): { content: string; filename: string; mimeType: string } {
-  const alerts = db.prepare(`
-    SELECT id, source, severity, title, content, status, created_at, updated_at
-    FROM alerts 
-    ORDER BY created_at DESC
-    LIMIT 10000
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  `).all() as any[];
+  const alerts = alertRepository.listAllForExport();
 
   if (format === 'json') {
     return {
@@ -282,15 +243,7 @@ export function exportAlerts(format: 'csv' | 'json' = 'csv'): { content: string;
 }
 
 export function exportAuditLogs(format: 'csv' | 'json' = 'csv'): { content: string; filename: string; mimeType: string } {
-  const logs = db.prepare(`
-    SELECT al.id, u.username, al.action, al.resource_type, al.resource_id, 
-           al.details, al.ip_address, al.created_at
-    FROM audit_logs al
-    LEFT JOIN users u ON al.user_id = u.id
-    ORDER BY al.created_at DESC
-    LIMIT 10000
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  `).all() as any[];
+  const logs = auditLogRepository.listAllWithUsernameForExport();
 
   if (format === 'json') {
     return {
@@ -317,13 +270,7 @@ export function exportAuditLogs(format: 'csv' | 'json' = 'csv'): { content: stri
 }
 
 export function exportReports(format: 'csv' | 'json' = 'csv'): { content: string; filename: string; mimeType: string } {
-  const reports = db.prepare(`
-    SELECT id, name, type, format, content, is_preset, created_at, updated_at
-    FROM reports 
-    ORDER BY created_at DESC
-    LIMIT 5000
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  `).all() as any[];
+  const reports = reportsRepo.listAllForExport();
 
   if (format === 'json') {
     return {

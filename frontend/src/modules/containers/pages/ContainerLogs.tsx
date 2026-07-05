@@ -4,6 +4,7 @@ import { Play, Square, Search, Download, Trash2, ArrowDown } from 'lucide-react'
 import api from '../../../lib/api';
 import type { Socket } from 'socket.io-client';
 import io from 'socket.io-client';
+import { useAuth } from '../../../../contexts/AuthContext';
 
 interface Container {
   id: string;
@@ -33,7 +34,6 @@ export default function ContainerLogs() {
 
   // Initialize Socket.io
   useEffect(() => {
-    const token = localStorage.getItem('token');
     const socket = io('/', { auth: { token }, transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
@@ -48,7 +48,7 @@ export default function ContainerLogs() {
     });
 
     return () => { socket.disconnect(); };
-  }, [tailLines]);
+  }, [tailLines, token]);
 
   // Fetch containers list
   const fetchContainers = useCallback(async () => {

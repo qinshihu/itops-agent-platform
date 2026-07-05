@@ -149,11 +149,11 @@ class SnmpPollingService {
         snmpService.getSystemInfo(
           host, port, version,
           version !== 'v3' ? community : undefined
-        ).catch(() => null),
+        ).catch((err) => { logger.warn('SNMP getSystemInfo failed for device poll:', err); return null; }),
         snmpService.getInterfaces(
           host, port, version,
           version !== 'v3' ? community : undefined
-        ).catch(() => [])
+        ).catch((err) => { logger.warn('SNMP getInterfaces failed for device poll:', err); return []; })
       ]);
 
       if (!sysInfo && interfaces.length === 0) {

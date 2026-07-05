@@ -12,6 +12,8 @@ import { resourceAwareScheduler } from '../services/alertAutoResponse/scheduler/
 import { alertRepository } from '../../../repositories';
 import { logger } from '../../../utils/logger';
 import { getErrorMessage } from '../../../utils/errorHelpers';
+import { validateBody, validateParams } from '../../../middleware/validation';
+import { alertSchemas, aarsSchemas } from '../../../shared/schemas/apiValidation';
 
 const router = Router();
 
@@ -19,7 +21,7 @@ const router = Router();
  * POST /api/alert-auto-response/trigger/:alertId
  * 手动触发某个告警的自动响应
  */
-router.post('/trigger/:alertId', async (req: Request, res: Response) => {
+router.post('/trigger/:alertId', validateParams(alertSchemas.alertId), async (req: Request, res: Response) => {
   try {
     const { alertId } = req.params;
 
@@ -104,7 +106,7 @@ router.get('/config', (_req: Request, res: Response) => {
  * PUT /api/alert-auto-response/config
  * 更新配置
  */
-router.put('/config', (req: Request, res: Response) => {
+router.put('/config', validateBody(aarsSchemas.updateConfig), (req: Request, res: Response) => {
   try {
     const updates = req.body;
 

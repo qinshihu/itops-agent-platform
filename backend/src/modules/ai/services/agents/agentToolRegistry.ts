@@ -5,8 +5,8 @@ import { logger } from '../../../../utils/logger';
 import { executeCommand } from '../../../servers/services/sshService';
 import { dockerService } from '../../../containers/services/dockerService';
 import { serverInfoCollector } from '../../../servers/services/serverInfoCollector';
-// eslint-disable-next-line no-restricted-imports
-import db from '../../../../models/database';
+import { serversRepo, alertRepository, userRepository } from '../../../../repositories';
+import type { AlertFilters } from '../../../../repositories';
 
 // ── 语义化类型别名 ──
 
@@ -196,7 +196,7 @@ ${metrics.data ? `
         properties: {},
       },
       execute: async () => {
-        const servers = db.prepare('SELECT id, name, hostname, enabled FROM servers').all() as Array<{ id: string; name: string; hostname: string; enabled: number }>;
+        const servers = serversRepo.list();
         return `服务器列表 (共${servers.length}个):\n${
           servers.map(s => `• ${s.name} (${s.hostname}) ${s.enabled ? '✅ 在线' : '❌ 离线'}`).join('\n')
         }`;
@@ -603,18 +603,11 @@ ${result.stdout}
         const level = args.level as string;
         const status = args.status as string;
 
-        let query = 'SELECT * FROM alerts';
-        const whereClauses: string[] = [];
-        
-        if (level) whereClauses.push(`level = '${level}'`);
-        if (status) whereClauses.push(`status = '${status}'`);
-        
-        if (whereClauses.length > 0) {
-          query += ` WHERE ${whereClauses.join(' AND ')}`;
-        }
-        query += ` ORDER BY created_at DESC LIMIT ${limit}`;
-
-        const alerts = db.prepare(query).all() as any[];
+        const alerts = alertRepository.getAll({
+          status: status as AlertFilters['status'],
+          severity: level as AlertFilters['severity'],
+          limit,
+        });
         
         return `告警列表 (共${alerts.length}条):\n${
           alerts.map(a => `• ${a.title} (${a.level}) [${a.status}]`).join('\n')
@@ -633,9 +626,9 @@ ${result.stdout}
         properties: {},
       },
       execute: async () => {
-        const serverCount = (db.prepare('SELECT COUNT(*) as count FROM servers').get() as any).count;
-        const alertCount = (db.prepare('SELECT COUNT(*) as count FROM alerts').get() as any).count;
-        const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any).count;
+        const serverCount = serversRepo.countAll();
+        const alertCount = alertRepository.countAll();
+        const userCount = userRepository.countAll();
         
         return `数据库信息统计:
 - 服务器数量: ${serverCount}

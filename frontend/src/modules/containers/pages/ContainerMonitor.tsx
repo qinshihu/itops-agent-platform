@@ -4,6 +4,7 @@ import { Play, Square, Eye, Activity, RefreshCw } from 'lucide-react';
 import api from '../../../lib/api';
 import type { Socket } from 'socket.io-client';
 import io from 'socket.io-client';
+import { useAuth } from '../../../../contexts/AuthContext';
 
 interface ContainerStats {
   containerId: string;
@@ -38,6 +39,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function ContainerMonitor() {
+  const { token } = useAuth();
   const [data, setData] = useState<Container[]>([]);
   const [loading, setLoading] = useState(false);
   const [clusterStats, setClusterStats] = useState<ClusterSnapshot>({
@@ -54,7 +56,6 @@ export default function ContainerMonitor() {
 
   // Initialize Socket.io
   useEffect(() => {
-    const token = localStorage.getItem('token');
     const socket = io('/', { auth: { token }, transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
@@ -63,7 +64,7 @@ export default function ContainerMonitor() {
     });
 
     return () => { socket.disconnect(); };
-  }, []);
+  }, [token]);
 
   // Fetch initial data
   const fetchData = useCallback(async () => {

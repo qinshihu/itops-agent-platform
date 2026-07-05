@@ -20,12 +20,10 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-// eslint-disable-next-line no-restricted-imports
-import db from '../../../models/database';
+import { dbHealthRepository, tasksRepo, alertRepository } from '../../../repositories';
 import { logger } from '../../../utils/logger';
 import { env } from '../../../utils/env';
 import { randomUUID } from 'crypto';
-import { tasksRepo, alertRepository } from '../../../repositories';
 
 // ====================== 接口定义 ======================
 
@@ -294,7 +292,7 @@ export class SelfMonitorService {
     const startTime = Date.now();
 
     try {
-      db.prepare('SELECT 1').get();
+      dbHealthRepository.ping();
       const latencyMs = Date.now() - startTime;
 
       if (latencyMs > this.config.dbLatencyCritMs) {
@@ -319,11 +317,11 @@ export class SelfMonitorService {
 
       // 额外检查：执行完整性检查
       try {
-        const integrityResult = db.pragma('integrity_check') as Array<{ integrity_check: string }>;
-        if (integrityResult[0]?.integrity_check !== 'ok') {
+        const integrityResult = dbHealthRepository.checkIntegrity();
+        if (integrityResult !== 'ok') {
           return {
             status: 'fail',
-            message: `数据库完整性检查失败: ${integrityResult[0]?.integrity_check}`,
+            message: `数据库完整性检查失败: ${integrityResult}`,
             latencyMs,
           };
         }

@@ -89,7 +89,7 @@ router.put('/:id', requireRole('admin'), validateParams(z.object({ id: z.string(
     }
     res.json({ success: true, data: toolLinksRepo.getById(id) });
   } catch (error) {
-    console.error('Failed to update tool link', error);
+    logger.error('Failed to update tool link', error);
     res.status(500).json({ success: false, message: 'Failed to update tool link' });
   }
 });

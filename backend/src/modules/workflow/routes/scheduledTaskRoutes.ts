@@ -5,6 +5,8 @@ import { randomUUID } from 'crypto';
 import { createAuditLog } from '../../infra/services/auditService';
 import { schedulerService } from '../services/schedulerService';
 import { requireRole } from '../../../middleware/auth';
+import { validateBody, validateParams } from '../../../middleware/validation';
+import { scheduledTaskSchemas } from '../../../shared/schemas/apiValidation';
 
 const router = Router();
 
@@ -32,13 +34,9 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/', requireRole('admin', 'operator'), (req: Request, res: Response) => {
+router.post('/', requireRole('admin', 'operator'), validateBody(scheduledTaskSchemas.createTask), (req: Request, res: Response) => {
   try {
     const { name, description, workflow_id, schedule, cron_expression, enabled = 1 } = req.body;
-
-    if (!name || (!schedule && !cron_expression)) {
-      return res.status(400).json({ success: false, error: 'Name and cron expression are required' });
-    }
 
     const taskSchedule = schedule || cron_expression;
 
@@ -158,7 +156,7 @@ router.delete('/:id', requireRole('admin', 'operator'), (req: Request, res: Resp
   }
 });
 
-router.post('/:id/toggle', (req: Request, res: Response) => {
+router.post('/:id/toggle', validateParams(scheduledTaskSchemas.taskId), (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -190,7 +188,7 @@ router.post('/:id/toggle', (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/run', (req: Request, res: Response) => {
+router.post('/:id/run', validateParams(scheduledTaskSchemas.taskId), (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 

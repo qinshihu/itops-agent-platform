@@ -1,7 +1,6 @@
 import { logger } from '../../../utils/logger';
 import { env } from '../../../utils/env';
-import { settingsRepository, alertRepository } from '../../../repositories';
-import { rcaRepository } from '../../ai/services/rca/rootCauseAnalysisService/rcaRepository';
+import { settingsRepository, alertRepository, rcaRepository } from '../../../repositories';
 import { rootCauseAnalysisService } from '../../ai/services/rca/rootCauseAnalysisService';
 import { circuitBreakers } from '../../ai/services/llm/llmService';
 import { credentialService } from '../../auth/services/credentialService';
@@ -461,7 +460,7 @@ export class AlertService {
     if (alert.severity === 'critical' || alert.severity === 'high' || alert.severity === 'warning') {
       setImmediate(async () => {
         try {
-          const existingRCA = rcaRepository.getByAlert(alert.id);
+          const existingRCA = rcaRepository.getByAlertId(alert.id);
 
           if (existingRCA && existingRCA.status !== 'failed') {
             logger.info(`⏭️ [AlertService] Skipping RCA for alert ${alertId} - already analyzed (existing RCA: ${existingRCA.id})`);

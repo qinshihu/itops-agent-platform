@@ -375,21 +375,7 @@ export function migrateOldConfigToAIModels(): void {
 export function migrateOldAgents(): void {
   logger.info('Migrating old agents to use primary_model_id...');
   
-  // db.exec is a bulk operation, keep it as-is for now since it's a migration script
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, no-restricted-imports
-  const db = require('../../../../models/database').default;
-  db.exec(`
-    UPDATE agents 
-    SET primary_model_id = (
-      SELECT id FROM ai_models 
-      WHERE (
-        (agents.api_provider = 'doubao' AND provider_type = 'volcengine') OR
-        (agents.api_provider = provider_type)
-      ) AND is_default = 1
-      LIMIT 1
-    )
-    WHERE primary_model_id IS NULL AND api_provider IS NOT NULL;
-  `);
+  agentRepository.migratePrimaryModelIds();
   
   logger.info('Old agents migration completed');
 }

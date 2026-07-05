@@ -1,9 +1,7 @@
-// eslint-disable-next-line no-restricted-imports
-import db from '../../../../../models/database';
+import { alertRepository, rcaRepository } from '../../../../../repositories';
+import type { RootCauseAnalysis, CreateRCAInput, UpdateRCAInput } from '../../../../../repositories';
 import { logger } from '../../../../../utils/logger';
 import { aiRemediationService } from '../../remediation/aiRemediationService';
-import type { RootCauseAnalysis, CreateRCAInput, UpdateRCAInput } from './rcaTypes';
-import { rcaRepository } from './rcaRepository';
 import {
   performRuleEngineAnalysis,
   generateFallbackAnalysis,
@@ -15,13 +13,9 @@ import {
 } from './rcaAnalyzer';
 
 // Re-export types for external consumers
-export type { RootCauseAnalysis, CreateRCAInput, UpdateRCAInput } from './rcaTypes';
+export type { RootCauseAnalysis, CreateRCAInput, UpdateRCAInput } from '../../../../../repositories';
 
 class RootCauseAnalysisService {
-  init() {
-    rcaRepository.init();
-  }
-
   create(input: CreateRCAInput): RootCauseAnalysis {
     return rcaRepository.create(input);
   }
@@ -35,24 +29,18 @@ class RootCauseAnalysisService {
   }
 
   get(id: string): RootCauseAnalysis | undefined {
-    return rcaRepository.get(id);
+    return rcaRepository.getById(id);
   }
 
   getByAlert(alertId: string): RootCauseAnalysis | undefined {
-    return rcaRepository.getByAlert(alertId);
+    return rcaRepository.getByAlertId(alertId);
   }
 
   delete(id: string): boolean {
-    return rcaRepository.delete(id);
+    return rcaRepository.deleteById(id);
   }
 
-  getStats(): {
-    todayCount: number;
-    avgConfidence: number;
-    autoRemediations: number;
-    falsePositives: number;
-    totalCompleted: number;
-  } {
+  getStats() {
     return rcaRepository.getStats();
   }
 
@@ -67,7 +55,7 @@ class RootCauseAnalysisService {
   }
 
   async analyze(id: string): Promise<RootCauseAnalysis | undefined> {
-    const existing = rcaRepository.get(id);
+    const existing = rcaRepository.getById(id);
     if (!existing) {
       return undefined;
     }
@@ -99,15 +87,7 @@ class RootCauseAnalysisService {
     try {
       logger.info(`🔍 [RCA] 开始自动根因分析: alertId=${alertId}`);
 
-      const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(alertId) as {
-        id: string;
-        title: string;
-        content: string;
-        severity: string;
-        source: string;
-        server_id?: string;
-        created_at: string;
-      } | undefined;
+      const alert = alertRepository.getById(alertId);
 
       if (!alert) {
         logger.warn(`⚠️ [RCA] 告警不存在: ${alertId}`);

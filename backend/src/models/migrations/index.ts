@@ -96,6 +96,12 @@ import v054AlertAutoAnalysis from './v054_alert_auto_analysis';
 // === 运行时建表残留清理 v055 ===
 import v055VmManagementTables from './v055_vm_management_tables';
 
+// === 配置修复模板 v056 ===
+import v056ConfigFileTemplates from './v056_config_file_templates';
+
+// === 配置修复记录 v057 ===
+import v057ConfigRepairRecords from './v057_config_repair_records';
+
 // Helper: wrap sync up/down into async
 function wrapAsync(fn: (db: any) => void): (db: any) => Promise<void> {
   return async (db: any) => { fn(db); };
@@ -339,6 +345,10 @@ export const ALL_MIGRATIONS: Migration[] = [
   v054AlertAutoAnalysis,
   // v055: 运行时建表残留清理（initVMManagement 下沉）
   v055VmManagementTables,
+  // v056: 配置修复模板
+  v056ConfigFileTemplates,
+  // v057: 配置修复记录
+  v057ConfigRepairRecords,
 ];
 
 export function createMigrationManager(db: any): MigrationManager {

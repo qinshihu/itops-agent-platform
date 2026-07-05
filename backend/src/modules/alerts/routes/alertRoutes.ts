@@ -2,16 +2,17 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { randomUUID, createHash } from 'crypto';
-import { getIOInstance } from '../../../shared/websocket/io';
 import { notificationService } from '../../notification/services/notificationService';
 import { alertNoiseReductionService } from '../services/alertNoiseReductionService';
 import { rootCauseAnalysisService } from '../../ai/services/rca/rootCauseAnalysisService';
-import { emitToAlerts } from '../../../shared/websocket/handler';
 import { logger } from '../../../utils/logger';
 import { requireRole } from '../../../middleware/auth';
 import { alertProviderRegistry } from '../services/alertProviderRegistry';
 import { alertProcessor } from '../services/AlertProcessor';
 import { alertRepository, settingsRepository } from '../../../repositories';
+import { runAlertProcessingPipeline, type AlertProcessingContext } from '../services/alertProcessingPipeline';
+import { validateBody, validateParams } from '../../../middleware/validation';
+import { alertSchemas, alertCreateSchemas, commonSchemas } from '../../../shared/schemas/apiValidation';
 
 const router = Router();
 
@@ -59,16 +60,9 @@ router.get('/:id/automation-logs', (req: Request, res: Response) => {
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', validateBody(alertCreateSchemas.createAlert), async (req: Request, res: Response) => {
     try {
       const { source, severity, title, content, metadata, related_task_id } = req.body;
-
-      if (!title || title.length === 0) {
-        return res.status(400).json({ success: false, error: 'Title is required' });
-      }
-      if (severity && !validSeverities.includes(severity)) {
-        return res.status(400).json({ success: false, error: 'Invalid severity value' });
-      }
 
       const noiseCheck = await alertNoiseReductionService.processAlert(
         source || 'unknown',
@@ -137,7 +131,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
   });
 
-router.put('/:id/acknowledge', (req: Request, res: Response) => {
+router.put('/:id/acknowledge', validateParams(alertSchemas.alertId), (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -217,69 +211,11 @@ router.get('/stats/summary', (_req: Request, res: Response) => {
   }
 });
 
-// ── 告警自动处理流水线（复用新建告警时的全部逻辑） ──
-interface AlertProcessingContext {
-  id: string;
-  source: string;
-  severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
-  rawSeverity?: string;
-  title: string;
-  content: string;
-  tags: string[];
-}
-
-async function runAlertProcessingPipeline(ctx: AlertProcessingContext): Promise<void> {
-  const io = getIOInstance();
-  try {
-    const { id, source, severity, rawSeverity, title, content, tags } = ctx;
-
-    emitToAlerts(io!, 'remediation:started', {
-      alertId: id,
-      title,
-      timestamp: new Date().toISOString()
-    });
-
-    // 自动根因分析
-    const autoRCAEnabled = settingsRepository.getValue('auto_root_cause_enabled');
-    if (autoRCAEnabled === 'true') {
-      logger.info('🔍 Auto RCA triggered for alert:', id);
-      rootCauseAnalysisService.analyzeByAlert(id, title, content).catch((err) => {
-        logger.error('Failed to auto-trigger RCA for alert:', err);
-      });
-    }
-
-    // ── 统一告警处理入口（AARS + 工作流 智能决策）──
-    alertProcessor.processAlert({
-      alertId: id,
-      title,
-      content,
-      severity,
-      source,
-      metadata: { tags, rawSeverity }
-    }).then((result) => {
-      emitToAlerts(io!, 'remediation:result', {
-        alertId: id,
-        policyId: result.executionId || result.taskId || '',
-        policyName: `统一处理: ${result.strategy}`,
-        executionId: result.executionId || result.taskId,
-        status: result.success ? 'success' : 'failed',
-        timestamp: new Date().toISOString()
-      });
-    }).catch((err: Error) => {
-      logger.error(`AlertProcessor failed for ${id}:`, err);
-    });
-  } catch (error) {
-    logger.error('Failed to process alert remediation:', error);
-    emitToAlerts(io!, 'remediation:error', {
-      alertId: ctx.id,
-      error: error instanceof Error ? error.message : String(error),
-      timestamp: new Date().toISOString()
-    });
-  }
-}
+// ── 告警自动处理流水线（已提取到 alertProcessingPipeline.ts 服务层）──
+// runAlertProcessingPipeline 和 AlertProcessingContext 从 '../services/alertProcessingPipeline' 导入
 
 // ── 手动触发告警处理（同步匹配 + 异步执行） ──
-router.post('/:id/process', async (req: Request, res: Response) => {
+router.post('/:id/process', validateParams(alertSchemas.alertId), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -357,7 +293,7 @@ router.post('/:id/process', async (req: Request, res: Response) => {
 });
 
 // ── 统一入口：告警处理（自动决策用哪种策略） ──
-router.post('/:id/process-unified', async (req: Request, res: Response) => {
+router.post('/:id/process-unified', validateParams(alertSchemas.alertId), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -480,12 +416,9 @@ router.get('/providers/configs/:id', (req, res) => {
   }
 });
 
-router.post('/providers/configs', (req, res) => {
+router.post('/providers/configs', validateBody(alertCreateSchemas.createProviderConfig), (req, res) => {
   try {
     const { provider_id, name, config, enabled } = req.body;
-    if (!provider_id || !name) {
-      return res.status(400).json({ success: false, error: 'provider_id and name are required' });
-    }
     const id = randomUUID();
     const newConfig = alertRepository.createProviderConfig({
       id,
@@ -506,7 +439,7 @@ router.post('/providers/configs', (req, res) => {
   }
 });
 
-router.put('/providers/configs/:id', (req, res) => {
+router.put('/providers/configs/:id', validateBody(alertCreateSchemas.updateProviderConfig), (req, res) => {
   try {
     const { name, config, enabled } = req.body;
     const id = req.params.id;

@@ -176,3 +176,21 @@ export type {
   ImageRegistryRecord, ImageRegistryCreateInput,
   DockerEndpointRecord, DockerEndpointCreateInput,
 } from './containersRepository';
+
+export { aiRemediationRepository } from './aiRemediationRepository';
+export type { AiRemediationRecord, AiRemediationCreateInput } from './aiRemediationRepository';
+
+export { copilotConversationRepository } from './copilotConversationRepository';
+export type { CopilotConversationRow } from './copilotConversationRepository';
+
+export { rcaRepository } from './rcaRepository';
+export type { RootCauseAnalysis, CreateRCAInput, UpdateRCAInput } from './rcaRepository';
+
+export { containerRepository } from './containerRepository';
+export { chatSessionRepository } from './chatSessionRepository';
+export { backupRepository } from './backupRepository';
+export { dbHealthRepository } from './dbHealthRepository';
+export { configFileTemplateRepository } from './configFileTemplateRepository';
+export type { ConfigFileTemplate } from './configFileTemplateRepository';
+
+export { maintenanceRepository } from './maintenanceRepository';

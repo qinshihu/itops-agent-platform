@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -15,6 +14,17 @@ interface SceneProps {
   heatmapData?: Record<string, number>;
   viewMode: ViewMode;
 }
+
+/** Three.js 对象的 userData 扩展属性 */
+interface RackUserData {
+  rackId?: string;
+  isRackDoor?: boolean;
+  isStatusLed?: boolean;
+  isGlow?: boolean;
+  targetRotation?: number;
+}
+
+type ThreeObject = THREE.Object3D & { isMesh?: boolean; material?: THREE.Material & { opacity?: number }; userData: RackUserData };
 
 // ── 纹理缓存 ──
 const texCache: Record<string, THREE.CanvasTexture> = {};
@@ -290,11 +300,11 @@ export default function Scene({ racks, onRackClick, selectedRackId, hoveredRackI
       mouse.current.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       ray.current.setFromCamera(mouse.current, camera);
       const hits = ray.current.intersectObjects(
-        Array.from(rackMap.current.values()).flatMap(g => { const a: THREE.Object3D[] = []; g.traverse(c => { if ((c as any).isMesh) a.push(c); }); return a; }),
+        Array.from(rackMap.current.values()).flatMap(g => { const a: THREE.Object3D[] = []; g.traverse(c => { if ((c as ThreeObject).isMesh) a.push(c); }); return a; }),
         false
       );
       let hid: string | null = null;
-      if (hits.length > 0) { let c: any = hits[0].object; while (c && !c.userData?.rackId) c = c.parent; if (c) hid = c.userData.rackId; }
+      if (hits.length > 0) { let c: THREE.Object3D | null = hits[0].object; while (c && !(c as ThreeObject).userData?.rackId) c = c.parent; if (c) hid = (c as ThreeObject).userData.rackId ?? null; }
       onHoverChange?.(hid);
     };
     const onUp = (e: PointerEvent) => {
@@ -305,10 +315,10 @@ export default function Scene({ racks, onRackClick, selectedRackId, hoveredRackI
       mouse.current.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       ray.current.setFromCamera(mouse.current, camera);
       const hits = ray.current.intersectObjects(
-        Array.from(rackMap.current.values()).flatMap(g => { const a: THREE.Object3D[] = []; g.traverse(c => { if ((c as any).isMesh) a.push(c); }); return a; }),
+        Array.from(rackMap.current.values()).flatMap(g => { const a: THREE.Object3D[] = []; g.traverse(c => { if ((c as ThreeObject).isMesh) a.push(c); }); return a; }),
         false
       );
-      if (hits.length > 0) { let c: any = hits[0].object; while (c && !c.userData?.rackId) c = c.parent; if (c) onRackClick(c.userData.rackId); }
+      if (hits.length > 0) { let c: THREE.Object3D | null = hits[0].object; while (c && !(c as ThreeObject).userData?.rackId) c = c.parent; if (c) onRackClick((c as ThreeObject).userData.rackId!); }
     };
     cv.addEventListener('pointerdown', onDown);
 
@@ -325,15 +335,15 @@ export default function Scene({ racks, onRackClick, selectedRackId, hoveredRackI
       controls.update();
       const t = Date.now() * 0.001;
       anim.current.doors.forEach(d => {
-        const tg = (d.userData as any).targetRotation || 0;
+        const tg = (d.userData as RackUserData).targetRotation || 0;
         const df = tg - d.rotation.y;
         if (Math.abs(df) > 0.001) d.rotation.y += df * 0.1;
         else d.rotation.y = tg;
       });
-      anim.current.leds.forEach(l => { (l.material as any).opacity = 0.4 + 0.6 * Math.sin(t * 3); });
+      anim.current.leds.forEach(l => { ((l as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.4 + 0.6 * Math.sin(t * 3); });
       anim.current.glows.forEach(g => {
         g.scale.setScalar(0.7 + 0.5 * Math.sin(t * 3));
-        (g.material as any).opacity = 0.15 + 0.3 * Math.sin(t * 3);
+        ((g as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.15 + 0.3 * Math.sin(t * 3);
       });
       renderer.render(scene, camera);
     };
@@ -389,9 +399,9 @@ export default function Scene({ racks, onRackClick, selectedRackId, hoveredRackI
       scene.add(g);
       rackMap.current.set(rack.id, g);
       g.traverse(o => {
-        if ((o as any).userData?.isRackDoor) anim.current.doors.push(o as THREE.Group);
-        if ((o as any).userData?.isStatusLed) anim.current.leds.push(o as THREE.Mesh);
-        if ((o as any).userData?.isGlow) anim.current.glows.push(o as THREE.Mesh);
+        if ((o as ThreeObject).userData?.isRackDoor) anim.current.doors.push(o as THREE.Group);
+        if ((o as ThreeObject).userData?.isStatusLed) anim.current.leds.push(o as THREE.Mesh);
+        if ((o as ThreeObject).userData?.isGlow) anim.current.glows.push(o as THREE.Mesh);
       });
     });
   }, [racks, heatmapData]);
@@ -402,8 +412,8 @@ export default function Scene({ racks, onRackClick, selectedRackId, hoveredRackI
       const sel = id === selectedRackId, hov = id === hoveredRackId;
       g.scale.setScalar(sel || hov ? 1.03 : 1);
       g.traverse(o => {
-        if ((o as any).userData?.isRackDoor) {
-          (o as any).userData.targetRotation = sel ? -Math.PI / 2.2 : 0;
+        if ((o as ThreeObject).userData?.isRackDoor) {
+          (o as ThreeObject).userData.targetRotation = sel ? -Math.PI / 2.2 : 0;
         }
       });
     });

@@ -381,7 +381,7 @@ export class AlertNotificationService {
 
   getNotifications(limit = 50): AlertNotification[] {
     try {
-      const rows = alertConfigsRepo.listNotifications(limit);
+      const rows = alertConfigsRepo.listNotifications({ limit });
 
       return rows.map(row => ({
         id: row.id,

@@ -73,7 +73,7 @@ export default function RemoteDesktop() {
       }
       return null;
     } catch (err) {
-      console.error('Failed to load VNC config:', err);
+      logger.error('Failed to load VNC config:', err);
       return null;
     }
   };

@@ -26,10 +26,7 @@ export function useBigScreenData() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [dashboardTitle, setDashboardTitle] = useState(() => {
-    const saved = localStorage.getItem('dashboardTitle');
-    return saved || 'ITOps 运维监控大屏';
-  });
+  const [dashboardTitle, setDashboardTitle] = useState('ITOps 运维监控大屏');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleInputValue, setTitleInputValue] = useState(dashboardTitle);
 
@@ -54,9 +51,7 @@ export function useBigScreenData() {
   }, []);
 
   useEffect(() => {
-    if (dashboardTitle !== 'ITOps 运维监控大屏') {
-      localStorage.setItem('dashboardTitle', dashboardTitle);
-    }
+    // Keep dashboardTitle in state only (no localStorage)
   }, [dashboardTitle]);
 
   const handleSaveTitle = () => {

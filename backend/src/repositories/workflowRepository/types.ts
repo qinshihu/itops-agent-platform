@@ -73,6 +73,7 @@ export interface TaskCreateWithStatusInput {
 
 export interface TaskListFilters {
   status?: string;
+  hostId?: string;
   limit?: number;
 }
 

@@ -14,8 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "depcruise": "depcruise --config .dependency-cruiser.json src",
-    "depcruise:graph": "depcruise --config .dependency-cruiser.json --output-type dot src | dot -T svg > dependency-graph.svg",
+    "depcruise": "depcruise --config ../.dependency-cruiser.json src",
+    "depcruise:graph": "depcruise --config ../.dependency-cruiser.json --output-type dot src | dot -T svg > dependency-graph.svg",
     "postinstall": "node -e \"try{require('better-sqlite3')}catch(e){console.warn('better-sqlite3 需要 Node.js 20 编译,当前版本: '+process.version)}\""
   },
   "dependencies": {
@@ -66,7 +66,6 @@
     "@typescript-eslint/eslint-plugin": "^8.59.4",
     "@typescript-eslint/parser": "^8.59.4",
     "@vitest/coverage-v8": "^1.6.0",
-    "dependency-cruiser": "^18.0.0",
     "eslint": "^8.57.1",
     "supertest": "^7.2.2",
     "ts-node": "^10.9.2",

@@ -5,6 +5,7 @@ import { multiHostDockerService } from '../services/multiHostDockerService';
 import { requireRole } from '../../../middleware/auth';
 import Docker from 'dockerode';
 import { getErrorMessage, getErrorStatusCode } from '../../../utils/errorHelpers';
+import { logger } from '../../../utils/logger';
 
 const router = Router();
 
@@ -35,7 +36,7 @@ function checkDockerAvailable(res: Response, req?: Request): boolean {
   }
   if (!dockerService.isAvailable()) {
     // 尝试自动初始化一次
-    dockerService.init().catch(() => {});
+    dockerService.init().catch((err) => { logger.warn('Docker init failed:', err); });
     res.status(503).json({ success: false, message: 'Docker 服务不可用，请先配置 Docker 连接' });
     return false;
   }
@@ -80,11 +81,11 @@ router.post('/endpoints', requireRole('admin', 'operator'), async (req: Request,
       tls_ca: tlsCa, tls_cert: tlsCert, tls_key: tlsKey,
     }).then(result => {
       const status = result.success ? 'active' : 'error';
-      // eslint-disable-next-line @typescript-eslint/no-require-imports, no-restricted-imports
+      // eslint-disable-next-line @typescript-eslint/no-require-imports, no-restricted-imports -- admin endpoint: async connection test requires direct DB write for status
       const db = require('../../../models/database').db;
       db.prepare('UPDATE docker_endpoints SET status=?, error_message=? WHERE id=?')
         .run(status, result.message || null, endpoint.id);
-    }).catch(() => {});
+    }).catch((err) => { logger.warn('Docker endpoint connection test failed:', err); });
     res.json({ success: true, data: endpoint });
   } catch (err: unknown) {
     res.status(500).json({ success: false, message: getErrorMessage(err) });

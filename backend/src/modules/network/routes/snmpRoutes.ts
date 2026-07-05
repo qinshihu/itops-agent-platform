@@ -206,7 +206,7 @@ router.post('/health-batch', async (req: Request, res: Response) => {
     }
     const results: Record<string, unknown> = {};
     for (const id of deviceIds) {
-      results[id] = await snmpService.healthCheck(id).catch(() => null);
+      results[id] = await snmpService.healthCheck(id).catch((err) => { logger.warn(`SNMP health check failed for ${id}:`, err); return null; });
     }
     res.json({ code: 0, data: results });
   } catch (error: unknown) {

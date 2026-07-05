@@ -6,6 +6,8 @@ import { auditLogRepository } from '../../../repositories';
 import { logger } from '../../../utils/logger';
 import { requireRole } from '../../../middleware/auth';
 import { checkCommandSafety } from '../../../middleware/commandFilter';
+import { validateBody, validateParams } from '../../../middleware/validation';
+import { commonSchemas, serverCommandSchemas } from '../../../shared/schemas/apiValidation';
 
 const router = Router();
 
@@ -30,7 +32,7 @@ function logCommandAudit(
   }
 }
 
-router.post('/:id/test', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
+router.post('/:id/test', requireRole('admin', 'operator'), validateParams(commonSchemas.idParam), async (req: Request, res: Response) => {
   try {
     const result = await testConnection(req.params.id);
     res.json({ success: result.success, data: result });
@@ -39,11 +41,8 @@ router.post('/:id/test', requireRole('admin', 'operator'), async (req: Request, 
   }
 });
 
-router.post('/:id/exec', requireRole('admin', 'operator'), (req: Request, res: Response, next: NextFunction) => {
+router.post('/:id/exec', requireRole('admin', 'operator'), validateParams(commonSchemas.idParam), validateBody(serverCommandSchemas.execCommand), (req: Request, res: Response, next: NextFunction) => {
   const { command } = req.body;
-  if (!command) {
-    return res.status(400).json({ success: false, error: 'Command is required' });
-  }
 
   const userRole = (req as Request & { user?: { role?: string } }).user?.role || 'viewer';
   const safetyCheck = checkCommandSafety(command, userRole);

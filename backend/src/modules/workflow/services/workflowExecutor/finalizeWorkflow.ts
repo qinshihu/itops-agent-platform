@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { getIOInstance } from '../../../../shared/websocket/io';
 import { logger } from '../../../../utils/logger';
-import { knowledgeRepository, tasksRepo, reportsRepo } from '../../../../repositories';
+import { knowledgeRepository, tasksRepo, reportsRepo, aiRemediationRepository } from '../../../../repositories';
 import { executeAgentNode } from '../../../ai/services/agents/agentExecutor';
 import { reportService } from '../../../infra/services/reportService';
 import { notificationService } from '../../../notification/services/notificationService';
@@ -117,12 +117,11 @@ export async function finalizeWorkflow(
           const ctxJson = tasksRepo.getContext(taskId);
           const ctx = ctxJson ? JSON.parse(ctxJson) : {};
           if (ctx.remediation_id) {
-            // eslint-disable-next-line no-restricted-imports
-            const { default: db } = await import('../../../../models/database');
-            db.prepare(`
-              UPDATE ai_remediations SET status = 'failed', execution_result = ?, updated_at = datetime('now','localtime')
-              WHERE id = ?
-            `).run(JSON.stringify({ verification: 'failed', rollback: 'executed', rollback_output: rollbackOutput.substring(0, 500) }), ctx.remediation_id);
+            aiRemediationRepository.updateStatusFields(
+              ctx.remediation_id,
+              'failed',
+              JSON.stringify({ verification: 'failed', rollback: 'executed', rollback_output: rollbackOutput.substring(0, 500) })
+            );
           }
         } catch { /* ai_remediations 表可能不存在 */ }
 
@@ -145,12 +144,12 @@ export async function finalizeWorkflow(
           const ctxJson = tasksRepo.getContext(taskId);
           const ctx = ctxJson ? JSON.parse(ctxJson) : {};
           if (ctx.remediation_id) {
-            // eslint-disable-next-line no-restricted-imports
-            const { default: db } = await import('../../../../models/database');
-            db.prepare(`
-              UPDATE ai_remediations SET status = 'failed', error_message = ?, updated_at = datetime('now','localtime')
-              WHERE id = ?
-            `).run(`验证失败且回滚失败: ${rollbackErrMsg}`, ctx.remediation_id);
+            aiRemediationRepository.updateStatusFields(
+              ctx.remediation_id,
+              'failed',
+              undefined,
+              `验证失败且回滚失败: ${rollbackErrMsg}`
+            );
           }
         } catch { /* ai_remediations 表可能不存在 */ }
       }

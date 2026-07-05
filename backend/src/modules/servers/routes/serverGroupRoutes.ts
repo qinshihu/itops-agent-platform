@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { serverRepository } from '../../../repositories';
 import { logger } from '../../../utils/logger';
+import { validateBody, validateParams } from '../../../middleware/validation';
+import { serverGroupSchemas } from '../../../shared/schemas/apiValidation';
 
 const router = Router();
 
@@ -22,18 +24,13 @@ router.get('/tree', (_req, res) => {
   res.json({ success: true, data: buildTree(null) });
 });
 
-router.post('/', (req, res) => {
+router.post('/', validateBody(serverGroupSchemas.createGroup), (req, res) => {
   const { name, description, parent_id, sort_order } = req.body as {
     name: string;
     description?: string;
     parent_id?: string | null;
     sort_order?: number;
   };
-
-  if (!name) {
-    res.status(400).json({ success: false, error: '分组名称不能为空' });
-    return;
-  }
 
   const id = randomUUID();
   serverRepository.groups.create({ id, name, description: description || null, parent_id: parent_id || null, sort_order: sort_order || 0 });
@@ -42,7 +39,7 @@ router.post('/', (req, res) => {
   res.json({ success: true, data: { id, name, description, parent_id, sort_order } });
 });
 
-router.put('/:id', (req, res) => {
+router.put('/:id', validateParams(serverGroupSchemas.groupId), validateBody(serverGroupSchemas.updateGroup), (req, res) => {
   const { id } = req.params;
   const { name, description, parent_id, sort_order } = req.body as {
     name?: string;
@@ -112,7 +109,7 @@ router.delete('/:id', (req, res) => {
   res.json({ success: true });
 });
 
-router.post('/:id/move', (req, res) => {
+router.post('/:id/move', validateParams(serverGroupSchemas.groupId), validateBody(serverGroupSchemas.moveGroup), (req, res) => {
   const { id } = req.params;
   const { new_parent_id, sort_order } = req.body as {
     new_parent_id?: string | null;
@@ -136,13 +133,8 @@ router.post('/:id/move', (req, res) => {
   res.json({ success: true });
 });
 
-router.post('/mapping', (req, res) => {
+router.post('/mapping', validateBody(serverGroupSchemas.groupMapping), (req, res) => {
   const { server_id, group_id } = req.body as { server_id: string; group_id: string };
-
-  if (!server_id || !group_id) {
-    res.status(400).json({ success: false, error: '缺少 server_id 或 group_id' });
-    return;
-  }
 
   if (!serverRepository.servers.existsById(server_id)) {
     res.status(404).json({ success: false, error: '服务器不存在' });

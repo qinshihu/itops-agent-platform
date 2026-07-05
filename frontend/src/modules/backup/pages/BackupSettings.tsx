@@ -4,6 +4,7 @@ import { Database, Loader2, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '../../../lib/api';
 import { getAxiosErrorMessage } from '../../../lib/errorHandler';
+import { useAuth } from '../../../../contexts/AuthContext';
 
 interface Backup {
   id: string;
@@ -164,7 +165,6 @@ export default function BackupSettings() {
                     <button
                       onClick={async () => {
                         try {
-                          const token = localStorage.getItem('token');
                           const response = await fetch(`/api/backups/download/${backup.id}`, {
                             headers: {
                               'Authorization': `Bearer ${token}`

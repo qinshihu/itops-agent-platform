@@ -27,6 +27,7 @@ vi.mock('../../containers/services/vmManagement', () => ({
   },
 }));
 
+// eslint-disable-next-line no-restricted-imports -- test file: vi.mock hoists above imports, must import db for mock verification
 import db from '../../../models/database';
 import { vmMigrationService } from './vmMigrationService';
 import { vmManagementService } from '../../containers/services/vmManagement';

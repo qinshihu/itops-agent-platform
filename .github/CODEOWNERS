@@ -5,20 +5,20 @@
 * @tance
 
 # 核心基础设施（任何改动都需要审查）
-/core/                        @tance
-/middleware/                   @tance
-/repositories/                 @tance
-/models/migrations/            @tance
+/backend/src/core/                        @tance
+/backend/src/middleware/                   @tance
+/backend/src/repositories/                 @tance
+/backend/src/models/migrations/            @tance
 /scripts/                      @tance
 /.github/workflows/            @tance
 /.trae/                        @tance
 
 # 核心业务模块（改动影响全局）
-/src/modules/ai/               @tance
-/src/modules/workflow/         @tance
-/src/modules/mcp/              @tance
-/src/modules/alerts/           @tance
-/src/modules/auto/             @tance
+/backend/src/modules/ai/               @tance
+/backend/src/modules/workflow/         @tance
+/backend/src/modules/mcp/              @tance
+/backend/src/modules/alerts/           @tance
+/backend/src/modules/auto/             @tance
 
 # 前端核心
 /frontend/src/lib/             @tance

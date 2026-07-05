@@ -1,60 +1,19 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import type { Socket } from 'socket.io-client';
-import { io } from 'socket.io-client';
-import { logger } from '@/lib/logger';
 import { Play, Pause, XCircle, Clock, CheckCircle, XCircle as XIcon, FileText, Activity, List, FileCheck } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import clsx from 'clsx';
 import api from '../../../lib/api';
 import { useAuth } from '../../../contexts/AuthContext';
+import { logger } from '@/lib/logger';
 import MarkdownOutput from '../../../shared/components/MarkdownOutput';
+import { useTaskWebSocket } from './useTaskWebSocket';
+import { ReportDetailModal } from './ReportDetailModal';
+import { parseTaskData, parseTaskLogs } from './types';
+import type { TaskDisplay, TaskLogEntry, WorkflowDisplay, Report } from './types';
 
-const wsUrl = window.location.origin;
-
-// ── Local display types (parsed JSON from API) ──
-
-interface TaskLogEntry {
-  type: string;
-  content: string;
-  timestamp: Date;
-}
-
-interface TaskDisplay {
-  id: string;
-  name: string;
-  workflow_id: string;
-  status: string;
-  start_time: string;
-  end_time: string;
-  current_node_id: string;
-  node_results?: Record<string, Record<string, unknown>>;
-  logs: TaskLogEntry[];
-  created_at: string;
-  execution_order?: string[];
-  report_id?: string;
-}
-
-interface WorkflowDisplay {
-  id: string;
-  name: string;
-  nodes: Record<string, unknown>[];
-}
-
-interface Report {
-  id: string;
-  name: string;
-  content: string;
-  created_at: string;
-  format?: string;
-  task_id?: string;
-}
-
-interface _SocketTaskEvent {
-  taskId: string;
-  status?: string;
-}
+// ── Component ──────────────────────────────────────────
 
 export default function Tasks() {
   const { token } = useAuth();
@@ -66,37 +25,19 @@ export default function Tasks() {
   const [activeTab, setActiveTab] = useState<'logs' | 'nodes' | 'related_reports'>('logs');
   const [showReportDetail, setShowReportDetail] = useState<Report | null>(null);
 
+  // ── Data Queries ────────────────────────────────────
+
   const { data: tasks, refetch: refetchTasks } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
       const res = await api.get('/tasks');
       const taskData = res.data.data as TaskDisplay[];
       return taskData.map(task => {
-        const parsedTask = { ...task };
-        if (task.execution_order && typeof task.execution_order === 'string') {
-          try {
-            parsedTask.execution_order = JSON.parse(task.execution_order);
-          } catch {
-            parsedTask.execution_order = undefined;
-          }
+        const parsed = parseTaskData(task as unknown as Record<string, unknown>);
+        const parsedTask = { ...task, ...parsed } as TaskDisplay;
+        if (task.logs) {
+          parsedTask.logs = parseTaskLogs(task as unknown as Record<string, unknown>);
         }
-        
-        if (task.node_results && typeof task.node_results === 'string') {
-          try {
-            parsedTask.node_results = JSON.parse(task.node_results);
-          } catch {
-            parsedTask.node_results = undefined;
-          }
-        }
-        
-        if (task.logs && typeof task.logs === 'string') {
-          try {
-            parsedTask.logs = JSON.parse(task.logs);
-          } catch {
-            parsedTask.logs = [];
-          }
-        }
-        
         return parsedTask;
       });
     },
@@ -118,257 +59,105 @@ export default function Tasks() {
     },
   });
 
-  useEffect(() => {
-    if (!token) return;
+  // ── WebSocket ───────────────────────────────────────
 
-    const socket: Socket = io(wsUrl, {
-      transports: ['websocket', 'polling'],
-      auth: {
-        token: token
-      }
-    });
+  const onNodeStarted = useCallback((nodeId: string) => {
+    setExecutingNodeId(nodeId);
+  }, []);
 
-    const handleConnect = () => {
-    };
+  const onTaskLog = useCallback((entry: TaskLogEntry) => {
+    setTaskLogs(prev => [...prev, entry]);
+  }, []);
 
-    const handleDisconnect = () => {
-    };
+  const onNodeCompleted = useCallback((taskId: string, status: string) => {
+    setExecutingNodeId(null);
+    refetchTasks();
+    setTaskLogs(prev => [
+      ...prev,
+      { type: 'success', content: `节点执行完成: ${status}`, timestamp: new Date() },
+    ]);
+  }, [refetchTasks]);
 
-    const handleConnectError = (_error: Error) => {
-    };
+  useTaskWebSocket({
+    token,
+    selectedTask,
+    onRefetchTasks: refetchTasks,
+    onNodeStarted,
+    onTaskLog,
+    onNodeCompleted,
+  });
 
-    const handleTaskStarted = (_data: unknown) => {
-      refetchTasks();
-    };
-
-    const handleNodeStarted = (data: unknown) => {
-      const nodeData = data as { nodeId: string };
-      setExecutingNodeId(nodeData.nodeId);
-    };
-
-    const handleNodeThinking = (data: unknown) => {
-      const eventData = data as { taskId: string; content: string };
-      if (selectedTask?.id === eventData.taskId) {
-        setTaskLogs((prev) => [
-          ...prev,
-          { type: 'thinking', content: eventData.content, timestamp: new Date() },
-        ]);
-      }
-    };
-
-    const handleNodeOutput = (data: unknown) => {
-      const eventData = data as { taskId: string; output: string };
-      if (selectedTask?.id === eventData.taskId) {
-        setTaskLogs((prev) => [
-          ...prev,
-          { type: 'output', content: eventData.output, timestamp: new Date() },
-        ]);
-      }
-    };
-
-    const handleNodeCompleted = (data: unknown) => {
-      setExecutingNodeId(null);
-      refetchTasks();
-      const taskData = data as { taskId: string; status: string };
-      if (selectedTask?.id === taskData.taskId) {
-        setTaskLogs((prev) => [
-          ...prev,
-          {
-            type: 'success',
-            content: `节点执行完成: ${taskData.status}`,
-            timestamp: new Date(),
-          },
-        ]);
-      }
-    };
-
-    const handleTaskCompleted = (_data: unknown) => {
-      refetchTasks();
-    };
-
-    const handleTaskFailed = (_data: unknown) => {
-      refetchTasks();
-    };
-
-    socket.on('connect', handleConnect);
-    socket.on('disconnect', handleDisconnect);
-    socket.on('connect_error', handleConnectError);
-    socket.on('task:started', handleTaskStarted);
-    socket.on('task:node:started', handleNodeStarted);
-    socket.on('task:node:thinking', handleNodeThinking);
-    socket.on('task:node:output', handleNodeOutput);
-    socket.on('task:node:completed', handleNodeCompleted);
-    socket.on('task:completed', handleTaskCompleted);
-    socket.on('task:failed', handleTaskFailed);
-
-    if (selectedTask) {
-      socket.emit('task:subscribe', selectedTask.id);
-    }
-
-    return () => {
-      if (selectedTask) {
-        socket.emit('task:unsubscribe', selectedTask.id);
-      }
-      socket.off('connect', handleConnect);
-      socket.off('disconnect', handleDisconnect);
-      socket.off('connect_error', handleConnectError);
-      socket.off('task:started', handleTaskStarted);
-      socket.off('task:node:started', handleNodeStarted);
-      socket.off('task:node:thinking', handleNodeThinking);
-      socket.off('task:node:output', handleNodeOutput);
-      socket.off('task:node:completed', handleNodeCompleted);
-      socket.off('task:completed', handleTaskCompleted);
-      socket.off('task:failed', handleTaskFailed);
-      socket.disconnect();
-    };
-  }, [selectedTask, refetchTasks, token]);
-
-  const selectedTaskRef = useRef<TaskDisplay | null>(selectedTask);
-  useEffect(() => {
-    selectedTaskRef.current = selectedTask;
-  }, [selectedTask]);
+  // ── Task sync from polling ──────────────────────────
 
   useEffect(() => {
-    const currentSelectedTask = selectedTaskRef.current;
-    if (currentSelectedTask && tasks) {
-      const updatedTask = tasks.find(t => t.id === currentSelectedTask.id);
-      if (updatedTask) {
-        const hasChanged = 
-          updatedTask.status !== currentSelectedTask.status || 
-          JSON.stringify(updatedTask.node_results) !== JSON.stringify(currentSelectedTask.node_results);
-        
-        if (hasChanged) {
-          const parsedTask = { ...updatedTask };
-          if (updatedTask.execution_order && typeof updatedTask.execution_order === 'string') {
-            try {
-              parsedTask.execution_order = JSON.parse(updatedTask.execution_order);
-            } catch {
-              parsedTask.execution_order = undefined;
-            }
-          }
-          
-          if (updatedTask.node_results && typeof updatedTask.node_results === 'string') {
-            try {
-              parsedTask.node_results = JSON.parse(updatedTask.node_results);
-            } catch {
-              parsedTask.node_results = undefined;
-            }
-          }
-          
-          let parsedLogs: TaskLogEntry[] = [];
-          if (updatedTask.logs && Array.isArray(updatedTask.logs)) {
-            parsedLogs = updatedTask.logs.map((log: TaskLogEntry) => ({
-              ...log,
-              timestamp: log.timestamp ? new Date(log.timestamp) : new Date()
-            }));
-          } else if (updatedTask.logs && typeof updatedTask.logs === 'string') {
-            try {
-              const jsonLogs = JSON.parse(updatedTask.logs);
-              if (Array.isArray(jsonLogs)) {
-                parsedLogs = jsonLogs.map((log: TaskLogEntry) => ({
-                  ...log,
-                  timestamp: log.timestamp ? new Date(log.timestamp) : new Date()
-                }));
-              }
-            } catch {
-              // parse failure, use empty
-            }
-          }
-          
-          setSelectedTask(parsedTask);
-          if (updatedTask.status === 'completed' || updatedTask.status === 'failed') {
-            setTaskLogs(parsedLogs);
-          }
-        }
+    if (!selectedTask || !tasks) return;
+    const updatedTask = tasks.find(t => t.id === selectedTask.id);
+    if (!updatedTask) return;
+
+    const hasChanged =
+      updatedTask.status !== selectedTask.status ||
+      JSON.stringify(updatedTask.node_results) !== JSON.stringify(selectedTask.node_results);
+
+    if (hasChanged) {
+      const parsed = parseTaskData(updatedTask as unknown as Record<string, unknown>);
+      const parsedTask = { ...updatedTask, ...parsed } as TaskDisplay;
+      if (updatedTask.logs) {
+        parsedTask.logs = parseTaskLogs(updatedTask as unknown as Record<string, unknown>);
+      }
+      setSelectedTask(parsedTask);
+      if (updatedTask.status === 'completed' || updatedTask.status === 'failed') {
+        setTaskLogs(parsedTask.logs);
       }
     }
-  }, [tasks]);
-  
+  }, [tasks, selectedTask]);
+
+  // ── Task selection ──────────────────────────────────
+
   const handleSelectTask = (task: TaskDisplay) => {
-    const parsedTask = { ...task };
-    
-    if (task.execution_order && typeof task.execution_order === 'string') {
-      try {
-        parsedTask.execution_order = JSON.parse(task.execution_order);
-      } catch {
-        parsedTask.execution_order = undefined;
-      }
-    }
-    
-    if (task.node_results && typeof task.node_results === 'string') {
-      try {
-        parsedTask.node_results = JSON.parse(task.node_results);
-      } catch {
-        parsedTask.node_results = undefined;
-      }
-    }
-    
-    let parsedLogs: TaskLogEntry[] = [];
-    if (task.logs && Array.isArray(task.logs)) {
-      parsedLogs = task.logs.map((log: TaskLogEntry) => ({
-        ...log,
-        timestamp: log.timestamp ? new Date(log.timestamp) : new Date()
-      }));
-    } else if (task.logs && typeof task.logs === 'string') {
-      try {
-        const jsonLogs = JSON.parse(task.logs);
-        if (Array.isArray(jsonLogs)) {
-          parsedLogs = jsonLogs.map((log: TaskLogEntry) => ({
-            ...log,
-            timestamp: log.timestamp ? new Date(log.timestamp) : new Date()
-          }));
-        }
-      } catch {
-        // parse failure, use empty
-      }
-    }
-    
+    const parsed = parseTaskData(task as unknown as Record<string, unknown>);
+    const parsedTask = { ...task, ...parsed } as TaskDisplay;
+    parsedTask.logs = parseTaskLogs(task as unknown as Record<string, unknown>);
     setSelectedTask(parsedTask);
-    setTaskLogs(parsedLogs);
+    setTaskLogs(parsedTask.logs);
   };
 
   useEffect(() => {
     if (!taskIdFromQuery || !tasks || selectedTask?.id === taskIdFromQuery) return;
-
-    const task = tasks.find((item) => item.id === taskIdFromQuery);
-    if (task) {
-      handleSelectTask(task);
-    }
+    const task = tasks.find(item => item.id === taskIdFromQuery);
+    if (task) handleSelectTask(task);
   }, [taskIdFromQuery, selectedTask?.id, tasks]);
 
+  // ── Mutations ───────────────────────────────────────
+
   const pauseMutation = useMutation({
-    mutationFn: async (taskId: string) => {
-      await api.put(`/tasks/${taskId}/pause`);
-    },
+    mutationFn: (taskId: string) => api.put(`/tasks/${taskId}/pause`),
     onSuccess: () => refetchTasks(),
   });
 
   const resumeMutation = useMutation({
-    mutationFn: async (taskId: string) => {
-      await api.put(`/tasks/${taskId}/resume`);
-    },
+    mutationFn: (taskId: string) => api.put(`/tasks/${taskId}/resume`),
     onSuccess: () => refetchTasks(),
   });
 
   const cancelMutation = useMutation({
-    mutationFn: async (taskId: string) => {
-      await api.put(`/tasks/${taskId}/cancel`);
-    },
+    mutationFn: (taskId: string) => api.put(`/tasks/${taskId}/cancel`),
     onSuccess: () => refetchTasks(),
   });
 
+  // ── Helpers ─────────────────────────────────────────
+
   const getTaskWorkflow = (workflowId: string) => {
-    return workflows?.find((w) => w.id === workflowId);
+    return workflows?.find(w => w.id === workflowId);
   };
-  
-  const handleDownloadReport = async (reportId: string, format: 'markdown' | 'pdf' | 'word' = 'markdown') => {
+
+  const handleDownloadReport = async (reportId: string, format: 'markdown' = 'markdown') => {
     try {
       const response = await api.get(`/reports/${reportId}/export?format=${format}`, { responseType: 'blob' });
       const blob = response.data;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `report-${reportId}.${format === 'markdown' ? 'md' : format === 'pdf' ? 'pdf' : 'doc'}`;
+      a.download = `report-${reportId}.${format === 'markdown' ? 'md' : 'pdf'}`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -378,9 +167,12 @@ export default function Tasks() {
     }
   };
 
+  // ── Render ──────────────────────────────────────────
+
   return (
     <div className="h-full overflow-hidden">
       <div className="p-6 h-full flex gap-6">
+        {/* ── Task List Sidebar ── */}
         <div className="w-1/3 h-full flex flex-col">
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-text-primary mb-2">任务执行</h1>
@@ -388,7 +180,7 @@ export default function Tasks() {
           </div>
 
           <div className="flex-1 overflow-y-auto space-y-3 scrollbar-thin">
-            {tasks?.map((task) => (
+            {tasks?.map(task => (
               <div
                 key={task.id}
                 onClick={() => handleSelectTask(task)}
@@ -424,9 +216,11 @@ export default function Tasks() {
           </div>
         </div>
 
+        {/* ── Task Detail Panel ── */}
         <div className="flex-1 h-full flex flex-col bg-surface rounded-xl border border-border">
           {selectedTask ? (
             <>
+              {/* Header */}
               <div className="p-6 border-b border-border">
                 <div className="flex items-center justify-between mb-4">
                   <div>
@@ -463,13 +257,14 @@ export default function Tasks() {
                   </div>
                 </div>
 
+                {/* Node Flow */}
                 <div className="flex gap-2 overflow-x-auto pb-2">
                   {(() => {
                     const workflow = getTaskWorkflow(selectedTask.workflow_id);
                     const nodes = workflow?.nodes || [];
-                    const nodeMap = new Map(nodes.map((node) => [String(node.id), node]));
+                    const nodeMap = new Map(nodes.map(node => [String(node.id), node]));
                     const executionOrder = selectedTask.execution_order;
-                    
+
                     let orderedNodes;
                     if (executionOrder && executionOrder.length > 0) {
                       orderedNodes = executionOrder
@@ -499,17 +294,13 @@ export default function Tasks() {
                             <span className="text-sm font-medium text-text-primary whitespace-nowrap">
                               {((node as Record<string, unknown>).data as Record<string, unknown>)?.label as string}
                             </span>
-                            {status === 'completed' && (
-                              <CheckCircle className="w-4 h-4 text-status-success" />
-                            )}
+                            {status === 'completed' && <CheckCircle className="w-4 h-4 text-status-success" />}
                             {status === 'failed' && <XIcon className="w-4 h-4 text-status-failed" />}
                             {status === 'running' && (
                               <div className="w-4 h-4 border-2 border-status-running border-t-transparent rounded-full animate-spin" />
                             )}
                           </div>
-                          {index < orderedNodes.length - 1 && (
-                            <span className="text-text-secondary">→</span>
-                          )}
+                          {index < orderedNodes.length - 1 && <span className="text-text-secondary">→</span>}
                         </div>
                       );
                     });
@@ -517,53 +308,34 @@ export default function Tasks() {
                 </div>
               </div>
 
+              {/* Tabs */}
               <div className="flex-1 overflow-hidden flex flex-col">
                 <div className="flex border-b border-border px-6 pt-4">
-                  <button
-                    onClick={() => setActiveTab('logs')}
-                    className={clsx(
-                      'px-4 py-2 text-sm font-medium border-b-2 transition-all',
-                      activeTab === 'logs'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-text-secondary hover:text-text-primary'
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      <List className="w-4 h-4" />
-                      执行日志
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('nodes')}
-                    className={clsx(
-                      'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
-                      activeTab === 'nodes'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-text-secondary hover:text-text-primary'
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4" />
-                      节点结果
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('related_reports')}
-                    className={clsx(
-                      'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
-                      activeTab === 'related_reports'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-text-secondary hover:text-text-primary'
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      <FileCheck className="w-4 h-4" />
-                      相关报告
-                    </div>
-                  </button>
+                  {([
+                    ['logs', List, '执行日志'],
+                    ['nodes', FileText, '节点结果'],
+                    ['related_reports', FileCheck, '相关报告'],
+                  ] as const).map(([tab, Icon, label]) => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={clsx(
+                        'px-4 py-2 text-sm font-medium border-b-2 transition-all',
+                        activeTab === tab
+                          ? 'border-primary text-primary'
+                          : 'border-transparent text-text-secondary hover:text-text-primary'
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon className="w-4 h-4" />
+                        {label}
+                      </div>
+                    </button>
+                  ))}
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6">
+                  {/* Logs Tab */}
                   {activeTab === 'logs' && (
                     <div className="space-y-2">
                       {taskLogs.length === 0 ? (
@@ -588,12 +360,8 @@ export default function Tasks() {
                               <span className="text-xs text-text-secondary">
                                 {format(new Date(log.timestamp), 'HH:mm:ss')}
                               </span>
-                              {log.type === 'thinking' && (
-                                <span className="text-xs text-blue-500">分析中</span>
-                              )}
-                              {log.type === 'output' && (
-                                <span className="text-xs text-green-500">输出</span>
-                              )}
+                              {log.type === 'thinking' && <span className="text-xs text-blue-500">分析中</span>}
+                              {log.type === 'output' && <span className="text-xs text-green-500">输出</span>}
                             </div>
                             {log.type === 'output' ? (
                               <div className="text-text-primary">
@@ -607,15 +375,16 @@ export default function Tasks() {
                       )}
                     </div>
                   )}
-                  
+
+                  {/* Nodes Tab */}
                   {activeTab === 'nodes' && (
                     <div className="space-y-4">
                       {(() => {
                         const workflow = getTaskWorkflow(selectedTask.workflow_id);
                         const nodes = workflow?.nodes || [];
-                        const nodeMap = new Map(nodes.map((node) => [String(node.id), node]));
+                        const nodeMap = new Map(nodes.map(node => [String(node.id), node]));
                         const executionOrder = selectedTask.execution_order;
-                        
+
                         let orderedNodes;
                         if (executionOrder && executionOrder.length > 0) {
                           orderedNodes = executionOrder
@@ -658,12 +427,8 @@ export default function Tasks() {
                                   <div>
                                     <h4 className="font-medium text-text-primary flex items-center gap-2">
                                       {((node as Record<string, unknown>).data as Record<string, unknown>)?.label as string || '未知节点'}
-                                      {status === 'completed' && (
-                                        <CheckCircle className="w-4 h-4 text-status-success" />
-                                      )}
-                                      {status === 'failed' && (
-                                        <XIcon className="w-4 h-4 text-status-failed" />
-                                      )}
+                                      {status === 'completed' && <CheckCircle className="w-4 h-4 text-status-success" />}
+                                      {status === 'failed' && <XIcon className="w-4 h-4 text-status-failed" />}
                                       {status === 'running' && (
                                         <div className="w-4 h-4 border-2 border-status-running border-t-transparent rounded-full animate-spin" />
                                       )}
@@ -722,29 +487,26 @@ export default function Tasks() {
                       })()}
                     </div>
                   )}
-                  
+
+                  {/* Reports Tab */}
                   {activeTab === 'related_reports' && (
                     <div className="space-y-4">
                       {(() => {
                         let relatedReports: Report[] = [];
-                        
+
                         if (selectedTask.report_id) {
-                          const exactReport = reports?.find((report: Report) => 
-                            report.id === selectedTask.report_id
-                          );
-                          if (exactReport) {
-                            relatedReports = [exactReport];
-                          }
+                          const exactReport = reports?.find(report => report.id === selectedTask.report_id);
+                          if (exactReport) relatedReports = [exactReport];
                         }
-                        
+
                         if (relatedReports.length === 0) {
-                          relatedReports = reports?.filter((report: Report) => 
-                            report.name?.includes(selectedTask.name) || 
+                          relatedReports = reports?.filter(report =>
+                            report.name?.includes(selectedTask.name) ||
                             report.content?.includes(selectedTask.id) ||
                             report.task_id === selectedTask.id
                           ) || [];
                         }
-                        
+
                         if (relatedReports.length === 0) {
                           return (
                             <div className="text-center py-12 text-text-secondary">
@@ -753,8 +515,8 @@ export default function Tasks() {
                             </div>
                           );
                         }
-                        
-                        return relatedReports.map((report: Report) => (
+
+                        return relatedReports.map(report => (
                           <div
                             key={report.id}
                             className="bg-surface border border-border rounded-lg p-4 hover:border-primary/50 transition-all cursor-pointer"
@@ -774,10 +536,7 @@ export default function Tasks() {
                                 </p>
                               </div>
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDownloadReport(report.id, 'markdown');
-                                }}
+                                onClick={e => { e.stopPropagation(); handleDownloadReport(report.id, 'markdown'); }}
                                 className="text-primary hover:text-primary/80 p-2"
                               >
                                 <FileText className="w-5 h-5" />
@@ -801,38 +560,14 @@ export default function Tasks() {
           )}
         </div>
       </div>
-      
+
+      {/* Report Detail Modal */}
       {showReportDetail && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface border border-border rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between p-6 border-b border-border">
-              <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
-                <FileCheck className="w-6 h-6 text-primary" />
-                {showReportDetail.name}
-              </h2>
-              <button
-                onClick={() => setShowReportDetail(null)}
-                className="text-text-secondary hover:text-text-primary p-2"
-              >
-                <XIcon className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-6">
-              <MarkdownOutput content={showReportDetail.content} />
-            </div>
-            
-            <div className="p-4 border-t border-border flex justify-end gap-3">
-              <button
-                onClick={() => handleDownloadReport(showReportDetail.id, 'markdown')}
-                className="px-4 py-2 bg-surface hover:bg-background text-text-primary rounded-lg flex items-center gap-2"
-              >
-                <FileText className="w-4 h-4" />
-                下载 Markdown
-              </button>
-            </div>
-          </div>
-        </div>
+        <ReportDetailModal
+          report={showReportDetail}
+          onClose={() => setShowReportDetail(null)}
+          onDownload={handleDownloadReport}
+        />
       )}
     </div>
   );

@@ -2,9 +2,7 @@ import type { Job } from 'node-schedule';
 import { scheduleJob } from 'node-schedule';
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
-// eslint-disable-next-line no-restricted-imports
-import { performMaintenance } from '../../../models/database';
-import { scheduledTasksRepo, workflowsRepo, tasksRepo, auditLogRepository } from '../../../repositories';
+import { scheduledTasksRepo, workflowsRepo, tasksRepo, auditLogRepository, maintenanceRepository } from '../../../repositories';
 import { executeWorkflow } from './workflowExecutor';
 import type { WorkflowParsed, WorkflowNode, WorkflowEdge } from '../../../types';
 import { serverInfoCollector } from '../../servers/services/serverInfoCollector';
@@ -62,15 +60,15 @@ class SchedulerService {
       
       try {
         // 先分析统计信息
-        performMaintenance('analyze');
+        maintenanceRepository.performMaintenance('analyze');
         
         // 检查完整性
-        performMaintenance('integrity_check');
+        maintenanceRepository.performMaintenance('integrity_check');
         
         // 每周日凌晨3点执行VACUUM（释放空间）
         const dayOfWeek = new Date().getDay();
         if (dayOfWeek === 0) { // 周日
-          performMaintenance('vacuum');
+          maintenanceRepository.performMaintenance('vacuum');
           logger.info('✅ Weekly VACUUM completed');
         }
         

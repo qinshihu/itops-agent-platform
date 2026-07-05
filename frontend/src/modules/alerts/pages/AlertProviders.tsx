@@ -25,8 +25,7 @@ interface AlertProviderConfig {
   id: string;
   provider_id: string;
   name: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  config: Record<string, any>;
+  config: Record<string, unknown>;
   enabled: boolean;
   created_at: string;
   updated_at: string;
@@ -112,8 +111,7 @@ export default function AlertProviders() {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [editingConfig, setEditingConfig] = useState<AlertProviderConfig | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<AlertProvider | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [configFormData, setConfigFormData] = useState<Record<string, any>>({});
+  const [configFormData, setConfigFormData] = useState<Record<string, unknown>>({});
   const [configName, setConfigName] = useState('');
   const [configEnabled, setConfigEnabled] = useState(true);
   const [copied, setCopied] = useState('');
@@ -208,8 +206,7 @@ export default function AlertProviders() {
     setConfigEnabled(true);
     setTestResult(null);
     // 初始化表单默认值
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const defaults: Record<string, any> = {};
+    const defaults: Record<string, unknown> = {};
     if (provider.configSchema?.properties) {
       Object.entries(provider.configSchema.properties).forEach(([key, prop]) => {
         if (prop.default !== undefined) {

@@ -46,6 +46,7 @@ vi.mock('axios', () => ({
 }));
 
 import axios from 'axios';
+// eslint-disable-next-line no-restricted-imports -- test file: vi.mock hoists above imports, must import db for mock verification
 import db from '../../../models/database';
 import { registryService } from './registryService';
 import { credentialService } from '../../auth/services/credentialService';

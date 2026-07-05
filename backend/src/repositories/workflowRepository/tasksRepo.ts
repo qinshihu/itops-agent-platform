@@ -11,9 +11,17 @@ export const tasksRepo = {
   list(filters?: TaskListFilters): TaskRecord[] {
     let sql = 'SELECT * FROM tasks';
     const params: unknown[] = [];
+    const conditions: string[] = [];
     if (filters?.status) {
-      sql += ' WHERE status = ?';
+      conditions.push('status = ?');
       params.push(filters.status);
+    }
+    if (filters?.hostId) {
+      conditions.push('host_id = ?');
+      params.push(filters.hostId);
+    }
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ');
     }
     sql += ' ORDER BY created_at DESC';
     if (filters?.limit && filters.limit > 0) {

@@ -1,6 +1,8 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { changeService } from '../services/changeService';
+import { validateBody, validateParams } from '../../../middleware/validation';
+import { changeSchemas, commonSchemas } from '../../../shared/schemas/apiValidation';
 
 const router = Router();
 
@@ -22,13 +24,9 @@ router.get('/', (req: Request, res: Response) => {
   }
 });
 
-router.post('/', (req: Request, res: Response) => {
+router.post('/', validateBody(changeSchemas.createChange), (req: Request, res: Response) => {
   try {
     const { server_id, change_type, description, changed_by, status, related_alert_id, metadata } = req.body;
-
-    if (!server_id || !change_type) {
-      return res.status(400).json({ success: false, error: 'server_id and change_type are required' });
-    }
 
     const record = changeService.create({
       server_id,
@@ -70,7 +68,7 @@ router.patch('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/root-cause', (req: Request, res: Response) => {
+router.post('/:id/root-cause', validateParams(commonSchemas.idParam), (req: Request, res: Response) => {
   try {
     const record = changeService.markAsRootCause(req.params.id);
     if (!record) {

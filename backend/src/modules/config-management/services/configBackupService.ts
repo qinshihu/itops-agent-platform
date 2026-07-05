@@ -106,11 +106,7 @@ class ConfigBackupService {
    * 批量备份所有在线设备
    */
   async backupAllOnlineDevices(): Promise<{ success: number; failed: number }> {
-    // eslint-disable-next-line no-restricted-imports
-    const { default: db } = await import('../../../models/database');
-    const devices = db.prepare(
-      "SELECT id FROM network_devices WHERE status IN ('online', 'unknown')"
-    ).all() as { id: string }[];
+    const devices = networkDeviceRepository.listIdsByStatus(['online', 'unknown']);
 
     let success = 0;
     let failed = 0;

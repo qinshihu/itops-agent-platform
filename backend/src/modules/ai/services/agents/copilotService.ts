@@ -1,6 +1,4 @@
-import { serversRepo } from '../../../../repositories';
-// eslint-disable-next-line no-restricted-imports
-import db from '../../../../models/database';
+import { serversRepo, copilotConversationRepository, alertRepository, tasksRepo } from '../../../../repositories';
 import { logger } from '../../../../utils/logger';
 import { generateCompletion } from '../llm/llmService';
 import { randomUUID } from 'crypto';
@@ -75,7 +73,7 @@ class CopilotService {
       if (isExpired) {
         this.conversations.delete(id);
         try {
-          db.prepare('DELETE FROM copilot_conversations WHERE id = ?').run(id);
+          copilotConversationRepository.deleteById(id);
         } catch (error) {
           logger.error('Failed to delete expired conversation from DB:', error);
         }
@@ -97,7 +95,7 @@ class CopilotService {
       toRemove.forEach(([id]) => {
         this.conversations.delete(id);
         try {
-          db.prepare('DELETE FROM copilot_conversations WHERE id = ?').run(id);
+          copilotConversationRepository.deleteById(id);
         } catch (error) {
           logger.error('Failed to remove excess conversation from DB:', error);
         }
@@ -115,13 +113,7 @@ class CopilotService {
 
   private loadConversations() {
     try {
-      const saved = db.prepare('SELECT * FROM copilot_conversations').all() as Array<{
-        id: string;
-        user_id: string;
-        messages: string;
-        created_at: string;
-        updated_at: string;
-      }>;
+      const saved = copilotConversationRepository.listAll();
       saved.forEach(c => {
         try {
           this.conversations.set(c.id, {
@@ -141,11 +133,7 @@ class CopilotService {
   }
 
   private saveConversation(conversation: Conversation) {
-    db.prepare(`
-      INSERT OR REPLACE INTO copilot_conversations 
-      (id, user_id, messages, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(
+    copilotConversationRepository.save(
       conversation.id,
       conversation.user_id,
       JSON.stringify(conversation.messages),
@@ -187,7 +175,7 @@ class CopilotService {
     this.ensureInitialized();
     const deleted = this.conversations.delete(id);
     if (deleted) {
-      db.prepare('DELETE FROM copilot_conversations WHERE id = ?').run(id);
+      copilotConversationRepository.deleteById(id);
     }
     return deleted;
   }
@@ -232,12 +220,7 @@ class CopilotService {
     // 根据用户输入自动注入相关数据到上下文中
     if (lowerInput.includes('告警') || lowerInput.includes('alert')) {
       try {
-        const alerts = db.prepare('SELECT * FROM alerts ORDER BY created_at DESC LIMIT 10').all() as Array<{
-          id: string;
-          severity: string;
-          title: string;
-          status: string;
-        }>;
+        const alerts = alertRepository.getAll({ limit: 10 });
         const severityCounts: Record<string, number> = {};
         const statusCounts: Record<string, number> = {};
         alerts.forEach((a) => {
@@ -274,11 +257,7 @@ class CopilotService {
 
     if (lowerInput.includes('任务') || lowerInput.includes('task')) {
       try {
-        const tasks = db.prepare('SELECT * FROM tasks ORDER BY created_at DESC LIMIT 15').all() as Array<{
-          id: string;
-          name: string;
-          status: string;
-        }>;
+        const tasks = tasksRepo.listRecent(15);
         const statusCounts: Record<string, number> = {};
         tasks.forEach((t) => {
           statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
@@ -354,12 +333,7 @@ class CopilotService {
   }
 
   private handleAlertQuery(): string {
-    const alerts = db.prepare('SELECT * FROM alerts ORDER BY created_at DESC LIMIT 10').all() as Array<{
-      id: string;
-      severity: string;
-      title: string;
-      status: string;
-    }>;
+    const alerts = alertRepository.getAll({ limit: 10 });
     const severityCounts: Record<string, number> = {};
     const statusCounts: Record<string, number> = {};
 
@@ -418,11 +392,7 @@ class CopilotService {
   }
 
   private handleTaskQuery(): string {
-    const tasks = db.prepare('SELECT * FROM tasks ORDER BY created_at DESC LIMIT 15').all() as Array<{
-      id: string;
-      name: string;
-      status: string;
-    }>;
+    const tasks = tasksRepo.listRecent(15);
     const statusCounts: Record<string, number> = {};
 
     tasks.forEach((t) => {
