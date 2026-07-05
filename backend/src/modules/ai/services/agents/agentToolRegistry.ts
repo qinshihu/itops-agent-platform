@@ -1,8 +1,11 @@
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { logger } from '../../../../utils/logger';
 import { executeCommand } from '../../../servers/services/sshService';
 import { dockerService } from '../../../containers/services/dockerService';
 import { serverInfoCollector } from '../../../servers/services/serverInfoCollector';
+// eslint-disable-next-line no-restricted-imports
 import db from '../../../../models/database';
 
 // ── 语义化类型别名 ──

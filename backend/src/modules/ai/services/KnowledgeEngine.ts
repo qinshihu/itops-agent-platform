@@ -8,8 +8,9 @@
  */
 
 import { randomUUID } from 'crypto';
-import db from '../../../models/database';
+import { knowledgeRepository } from '../../../repositories';
 import { logger } from '../../../utils/logger';
+import type { KnowledgeRecord } from '../../../repositories';
 
 // ── 类型定义 ──
 
@@ -64,25 +65,6 @@ export interface KnowledgeStats {
   topKeywords: string[];
 }
 
-interface KnowledgeRow {
-  id: string;
-  title: string;
-  category: string;
-  content: string;
-  tags: string | null;
-  solutions: string | null;
-  source: string;
-  alert_id: string | null;
-  workflow_id: string | null;
-  task_id: string | null;
-  server_id: string | null;
-  success_rating: number;
-  duration_ms: number | null;
-  usage_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
 interface NodeResultData {
   output?: string;
   error?: string;
@@ -111,16 +93,11 @@ class KnowledgeEngine {
 
     if (duplicateId) {
       // 更新已有条目
-      db.prepare(`
-        UPDATE knowledge_base
-        SET content = ?, success_rating = ?, duration_ms = ?, usage_count = COALESCE(usage_count, 0) + 1,
-            updated_at = datetime('now','localtime')
-        WHERE id = ?
-      `).run(
+      knowledgeRepository.mergeOnDuplicate(
+        duplicateId,
         entry.content,
         entry.successRating,
-        entry.durationMs || null,
-        duplicateId
+        entry.durationMs || null
       );
       logger.info(`📚 知识已合并到已有条目: ${duplicateId}`);
       return duplicateId;
@@ -131,16 +108,21 @@ class KnowledgeEngine {
     const parsedTags = entry.tags ? (typeof entry.tags === 'string' ? entry.tags : JSON.stringify(entry.tags)) : null;
     const parsedSolutions = entry.solutions ? JSON.stringify(entry.solutions) : null;
 
-    db.prepare(`
-      INSERT INTO knowledge_base (id, title, category, content, tags, solutions, source, alert_id, workflow_id, task_id, server_id, success_rating, duration_ms, usage_count, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now','localtime'), datetime('now','localtime'))
-    `).run(
-      id, entry.title, entry.category, entry.content,
-      parsedTags, parsedSolutions,
-      entry.source, entry.alertId || null, entry.workflowId || null,
-      entry.taskId || null, entry.serverId || null,
-      entry.successRating, entry.durationMs || null
-    );
+    knowledgeRepository.create({
+      id,
+      title: entry.title,
+      category: entry.category,
+      content: entry.content,
+      tags: parsedTags,
+      solutions: parsedSolutions,
+      source: entry.source,
+      alert_id: entry.alertId || null,
+      workflow_id: entry.workflowId || null,
+      task_id: entry.taskId || null,
+      server_id: entry.serverId || null,
+      success_rating: entry.successRating,
+      duration_ms: entry.durationMs || null,
+    });
 
     logger.info(`📚 新知识已写入: ${id} - ${entry.title.substring(0, 60)}`);
     return id;
@@ -255,49 +237,23 @@ class KnowledgeEngine {
    * 按关键词检索知识
    */
   query(params: KnowledgeQuery): KnowledgeEntry[] {
-    const conditions: string[] = [];
-    const values: unknown[] = [];
+    const rows = knowledgeRepository.query({
+      category: params.category,
+      source: params.source,
+      serverId: params.serverId,
+      minSuccessRating: params.minSuccessRating,
+      limit: params.limit,
+    });
 
-    if (params.category) {
-      conditions.push('category = ?');
-      values.push(params.category);
-    }
-    if (params.source) {
-      conditions.push('source = ?');
-      values.push(params.source);
-    }
-    if (params.serverId) {
-      conditions.push('server_id = ?');
-      values.push(params.serverId);
-    }
-    if (params.minSuccessRating !== undefined) {
-      conditions.push('success_rating >= ?');
-      values.push(params.minSuccessRating);
-    }
-
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const limit = params.limit || 20;
-
-    const rows = db.prepare(`
-      SELECT * FROM knowledge_base ${where} ORDER BY usage_count DESC, created_at DESC LIMIT ${limit}
-    `).all(...values) as KnowledgeRow[];
-
-    return rows.map(r => this.rowToEntry(r));
+    return rows.map(r => this.recordToEntry(r));
   }
 
   /**
    * 按关键词模糊搜索（标题 + 内容）
    */
   search(keyword: string, limit = 10): KnowledgeEntry[] {
-    const likePattern = `%${keyword}%`;
-    const rows = db.prepare(`
-      SELECT * FROM knowledge_base
-      WHERE title LIKE ? OR content LIKE ?
-      ORDER BY usage_count DESC, created_at DESC
-      LIMIT ?
-    `).all(likePattern, likePattern, limit) as KnowledgeRow[];
-
-    return rows.map(r => this.rowToEntry(r));
+    const rows = knowledgeRepository.search(keyword, limit);
+    return rows.map(r => this.recordToEntry(r));
   }
 
   /**
@@ -356,16 +312,16 @@ class KnowledgeEngine {
    * 按 alertId 查找关联知识
    */
   getByAlertId(alertId: string): KnowledgeEntry | null {
-    const row = db.prepare('SELECT * FROM knowledge_base WHERE alert_id = ? LIMIT 1').get(alertId) as KnowledgeRow | undefined;
-    return row ? this.rowToEntry(row) : null;
+    const row = knowledgeRepository.findByAlertId(alertId);
+    return row ? this.recordToEntry(row) : null;
   }
 
   /**
    * 按 workflowId 查找关联知识
    */
   getByWorkflowId(workflowId: string): KnowledgeEntry[] {
-    const rows = db.prepare('SELECT * FROM knowledge_base WHERE workflow_id = ? ORDER BY created_at DESC').all(workflowId) as KnowledgeRow[];
-    return rows.map(r => this.rowToEntry(r));
+    const rows = knowledgeRepository.findByWorkflowId(workflowId);
+    return rows.map(r => this.recordToEntry(r));
   }
 
   // ── 统计 ──
@@ -375,14 +331,14 @@ class KnowledgeEngine {
    */
   getStats(): KnowledgeStats {
     try {
-      const total = (db.prepare('SELECT COUNT(*) as c FROM knowledge_base').get() as { c: number }).c;
-      const usage = (db.prepare('SELECT COALESCE(SUM(usage_count), 0) as c FROM knowledge_base').get() as { c: number }).c;
-      const avgRating = (db.prepare('SELECT COALESCE(AVG(success_rating), 0) as c FROM knowledge_base').get() as { c: number }).c;
+      const total = knowledgeRepository.countAll();
+      const usage = knowledgeRepository.sumUsageCount();
+      const avgRating = knowledgeRepository.avgSuccessRating();
 
       const byCategory: Record<string, number> = {};
-      const catRows = db.prepare('SELECT category, COUNT(*) as c FROM knowledge_base GROUP BY category').all() as Array<{ category: string; c: number }>;
+      const catRows = knowledgeRepository.countByCategory();
       for (const r of catRows) {
-        byCategory[r.category] = r.c;
+        byCategory[r.category] = r.count;
       }
 
       return {
@@ -403,18 +359,13 @@ class KnowledgeEngine {
     if (!entry.title) return null;
 
     // 基于标题前缀匹配
-    const titlePrefix = entry.title.substring(0, 50);
-    const likePattern = `%${titlePrefix.replace(/[%_]/g, '')}%`;
+    const titlePrefix = entry.title.substring(0, 50).replace(/[%_]/g, '');
 
-    const existing = db.prepare(`
-      SELECT id, title, content FROM knowledge_base
-      WHERE (title LIKE ? OR alert_id = ?)
-      ORDER BY created_at DESC LIMIT 5
-    `).all(likePattern, entry.alertId || '') as Array<{ id: string; title: string; content: string }>;
+    const existing = knowledgeRepository.findDuplicates(titlePrefix, entry.alertId || '');
 
     for (const row of existing) {
       // 标题相似度 > 0.6 视为重复
-      const sim = this.computeSimilarity(this.tokenize(entry.title), row.title, row.content);
+      const sim = this.computeSimilarity(this.tokenize(entry.title), row.title, row.content || '');
       if (sim > 0.6) {
         return row.id;
       }
@@ -459,33 +410,33 @@ class KnowledgeEngine {
       .filter(w => !['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'has', 'have', 'from', 'this', 'that', 'with', 'will'].includes(w));
   }
 
-  private rowToEntry(row: KnowledgeRow): KnowledgeEntry {
+  private recordToEntry(row: KnowledgeRecord): KnowledgeEntry {
     let tags: string[] = [];
     try {
-      tags = row.tags ? (typeof row.tags === 'string' ? JSON.parse(row.tags as string) : row.tags) as string[] : [];
+      tags = row.tags ? (typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags) as string[] : [];
     } catch { /* ignore */ }
 
     let solutions: KnowledgeSolutions = {};
     try {
-      solutions = row.solutions ? (typeof row.solutions === 'string' ? JSON.parse(row.solutions as string) : row.solutions) as KnowledgeSolutions : {};
+      solutions = row.solutions ? (typeof row.solutions === 'string' ? JSON.parse(row.solutions) : row.solutions) as KnowledgeSolutions : {};
     } catch { /* ignore */ }
 
     return {
-      id: row.id as string,
-      title: row.title as string,
-      category: row.category as string,
-      content: row.content as string,
+      id: row.id,
+      title: row.title,
+      category: row.category,
+      content: row.content || '',
       tags,
       solutions,
       source: (row.source as KnowledgeEntry['source']) || 'manual',
-      alertId: row.alert_id as string | undefined,
-      workflowId: row.workflow_id as string | undefined,
-      taskId: row.task_id as string | undefined,
-      serverId: row.server_id as string | undefined,
-      successRating: (row.success_rating as number) || 0.5,
-      durationMs: row.duration_ms as number | undefined,
-      usageCount: (row.usage_count as number) || 1,
-      createdAt: row.created_at as string,
+      alertId: row.alert_id || undefined,
+      workflowId: row.workflow_id || undefined,
+      taskId: row.task_id || undefined,
+      serverId: row.server_id || undefined,
+      successRating: row.success_rating || 0.5,
+      durationMs: row.duration_ms || undefined,
+      usageCount: row.usage_count || 1,
+      createdAt: row.created_at,
     };
   }
 }

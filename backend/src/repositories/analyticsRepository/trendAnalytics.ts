@@ -98,9 +98,11 @@ export function getDeviceTrend(deviceId: string, days: number, metric: string): 
       WHERE device_id = ? AND sampled_at >= datetime('now', '-${limit} days')
       ORDER BY sampled_at ASC`
     )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .all(deviceId) as Array<Record<string, any>>;
 
   // 按采样时间点聚合
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const timeBuckets: Record<string, any> = {};
   for (const snap of snapshots) {
     const ts = (snap.sampled_at || '').slice(0, 16) || 'unknown';

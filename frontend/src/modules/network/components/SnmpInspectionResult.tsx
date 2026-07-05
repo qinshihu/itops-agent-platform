@@ -1,4 +1,4 @@
-import { X, CheckCircle2, AlertCircle, AlertTriangle, Loader2, Clock, Radio, Wifi } from 'lucide-react';
+import { X, _CheckCircle2, _AlertCircle, AlertTriangle, _Loader2, _Clock, Radio, Wifi } from 'lucide-react';
 import { useEscapeKey } from '../../../hooks/useEscapeKey';
 
 interface SnmpInterfaceMetric {

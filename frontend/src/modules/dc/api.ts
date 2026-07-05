@@ -4,7 +4,7 @@
  */
 
 import api from '@/lib/api';
-import type { DcRoom, DcRack, DcRackSlot } from '../../types/dc';
+import type { DcRoom as _DcRoom, DcRack as _DcRack, DcRackSlot as _DcRackSlot } from '../../types/dc';
 
 // ============================================================
 // 类型定义
@@ -212,43 +212,43 @@ export const dcApi = {
 
   /** 获取概览数据 */
   async getOverview(): Promise<OverviewData> {
-    const { data } = await api.get('/api/dc/overview');
+    const { data } = await api.get('/dc/overview');
     return data.data;
   },
 
   /** 获取所有设备列表 */
   async listDevices(): Promise<DcDevice[]> {
-    const { data } = await api.get('/api/dc/devices');
+    const { data } = await api.get('/dc/devices');
     return data.data;
   },
 
   /** 获取未分配设备列表 */
   async listUnallocatedDevices(): Promise<DcDevice[]> {
-    const { data } = await api.get('/api/dc/devices/unallocated');
+    const { data } = await api.get('/dc/devices/unallocated');
     return data.data;
   },
 
   /** 获取生命周期记录 */
   async listLifecycles(params?: LifecycleParams): Promise<LifecycleRecord[]> {
-    const { data } = await api.get('/api/dc/lifecycle', { params });
+    const { data } = await api.get('/dc/lifecycle', { params });
     return data.data;
   },
 
   /** 获取导出数据（JSON） */
   async getExportData(): Promise<unknown> {
-    const { data } = await api.get('/api/dc/export');
+    const { data } = await api.get('/dc/export');
     return data.data;
   },
 
   /** 导出数据（Blob） */
   async exportBlob(): Promise<Blob> {
-    const { data } = await api.get('/api/dc/export', { responseType: 'blob' });
+    const { data } = await api.get('/dc/export', { responseType: 'blob' });
     return data;
   },
 
   /** 导入数据 */
   async importData(input: { data: unknown }): Promise<unknown> {
-    const { data } = await api.post('/api/dc/import', input);
+    const { data } = await api.post('/dc/import', input);
     return data;
   },
 
@@ -256,225 +256,225 @@ export const dcApi = {
 
   /** 获取机房列表 */
   async listRooms(): Promise<Room[]> {
-    const { data } = await api.get('/api/dc/rooms');
+    const { data } = await api.get('/dc/rooms');
     return data.data;
   },
 
   /** 创建机房 */
   async createRoom(input: RoomInput): Promise<Room> {
-    const { data } = await api.post('/api/dc/rooms', input);
+    const { data } = await api.post('/dc/rooms', input);
     return data.data;
   },
 
   /** 更新机房 */
   async updateRoom(id: string, input: RoomInput): Promise<Room> {
-    const { data } = await api.put(`/api/dc/rooms/${id}`, input);
+    const { data } = await api.put(`/dc/rooms/${id}`, input);
     return data.data;
   },
 
   /** 删除机房 */
   async deleteRoom(id: string): Promise<void> {
-    await api.delete(`/api/dc/rooms/${id}`);
+    await api.delete(`/dc/rooms/${id}`);
   },
 
   // ── 机柜 ──
 
   /** 获取机柜列表 */
   async listRacks(): Promise<Rack[]> {
-    const { data } = await api.get('/api/dc/racks');
+    const { data } = await api.get('/dc/racks');
     return data.data;
   },
 
   /** 创建机柜 */
   async createRack(input: RackInput): Promise<Rack> {
-    const { data } = await api.post('/api/dc/racks', input);
+    const { data } = await api.post('/dc/racks', input);
     return data.data;
   },
 
   /** 更新机柜 */
   async updateRack(id: string, input: RackInput): Promise<Rack> {
-    const { data } = await api.put(`/api/dc/racks/${id}`, input);
+    const { data } = await api.put(`/dc/racks/${id}`, input);
     return data.data;
   },
 
   /** 删除机柜 */
   async deleteRack(id: string): Promise<void> {
-    await api.delete(`/api/dc/racks/${id}`);
+    await api.delete(`/dc/racks/${id}`);
   },
 
   // ── 机位 ──
 
   /** 获取机柜的机位列表 */
   async listSlots(rackId: string): Promise<Slot[]> {
-    const { data } = await api.get(`/api/dc/slots/${rackId}`);
+    const { data } = await api.get(`/dc/slots/${rackId}`);
     return data.data;
   },
 
   /** 创建/分配机位 */
   async createSlot(input: SlotInput): Promise<Slot> {
-    const { data } = await api.post('/api/dc/slots', input);
+    const { data } = await api.post('/dc/slots', input);
     return data.data;
   },
 
   /** 更新机位 */
   async updateSlot(id: string, input: Partial<SlotInput>): Promise<Slot> {
-    const { data } = await api.put(`/api/dc/slots/${id}`, input);
+    const { data } = await api.put(`/dc/slots/${id}`, input);
     return data.data;
   },
 
   /** 删除机位 */
   async deleteSlot(id: string): Promise<void> {
-    await api.delete(`/api/dc/slots/${id}`);
+    await api.delete(`/dc/slots/${id}`);
   },
 
   // ── PDU ──
 
   /** 获取 PDU 列表 */
   async listPdus(): Promise<PDU[]> {
-    const { data } = await api.get('/api/dc/pdus');
+    const { data } = await api.get('/dc/pdus');
     return data.data;
   },
 
   /** 创建 PDU */
   async createPdu(input: PduInput): Promise<PDU> {
-    const { data } = await api.post('/api/dc/pdus', input);
+    const { data } = await api.post('/dc/pdus', input);
     return data.data;
   },
 
   /** 更新 PDU */
   async updatePdu(id: string, input: PduInput): Promise<PDU> {
-    const { data } = await api.put(`/api/dc/pdus/${id}`, input);
+    const { data } = await api.put(`/dc/pdus/${id}`, input);
     return data.data;
   },
 
   /** 删除 PDU */
   async deletePdu(id: string): Promise<void> {
-    await api.delete(`/api/dc/pdus/${id}`);
+    await api.delete(`/dc/pdus/${id}`);
   },
 
   // ── 制造商 ──
 
   /** 获取制造商列表 */
   async listManufacturers(): Promise<Manufacturer[]> {
-    const { data } = await api.get('/api/dc/manufacturers');
+    const { data } = await api.get('/dc/manufacturers');
     return data.data;
   },
 
   /** 创建制造商 */
   async createManufacturer(input: Record<string, unknown>): Promise<Manufacturer> {
-    const { data } = await api.post('/api/dc/manufacturers', input);
+    const { data } = await api.post('/dc/manufacturers', input);
     return data.data;
   },
 
   /** 更新制造商 */
   async updateManufacturer(id: string, input: Record<string, unknown>): Promise<Manufacturer> {
-    const { data } = await api.put(`/api/dc/manufacturers/${id}`, input);
+    const { data } = await api.put(`/dc/manufacturers/${id}`, input);
     return data.data;
   },
 
   /** 删除制造商 */
   async deleteManufacturer(id: string): Promise<void> {
-    await api.delete(`/api/dc/manufacturers/${id}`);
+    await api.delete(`/dc/manufacturers/${id}`);
   },
 
   // ── 设备型号 ──
 
   /** 获取设备型号列表 */
   async listDeviceTypes(): Promise<DeviceType[]> {
-    const { data } = await api.get('/api/dc/device-types');
+    const { data } = await api.get('/dc/device-types');
     return data.data;
   },
 
   /** 创建设备型号 */
   async createDeviceType(input: Record<string, unknown>): Promise<DeviceType> {
-    const { data } = await api.post('/api/dc/device-types', input);
+    const { data } = await api.post('/dc/device-types', input);
     return data.data;
   },
 
   /** 更新设备型号 */
   async updateDeviceType(id: string, input: Record<string, unknown>): Promise<DeviceType> {
-    const { data } = await api.put(`/api/dc/device-types/${id}`, input);
+    const { data } = await api.put(`/dc/device-types/${id}`, input);
     return data.data;
   },
 
   /** 删除设备型号 */
   async deleteDeviceType(id: string): Promise<void> {
-    await api.delete(`/api/dc/device-types/${id}`);
+    await api.delete(`/dc/device-types/${id}`);
   },
 
   // ── 配电柜 ──
 
   /** 获取配电柜列表 */
   async listPowerPanels(): Promise<PowerPanel[]> {
-    const { data } = await api.get('/api/dc/power-panels');
+    const { data } = await api.get('/dc/power-panels');
     return data.data;
   },
 
   /** 创建配电柜 */
   async createPowerPanel(input: Record<string, unknown>): Promise<PowerPanel> {
-    const { data } = await api.post('/api/dc/power-panels', input);
+    const { data } = await api.post('/dc/power-panels', input);
     return data.data;
   },
 
   /** 更新配电柜 */
   async updatePowerPanel(id: string, input: Record<string, unknown>): Promise<PowerPanel> {
-    const { data } = await api.put(`/api/dc/power-panels/${id}`, input);
+    const { data } = await api.put(`/dc/power-panels/${id}`, input);
     return data.data;
   },
 
   /** 删除配电柜 */
   async deletePowerPanel(id: string): Promise<void> {
-    await api.delete(`/api/dc/power-panels/${id}`);
+    await api.delete(`/dc/power-panels/${id}`);
   },
 
   // ── 供电线路 ──
 
   /** 获取供电线路列表 */
   async listPowerFeeds(): Promise<PowerFeed[]> {
-    const { data } = await api.get('/api/dc/power-feeds');
+    const { data } = await api.get('/dc/power-feeds');
     return data.data;
   },
 
   /** 创建供电线路 */
   async createPowerFeed(input: Record<string, unknown>): Promise<PowerFeed> {
-    const { data } = await api.post('/api/dc/power-feeds', input);
+    const { data } = await api.post('/dc/power-feeds', input);
     return data.data;
   },
 
   /** 更新供电线路 */
   async updatePowerFeed(id: string, input: Record<string, unknown>): Promise<PowerFeed> {
-    const { data } = await api.put(`/api/dc/power-feeds/${id}`, input);
+    const { data } = await api.put(`/dc/power-feeds/${id}`, input);
     return data.data;
   },
 
   /** 删除供电线路 */
   async deletePowerFeed(id: string): Promise<void> {
-    await api.delete(`/api/dc/power-feeds/${id}`);
+    await api.delete(`/dc/power-feeds/${id}`);
   },
 
   // ── 线缆 ──
 
   /** 获取线缆列表 */
   async listCables(): Promise<Cable[]> {
-    const { data } = await api.get('/api/dc/cables');
+    const { data } = await api.get('/dc/cables');
     return data.data;
   },
 
   /** 创建线缆 */
   async createCable(input: Record<string, unknown>): Promise<Cable> {
-    const { data } = await api.post('/api/dc/cables', input);
+    const { data } = await api.post('/dc/cables', input);
     return data.data;
   },
 
   /** 更新线缆 */
   async updateCable(id: string, input: Record<string, unknown>): Promise<Cable> {
-    const { data } = await api.put(`/api/dc/cables/${id}`, input);
+    const { data } = await api.put(`/dc/cables/${id}`, input);
     return data.data;
   },
 
   /** 删除线缆 */
   async deleteCable(id: string): Promise<void> {
-    await api.delete(`/api/dc/cables/${id}`);
+    await api.delete(`/dc/cables/${id}`);
   },
 };
 

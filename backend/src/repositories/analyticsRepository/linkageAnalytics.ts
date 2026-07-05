@@ -71,6 +71,7 @@ export function getInspectionCenter(
       ORDER BY created_at DESC
       LIMIT ?`
     )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .all(...params, limit) as Array<Record<string, any>>;
 
   for (const h of inspectionHistory) {
@@ -119,6 +120,7 @@ export function getInspectionCenter(
         ORDER BY aa.created_at DESC
         LIMIT ?`
       )
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .all(...analysisParams, limit) as Array<Record<string, any>>;
 
     for (const a of analysisResults) {
@@ -186,9 +188,11 @@ export function getInspectionCenter(
 /** 设备概览聚合：单设备的告警/巡检/分析/修复执行 */
 export function getDeviceOverview(deviceId: string): DeviceOverview | undefined {
   const nd = db.prepare('SELECT * FROM network_devices WHERE id = ?').get(deviceId) as
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     | Record<string, any>
     | undefined;
   const sv = !nd
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ? (db.prepare('SELECT * FROM servers WHERE id = ?').get(deviceId) as Record<string, any> | undefined)
     : null;
 

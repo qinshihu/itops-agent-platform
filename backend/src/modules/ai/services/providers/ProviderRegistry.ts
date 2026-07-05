@@ -1,18 +1,21 @@
 import { logger } from '../../../../utils/logger';
-import type { Provider, ProviderConfig } from './types';
+import type { Provider, ProviderConfig, ProviderResult } from './types';
+
+/** Provider 方法实现对象的类型 */
+export type ProviderImplementation = Record<string, (params: Record<string, unknown>) => Promise<ProviderResult>>;
 
 /**
  * Provider 注册器
  */
 export class ProviderRegistry {
   private providers: Map<string, Provider> = new Map();
-  private implementations: Map<string, any> = new Map();
+  private implementations: Map<string, ProviderImplementation> = new Map();
   private configs: Map<string, ProviderConfig> = new Map();
 
   /**
    * 注册 Provider
    */
-  register(provider: Provider, implementation?: any): void {
+  register(provider: Provider, implementation?: ProviderImplementation): void {
     this.providers.set(provider.name, provider);
     if (implementation) {
       this.implementations.set(provider.name, implementation);
@@ -30,7 +33,7 @@ export class ProviderRegistry {
   /**
    * 获取 Provider 实现
    */
-  getImplementation(name: string): any {
+  getImplementation(name: string): ProviderImplementation | undefined {
     return this.implementations.get(name);
   }
 
@@ -73,7 +76,7 @@ export class ProviderRegistry {
   /**
    * 执行 Provider 方法
    */
-  async execute(name: string, method: string, params: any): Promise<any> {
+  async execute(name: string, method: string, params: Record<string, unknown>): Promise<ProviderResult> {
     const provider = this.providers.get(name);
     if (!provider) {
       throw new Error(`Provider not found: ${name}`);

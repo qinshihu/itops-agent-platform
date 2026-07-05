@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { logger } from '../../../../utils/logger';
 import { executeAgentNode } from '../agents/agentExecutor';
 import { SpecialistBase } from './SpecialistBase';

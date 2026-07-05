@@ -14,6 +14,7 @@
  */
 
 import db from '../models/database';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { RemediationPolicy, RemediationExecution, RemediationHistory } from './types/auto';
 
 // ── 类型定义 ──

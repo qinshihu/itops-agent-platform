@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Tag, Space, message, Popconfirm } from 'antd';
+import { Table, Button, Modal, Form, Input, Tag, Space as _Space, message, Popconfirm } from 'antd';
 import { Search, RefreshCw, Trash2, Download } from 'lucide-react';
 import api from '../../../lib/api';
 
@@ -25,7 +25,7 @@ export default function Images() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/api/images', { params: { page, pageSize, search } });
+      const res = await api.get('/images', { params: { page, pageSize, search } });
       setData(res.data.data || []);
       setTotal(res.data.total || 0);
     } catch { message.error('加载失败'); }
@@ -36,7 +36,7 @@ export default function Images() {
 
   const handleSync = async () => {
     try {
-      const res = await api.post('/api/images/sync', { serverId: 'mock-1' });
+      const res = await api.post('/images/sync', { serverId: 'mock-1' });
       message.success(`同步完成: ${res.data.data?.synced || 0} 个镜像`);
       fetchData();
     } catch { message.error('同步失败'); }
@@ -45,7 +45,7 @@ export default function Images() {
   const handlePull = async () => {
     const values = await form.validateFields();
     try {
-      await api.post('/api/images/pull', values);
+      await api.post('/images/pull', values);
       message.success('拉取请求已提交');
       setPullOpen(false);
       form.resetFields();
@@ -54,7 +54,7 @@ export default function Images() {
   };
 
   const handleDelete = async (id: string) => {
-    try { await api.delete(`/api/images/${id}`); message.success('删除成功'); fetchData(); } catch { message.error('删除失败'); }
+    try { await api.delete(`/images/${id}`); message.success('删除成功'); fetchData(); } catch { message.error('删除失败'); }
   };
 
   const columns = [
@@ -63,7 +63,7 @@ export default function Images() {
     { title: '大小', dataIndex: 'size_bytes', key: 'size', render: (s: number) => formatSize(s || 0) },
     { title: '主机', dataIndex: 'host', key: 'host' },
     { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 170 },
-    { title: '操作', key: 'action', width: 100, render: (_: any, record: any) => (
+    { title: '操作', key: 'action', width: 100, render: (_: unknown, record: any) => (
       <Popconfirm title="确定删除?" onConfirm={() => handleDelete(record.id)}>
         <Button type="link" size="small" danger icon={<Trash2 size={14} />}>删除</Button>
       </Popconfirm>

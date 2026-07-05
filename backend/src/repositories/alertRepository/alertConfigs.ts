@@ -2,6 +2,7 @@
 // 覆盖 alert_configs + alert_notifications 两张表
 
 import db from '../../models/database';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { AlertConfig, AlertNotification } from '../types/alert';
 import type {
   AlertConfigCreateInput,

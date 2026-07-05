@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
-import db from '../../../../models/database';
 import { executeWorkflow } from '../../../workflow/services/workflowExecutor';
 import { logger } from '../../../../utils/logger';
+import { workflowsRepo, tasksRepo } from '../../../../repositories';
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -14,16 +14,14 @@ export async function verifyResult(
   service: RemediationServiceLike,
   executionId: string
 ): Promise<{ success: boolean; result?: unknown; error?: string }> {
-  const execution = (service as any).getExecution(executionId);
+  const execution = service.getExecution(executionId);
   const policy = service.getPolicy(execution.policy_id);
   const alert = JSON.parse(execution.alert_snapshot || '{}');
 
-  (service as any).updateExecution(executionId, { verification_status: 'pending' });
+  service.updateExecution(executionId, { verification_status: 'pending' });
 
   try {
-    const workflow = db.prepare('SELECT * FROM workflows WHERE id = ?').get(policy.verification_workflow_id!) as {
-      id: string; name: string; description: string; nodes: string; edges: string; agent_configs: string; is_template: number; created_at: string; updated_at: string;
-    } | undefined;
+    const workflow = workflowsRepo.getById(policy.verification_workflow_id!);
 
     if (!workflow) {
       throw new Error('Verification workflow not found');
@@ -42,10 +40,12 @@ export async function verifyResult(
     const timeout = policy.verification_timeout_seconds * 1000;
     const taskId = uuidv4();
 
-    db.prepare(`
-      INSERT INTO tasks (id, workflow_id, name, status, context, created_at)
-      VALUES (?, ?, ?, 'pending', ?, datetime('now','localtime'))
-    `).run(taskId, workflow.id, `修复验证: ${workflow.name}`, JSON.stringify(verifyContext));
+    tasksRepo.createPendingWithContext({
+      id: taskId,
+      workflow_id: workflow.id,
+      name: `修复验证: ${workflow.name}`,
+      context: JSON.stringify(verifyContext),
+    });
 
     let nodes: WorkflowNode[] = [];
     let edges: WorkflowEdge[] = [];
@@ -80,17 +80,17 @@ export async function verifyResult(
       )
     ]);
 
-    (service as any).updateExecution(executionId, {
+    service.updateExecution(executionId, {
       verification_status: 'success',
       verification_result: JSON.stringify(result),
       verification_completed_at: new Date().toISOString(),
       status: 'success'
     });
 
-    (service as any).resolveAlert(execution.alert_id);
-    (service as any).notifySelfHeal(execution.alert_id, alert?.title);
-    (service as any).updateCooldown(policy, alert);
-    (service as any).recordHistory(execution, policy, 'success');
+    service.resolveAlert(execution.alert_id);
+    service.notifySelfHeal(execution.alert_id, alert?.title);
+    service.updateCooldown(policy, alert);
+    service.recordHistory(execution, policy, 'success');
 
     return { success: true, result };
 
@@ -98,13 +98,13 @@ export async function verifyResult(
     const errorMsg = error instanceof Error ? error.message : String(error);
     logger.error(`Verification failed for execution ${executionId}:`, error);
 
-    (service as any).updateExecution(executionId, {
+    service.updateExecution(executionId, {
       verification_status: 'failed',
       verification_result: JSON.stringify({ error: errorMsg }),
       verification_completed_at: new Date().toISOString()
     });
 
-    (service as any).recordHistory(execution, policy, 'failed', errorMsg);
+    service.recordHistory(execution, policy, 'failed', errorMsg);
 
     if (policy.enable_rollback && policy.rollback_workflow_id) {
       await service.rollbackExecution(executionId);
@@ -115,7 +115,7 @@ export async function verifyResult(
 }
 
 export async function rollbackExecution(service: RemediationServiceLike, executionId: string): Promise<void> {
-  const execution = (service as any).getExecution(executionId);
+  const execution = service.getExecution(executionId);
   const policy = service.getPolicy(execution.policy_id);
 
   if (!policy.rollback_workflow_id) {
@@ -126,19 +126,19 @@ export async function rollbackExecution(service: RemediationServiceLike, executi
   logger.warn(`Rolling back execution ${executionId}`);
 
   try {
-    const workflow = db.prepare('SELECT * FROM workflows WHERE id = ?').get(policy.rollback_workflow_id) as {
-      id: string; name: string; description: string; nodes: string; edges: string; agent_configs: string; is_template: number; created_at: string; updated_at: string;
-    } | undefined;
+    const workflow = workflowsRepo.getById(policy.rollback_workflow_id);
 
     if (!workflow) {
       throw new Error('Rollback workflow not found');
     }
 
     const taskId = uuidv4();
-    db.prepare(`
-      INSERT INTO tasks (id, workflow_id, name, status, context, created_at)
-      VALUES (?, ?, ?, 'pending', ?, datetime('now','localtime'))
-    `).run(taskId, workflow.id, `回滚: ${workflow.name}`, JSON.stringify({ execution_id: executionId }));
+    tasksRepo.createPendingWithContext({
+      id: taskId,
+      workflow_id: workflow.id,
+      name: `回滚: ${workflow.name}`,
+      context: JSON.stringify({ execution_id: executionId }),
+    });
 
     const parsedWorkflow: WorkflowParsed = {
       id: workflow.id,
@@ -154,7 +154,7 @@ export async function rollbackExecution(service: RemediationServiceLike, executi
 
     const result = await executeWorkflow(taskId, parsedWorkflow);
 
-    (service as any).updateExecution(executionId, {
+    service.updateExecution(executionId, {
       rollback_triggered: 1,
       rollback_execution_id: taskId,
       rollback_result: JSON.stringify(result),
@@ -166,7 +166,7 @@ export async function rollbackExecution(service: RemediationServiceLike, executi
     const errorMsg = error instanceof Error ? error.message : String(error);
     logger.error(`Rollback failed for execution ${executionId}:`, error);
 
-    (service as any).updateExecution(executionId, {
+    service.updateExecution(executionId, {
       rollback_triggered: 1,
       rollback_result: JSON.stringify({ error: errorMsg }),
       rollback_completed_at: new Date().toISOString()
@@ -181,7 +181,7 @@ export async function approveExecution(
   userId: string,
   comment?: string
 ): Promise<void> {
-  const execution = (service as any).getExecution(executionId);
+  const execution = service.getExecution(executionId);
 
   if (execution.status !== 'waiting_approval') {
     throw new Error('Execution is not waiting for approval');
@@ -190,7 +190,7 @@ export async function approveExecution(
   const now = new Date().toISOString();
 
   if (action === 'approve') {
-    (service as any).updateExecution(executionId, {
+    service.updateExecution(executionId, {
       status: 'approved',
       approved_by: userId,
       approved_at: now,
@@ -199,7 +199,7 @@ export async function approveExecution(
 
     executeWorkflowAsync(service, executionId);
   } else {
-    (service as any).updateExecution(executionId, {
+    service.updateExecution(executionId, {
       status: 'rejected',
       approved_by: userId,
       approved_at: now,
@@ -210,14 +210,14 @@ export async function approveExecution(
 }
 
 export async function retryExecution(service: RemediationServiceLike, executionId: string): Promise<void> {
-  const execution = (service as any).getExecution(executionId);
+  const execution = service.getExecution(executionId);
 
   if (execution.status !== 'failed' && execution.status !== 'rejected') {
     throw new Error('Only failed or rejected executions can be retried');
   }
 
-  (service as any).updateExecution(executionId, {
-    status: 'pending' as any,
+  service.updateExecution(executionId, {
+    status: 'pending',
     workflow_execution_id: undefined,
     started_at: undefined,
     completed_at: undefined,

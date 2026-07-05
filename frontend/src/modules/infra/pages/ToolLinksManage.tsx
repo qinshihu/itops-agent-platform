@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   Plus, Edit, Trash2, ExternalLink, Globe, Cog, Search, X, CheckCircle2,
   ArrowUp, ArrowDown, AlertTriangle, Wrench, Monitor, Activity, Shield,
@@ -9,8 +10,10 @@ import {
   Play, Zap, Users, Network, Key, FileSearch, FileText, FileCode,
   Eye, EyeOff, Image, Upload, XCircle, ArrowLeft,
 } from 'lucide-react';
+/* eslint-enable @typescript-eslint/no-unused-vars */
 import clsx from 'clsx';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 import { useToast } from '../../../contexts/ToastContext';
 import { useEscapeKey } from '../../../hooks/useEscapeKey';
 
@@ -64,26 +67,26 @@ export default function ToolLinksManage() {
   const { data: tools, isLoading } = useQuery({
     queryKey: ['tool-links'],
     queryFn: async () => {
-      const res = await api.get('/api/tool-links');
+      const res = await api.get('/tool-links');
       return res.data.data as ToolLink[];
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: typeof formData) => api.post('/api/tool-links', data),
+    mutationFn: (data: typeof formData) => api.post('/tool-links', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tool-links'] });
       queryClient.invalidateQueries({ queryKey: ['tool-links', 'categories'] });
       closeModal();
       toast.success('工具链接已添加');
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.error || '添加失败');
+    onError: (err: unknown) => {
+      toast.error(getAxiosErrorMessage(err, '添加失败'));
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<typeof formData> }) => api.put(`/api/tool-links/${id}`, data),
+    mutationFn: ({ id, data }: { id: string; data: Partial<typeof formData> }) => api.put(`/tool-links/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tool-links'] });
       queryClient.invalidateQueries({ queryKey: ['tool-links', 'categories'] });
@@ -99,7 +102,7 @@ export default function ToolLinksManage() {
     mutationFn: ({ id, file }: { id: string; file: File }) => {
       const formData = new FormData();
       formData.append('icon', file);
-      return api.post(`/api/tool-links/${id}/upload-icon`, formData, {
+      return api.post(`/tool-links/${id}/upload-icon`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
     },
@@ -108,13 +111,13 @@ export default function ToolLinksManage() {
       queryClient.invalidateQueries({ queryKey: ['tool-links', 'categories'] });
       toast.success('图标已上传');
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.error || '图标上传失败');
+    onError: (err: unknown) => {
+      toast.error(getAxiosErrorMessage(err, '图标上传失败'));
     },
   });
 
   const deleteIconMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/tool-links/${id}/icon`),
+    mutationFn: (id: string) => api.delete(`/tool-links/${id}/icon`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tool-links'] });
       queryClient.invalidateQueries({ queryKey: ['tool-links', 'categories'] });
@@ -126,7 +129,7 @@ export default function ToolLinksManage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/tool-links/${id}`),
+    mutationFn: (id: string) => api.delete(`/tool-links/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tool-links'] });
       queryClient.invalidateQueries({ queryKey: ['tool-links', 'categories'] });

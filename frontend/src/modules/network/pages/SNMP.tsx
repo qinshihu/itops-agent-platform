@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect as _useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Network, Plus, Trash2, Play, Loader2, CheckCircle2, AlertCircle,
-  Monitor, Wifi, Search, RefreshCw, Eye, EyeOff, Key,
-  Server, List, Radio, Activity, Terminal
+  Monitor, Wifi, Search, RefreshCw as _RefreshCw, Eye, EyeOff, Key,
+  Server as _Server, List, Radio, Activity, Terminal
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../../lib/api';
@@ -57,7 +57,7 @@ interface SnmpTrap {
   oid?: string;
 }
 
-const VERDOR_OPTIONS = [
+const _VERDOR_OPTIONS = [
   'Cisco', 'Huawei', 'H3C', 'Juniper',
   'Ruijie', 'Dell', 'HP', 'MikroTik',
   'TP-Link', 'Ubiquiti', 'Other'
@@ -75,7 +75,7 @@ export default function SNMP() {
   // ── 凭证列表 ──
   const { data: credentials = [], isLoading: credsLoading } = useQuery({
     queryKey: ['snmp-credentials'],
-    queryFn: () => api.get('/api/snmp/credentials').then(r => r.data.data || []),
+    queryFn: () => api.get('/snmp/credentials').then(r => r.data.data || []),
   });
 
   // ── 新建/编辑 表单 ──
@@ -100,7 +100,7 @@ export default function SNMP() {
   const [testResult, setTestResult] = useState<{ host: string; status: 'testing' | 'success' | 'fail'; msg?: string } | null>(null);
 
   const testConn = useMutation({
-    mutationFn: () => api.post('/api/snmp/test', {
+    mutationFn: () => api.post('/snmp/test', {
       host: form.host,
       port: form.port,
       version: form.version,
@@ -134,9 +134,9 @@ export default function SNMP() {
         host: form.host || undefined,
       };
       if (editingId) {
-        return api.put(`/api/snmp/credentials/${editingId}`, body);
+        return api.put(`/snmp/credentials/${editingId}`, body);
       }
-      return api.post('/api/snmp/credentials', body);
+      return api.post('/snmp/credentials', body);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['snmp-credentials'] });
@@ -147,7 +147,7 @@ export default function SNMP() {
   });
 
   const deleteCred = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/snmp/credentials/${id}`),
+    mutationFn: (id: string) => api.delete(`/snmp/credentials/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['snmp-credentials'] }),
   });
 
@@ -155,7 +155,7 @@ export default function SNMP() {
   const [credTestResults, setCredTestResults] = useState<Record<string, { status: 'testing' | 'success' | 'fail'; msg?: string }>>({});
 
   const testCred = useMutation({
-    mutationFn: (cred: SnmpCredential) => api.post(`/api/snmp/credentials/${cred.id}/test`, { host: cred.host || undefined }),
+    mutationFn: (cred: SnmpCredential) => api.post(`/snmp/credentials/${cred.id}/test`, { host: cred.host || undefined }),
     onMutate: (cred) => {
       setCredTestResults(prev => ({ ...prev, [cred.id]: { status: 'testing' } }));
     },
@@ -195,7 +195,7 @@ export default function SNMP() {
     setQueryLoading(true);
     setQueryResult(null);
     try {
-      const res = await api.post('/api/snmp/system-info', {
+      const res = await api.post('/snmp/system-info', {
         host: queryHost, community: queryCommunity, version: queryVersion,
       });
       setQueryResult({ type: 'system-info', data: res.data.data });
@@ -210,7 +210,7 @@ export default function SNMP() {
     setQueryLoading(true);
     setQueryResult(null);
     try {
-      const res = await api.post('/api/snmp/interfaces', {
+      const res = await api.post('/snmp/interfaces', {
         host: queryHost, community: queryCommunity, version: queryVersion,
       });
       setQueryResult({ type: 'interfaces', data: res.data.data });
@@ -224,12 +224,12 @@ export default function SNMP() {
   // ── Trap 历史 ──
   const { data: traps = [], isLoading: trapsLoading } = useQuery({
     queryKey: ['snmp-traps'],
-    queryFn: () => api.get('/api/snmp/traps?limit=50').then(r => r.data.data || []),
+    queryFn: () => api.get('/snmp/traps?limit=50').then(r => r.data.data || []),
     refetchInterval: 30000,
   });
 
   const testTrapMutation = useMutation({
-    mutationFn: () => api.post('/api/snmp/traps/test'),
+    mutationFn: () => api.post('/snmp/traps/test'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['snmp-traps'] });
     },

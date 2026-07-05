@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Table, Button, Tag, Card, Statistic, Row, Col, Drawer, Descriptions, Progress, message, Switch, Space, Tooltip } from 'antd';
+import { Table, Button, Tag, Card, Statistic, Row, Col, Drawer, Descriptions, Progress, message, Switch as _Switch, Space, Tooltip } from 'antd';
 import { Play, Square, Eye, Activity, RefreshCw } from 'lucide-react';
 import api from '../../../lib/api';
 import type { Socket } from 'socket.io-client';
@@ -46,6 +46,7 @@ export default function ContainerMonitor() {
   });
   const [detailVisible, setDetailVisible] = useState(false);
   const [detailItem, setDetailItem] = useState<Container | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [detailInspect, setDetailInspect] = useState<any>(null);
   const [monitoredIds, setMonitoredIds] = useState<Set<string>>(new Set());
   const [containerStatsMap, setContainerStatsMap] = useState<Map<string, ContainerStats>>(new Map());
@@ -69,8 +70,8 @@ export default function ContainerMonitor() {
     setLoading(true);
     try {
       const [containerRes, snapRes] = await Promise.all([
-        api.get('/api/containers'),
-        api.get('/api/docker-monitor/cluster-snapshot'),
+        api.get('/containers'),
+        api.get('/docker-monitor/cluster-snapshot'),
       ]);
       setData(containerRes.data.data || []);
       setClusterStats(snapRes.data.data || {
@@ -89,7 +90,7 @@ export default function ContainerMonitor() {
   // Toggle monitoring
   const toggleMonitor = async (containerId: string, start: boolean) => {
     try {
-      await api.post(`/api/docker-monitor/${start ? 'start' : 'stop'}/${containerId}`);
+      await api.post(`/docker-monitor/${start ? 'start' : 'stop'}/${containerId}`);
       if (start) {
         socketRef.current?.emit('container:subscribe', { containerId });
         setMonitoredIds(prev => new Set(prev).add(containerId));
@@ -109,7 +110,7 @@ export default function ContainerMonitor() {
     setDetailInspect(null);
     setDetailVisible(true);
     try {
-      const res = await api.get(`/api/containers/${item.id}`);
+      const res = await api.get(`/containers/${item.id}`);
       setDetailInspect(res.data.data || res.data);
     } catch {
       // inspect may not be available
@@ -161,7 +162,7 @@ export default function ContainerMonitor() {
       title: 'CPU',
       key: 'cpu',
       width: 180,
-      render: (_: any, record: Container) => {
+      render: (_: unknown, record: Container) => {
         const stats = containerStatsMap.get(record.id);
         const cpu = parseFloat(stats?.cpuPercent || '0');
         return (
@@ -178,7 +179,7 @@ export default function ContainerMonitor() {
       title: '内存',
       key: 'memory',
       width: 200,
-      render: (_: any, record: Container) => {
+      render: (_: unknown, record: Container) => {
         const stats = containerStatsMap.get(record.id);
         const mem = stats?.memory;
         const percent = parseFloat(mem?.percent || '0');
@@ -199,7 +200,7 @@ export default function ContainerMonitor() {
       title: '网络 I/O',
       key: 'network',
       width: 160,
-      render: (_: any, record: Container) => {
+      render: (_: unknown, record: Container) => {
         const stats = containerStatsMap.get(record.id);
         const net = stats?.network;
         if (!net) return <span className="text-gray-400">-</span>;
@@ -216,7 +217,7 @@ export default function ContainerMonitor() {
       title: '操作',
       key: 'actions',
       width: 240,
-      render: (_: any, record: Container) => {
+      render: (_: unknown, record: Container) => {
         const isMonitoring = monitoredIds.has(record.id);
         return (
           <Space size="small">

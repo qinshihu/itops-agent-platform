@@ -44,17 +44,17 @@ export const changeManagementApi = {
   /** 获取审批列表 */
   async listApprovals(params?: { status?: string }): Promise<ApprovalRequest[]> {
     const query = params?.status && params.status !== 'all' ? `?status=${params.status}` : '';
-    const { data } = await api.get(`/api/approvals${query}`);
+    const { data } = await api.get(`/approvals${query}`);
     return data.data;
   },
 
   /** 通过审批 */
   async approve(approvalId: string, comment?: string): Promise<void> {
-    await api.post(`/api/approvals/${approvalId}/approve`, { comment: comment || '审批通过' });
+    await api.post(`/approvals/${approvalId}/approve`, { comment: comment || '审批通过' });
   },
 
   /** 拒绝审批 */
   async reject(approvalId: string, reason: string): Promise<void> {
-    await api.post(`/api/approvals/${approvalId}/reject`, { reason });
+    await api.post(`/approvals/${approvalId}/reject`, { reason });
   },
 };

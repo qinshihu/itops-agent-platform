@@ -11,7 +11,7 @@ router.get('/', (_req: Request, res: Response) => {
     const rooms = dcRepository.rooms.list();
     const groups = rooms.map(room => {
       const racks = dcRepository.racks.list({ roomId: (room as { id: string }).id });
-      const rackMap: Record<string, any> = {};
+      const rackMap: Record<string, unknown> = {};
       for (const rack of racks) {
         const r = rack as { id: string; name: string };
         // 获取该机柜下的设备（带 device_info）

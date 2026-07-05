@@ -1,5 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as XYFlow from '@xyflow/react';
 import { renderWithProviders } from '../utils/renderWithProviders';
 import api from '../../lib/api';
 import VirtualMachines from '../../modules/containers/pages/VirtualMachines';
@@ -18,7 +19,7 @@ vi.mock('../../lib/api', () => ({
 }));
 
 vi.mock('@xyflow/react', async () => {
-  const actual = await vi.importActual<typeof import('@xyflow/react')>('@xyflow/react');
+  const actual = await vi.importActual<typeof XYFlow>('@xyflow/react');
   return {
     ...actual,
     ReactFlow: () => <div data-testid="react-flow" />,

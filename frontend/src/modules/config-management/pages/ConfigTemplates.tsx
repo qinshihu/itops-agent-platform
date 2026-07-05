@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, Select, Tag, Space, message, Popconfirm } from 'antd';
-import { Plus, Edit, Trash2, Search, RefreshCw, Eye, FileText } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, RefreshCw, Eye, FileText as _FileText } from 'lucide-react';
 import api from '../../../lib/api';
 
 interface ConfigTemplate {
@@ -39,7 +39,7 @@ export default function ConfigTemplates() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/api/config-templates', { params: { page, pageSize, search, type: typeFilter } });
+      const res = await api.get('/config-templates', { params: { page, pageSize, search, type: typeFilter } });
       setData(res.data.data || []);
       setTotal(res.data.total || 0);
     } catch { message.error('加载失败'); }
@@ -52,10 +52,10 @@ export default function ConfigTemplates() {
     const values = await form.validateFields();
     try {
       if (editing) {
-        await api.put(`/api/config-templates/${editing.id}`, { ...values, variables });
+        await api.put(`/config-templates/${editing.id}`, { ...values, variables });
         message.success('更新成功');
       } else {
-        await api.post('/api/config-templates', { ...values, variables });
+        await api.post('/config-templates', { ...values, variables });
         message.success('创建成功');
       }
       setModalOpen(false);
@@ -67,14 +67,14 @@ export default function ConfigTemplates() {
   };
 
   const handleDelete = async (id: string) => {
-    try { await api.delete(`/api/config-templates/${id}`); message.success('删除成功'); fetchData(); } catch { message.error('删除失败'); }
+    try { await api.delete(`/config-templates/${id}`); message.success('删除成功'); fetchData(); } catch { message.error('删除失败'); }
   };
 
   const handlePreview = async (id: string) => {
     try {
       const vars: Record<string, string> = {};
       variables.forEach(v => { vars[v] = `{{${v}}}`; });
-      const res = await api.post(`/api/config-templates/${id}/render`, { variables: vars });
+      const res = await api.post(`/config-templates/${id}/render`, { variables: vars });
       setPreviewContent(res.data.data?.rendered || '');
       setPreviewOpen(true);
     } catch { message.error('预览失败'); }

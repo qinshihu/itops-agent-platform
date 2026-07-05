@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * MCP Tool Registry — 工具注册中心
  *
@@ -17,6 +18,7 @@ import {
   type ToolDefinition,
   type ToolCallResult,
   type ToolCallContext,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   type ToolInput,
   type JsonSchemaNode,
   MCP_TOOL_NAME_MAX_CHARS,

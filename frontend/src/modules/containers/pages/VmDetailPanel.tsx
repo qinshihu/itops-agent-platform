@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import {
-  Cpu, HardDrive, Camera, RotateCcw, Trash2, RefreshCw,
-  Play, Square, AlertCircle,
+  Cpu, HardDrive, Camera, RotateCcw, Trash2, RefreshCw as _RefreshCw,
+  Play as _Play, Square as _Square, AlertCircle as _AlertCircle,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import { useToast } from '../../../contexts/ToastContext';
+import { getAxiosErrorMessage } from '@/lib/errorHandler';
 import type { VM } from './VirtualMachines';
 
 interface Snapshot {
@@ -47,7 +48,7 @@ export default function VmDetailPanel({ open, onClose, vm }: VmDetailPanelProps)
     queryKey: ['vm-perf-stats', vm?.id],
     queryFn: async () => {
       if (!vm) return {};
-      const res = await api.get(`/api/virtual-machines/${vm.id}/stats`);
+      const res = await api.get(`/virtual-machines/${vm.id}/stats`);
       return res.data.data;
     },
     enabled: !!vm && open,
@@ -58,7 +59,7 @@ export default function VmDetailPanel({ open, onClose, vm }: VmDetailPanelProps)
     queryKey: ['vm-snapshots', vm?.id],
     queryFn: async () => {
       if (!vm) return [];
-      const res = await api.get(`/api/virtual-machines/${vm.id}/snapshots`);
+      const res = await api.get(`/virtual-machines/${vm.id}/snapshots`);
       return res.data.data;
     },
     enabled: !!vm && open,
@@ -67,35 +68,35 @@ export default function VmDetailPanel({ open, onClose, vm }: VmDetailPanelProps)
   const createSnapshot = async () => {
     if (!vm) return;
     try {
-      await api.post(`/api/virtual-machines/${vm.id}/snapshots`, snapshotForm);
+      await api.post(`/virtual-machines/${vm.id}/snapshots`, snapshotForm);
       refetchSnapshots();
       setShowSnapshotCreate(false);
       setSnapshotForm({ name: '', description: '', memory: true });
       toast.success('快照已创建');
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || '创建快照失败');
+    } catch (err: unknown) {
+      toast.error(getAxiosErrorMessage(err, '创建快照失败'));
     }
   };
 
   const restoreSnapshot = async (snapshotId: string) => {
     if (!vm) return;
     try {
-      await api.post(`/api/virtual-machines/${vm.id}/snapshots/${snapshotId}/restore`);
+      await api.post(`/virtual-machines/${vm.id}/snapshots/${snapshotId}/restore`);
       refetchSnapshots();
       toast.success('快照已恢复');
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || '恢复快照失败');
+    } catch (err: unknown) {
+      toast.error(getAxiosErrorMessage(err, '恢复快照失败'));
     }
   };
 
   const deleteSnapshot = async (snapshotId: string) => {
     if (!vm) return;
     try {
-      await api.delete(`/api/virtual-machines/${vm.id}/snapshots/${snapshotId}`);
+      await api.delete(`/virtual-machines/${vm.id}/snapshots/${snapshotId}`);
       refetchSnapshots();
       toast.success('快照已删除');
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || '删除快照失败');
+    } catch (err: unknown) {
+      toast.error(getAxiosErrorMessage(err, '删除快照失败'));
     }
   };
 

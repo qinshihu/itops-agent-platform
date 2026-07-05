@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import db from '../models/database';
+import { userRepository } from '../repositories/userRepository';
 import { env } from '../utils/env';
 import { tokenBlacklist } from '../modules/auth/services/tokenBlacklist';
 
@@ -30,7 +30,7 @@ function startCacheCleanup(): void {
     }
     
     if (expiredCount > 0) {
-      console.log(`🧹 Cleaned up ${expiredCount} expired user cache entries`);
+      logger.info(`🧹 Cleaned up ${expiredCount} expired user cache entries`);
     }
   }, CACHE_CLEANUP_INTERVAL);
   interval.unref();
@@ -103,9 +103,16 @@ export function verifyToken(token: string): AuthUser | null {
 
     let user: AuthUser | null = getCachedUser(decoded.id);
     if (!user) {
-      const dbUser = db.prepare('SELECT id, username, email, role, enabled, password_must_change FROM users WHERE id = ?').get(decoded.id);
+      const dbUser = userRepository.getCachedFields(decoded.id);
       if (dbUser) {
-        user = dbUser as AuthUser;
+        user = {
+          id: dbUser.id,
+          username: dbUser.username,
+          email: dbUser.email,
+          role: dbUser.role,
+          enabled: dbUser.enabled,
+          password_must_change: dbUser.password_must_change ?? 0,
+        };
         setCachedUser(decoded.id, user);
       }
     }

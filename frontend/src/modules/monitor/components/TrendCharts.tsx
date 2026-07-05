@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { TrendingUp, Activity, AlertTriangle, Wrench, Calendar } from 'lucide-react';
+import { TrendingUp, Activity, AlertTriangle, Wrench as _Wrench, Calendar } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../../lib/api';
 import AnimatedBarChart from './AnimatedBarChart';
@@ -51,14 +51,14 @@ export default function TrendCharts({ deviceId }: TrendChartsProps) {
 
   const { data: trendData, isLoading: trendLoading } = useQuery({
     queryKey: ['trends-inspection', days, deviceId],
-    queryFn: () => api.get('/api/trends/inspection-history', {
+    queryFn: () => api.get('/trends/inspection-history', {
       params: { days, deviceId: deviceId || undefined }
     }).then(r => r.data.data as TrendData),
   });
 
   const { data: summary } = useQuery({
     queryKey: ['trends-summary', days],
-    queryFn: () => api.get('/api/trends/summary', {
+    queryFn: () => api.get('/trends/summary', {
       params: { days }
     }).then(r => r.data.data as TrendSummary),
   });

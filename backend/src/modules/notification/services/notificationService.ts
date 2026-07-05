@@ -371,6 +371,7 @@ export function createNotification(data: {
   try {
     const id = randomUUID();
     const now = new Date().toISOString();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { notificationsRepo } = require('../../../repositories');
 
     notificationsRepo.create({

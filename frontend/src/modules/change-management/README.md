@@ -1,19 +1,17 @@
-# Change Management 模块
+# 变更管理模块（前端）
 
 ## 职责
-IT 变更管理与审批流程。审批是变更的前置流程，两者天然聚合。
+IT 变更管理与审批流程：审批列表、审批操作。
 
 ## 内部结构
 ```
 change-management/
-├── routes.ts                          # 模块路由配置
+├── routes.ts                             # 模块路由
+├── api.ts                                # API 类型与调用
 ├── pages/
-│   └── Approvals.tsx                  # 审批中心
-├── api.ts                             # API 类型与调用
-├── index.ts
-└── README.md
+│   └── Approvals.tsx                     # 审批中心
+└── index.ts
 ```
 
 ## 对应后端
-- `modules/change-management/` — 变更记录 + 审批流转
-- API 前缀: `/api/changes`, `/api/approvals`
+`backend/src/modules/change-management/`

@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
-import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
-import type { ConfigTemplate, ConfigTemplateHistory } from '../../../types';
+import { configTemplatesRepo, configTemplateHistoryRepo } from '../../../repositories';
+import type { ConfigTemplate } from '../../../types';
 
 class ConfigTemplateService {
   private initialized = false;
@@ -19,19 +19,7 @@ class ConfigTemplateService {
     const id = uuidv4();
     const now = new Date().toISOString();
 
-    db.prepare(`
-      INSERT INTO config_templates (
-        id, name, description, category, service_name, template_content,
-        variables, os_type, target_path, backup_before_apply,
-        restart_command, validation_command, is_system,
-        usage_count, success_count, created_at, updated_at
-      ) VALUES (
-        @id, @name, @description, @category, @service_name, @template_content,
-        @variables, @os_type, @target_path, @backup_before_apply,
-        @restart_command, @validation_command, @is_system,
-        0, 0, @created_at, @updated_at
-      )
-    `).run({
+    configTemplatesRepo.createFull({
       id,
       name: template.name,
       description: template.description || null,
@@ -56,45 +44,24 @@ class ConfigTemplateService {
    * 更新配置模板
    */
   updateTemplate(id: string, updates: Partial<Pick<ConfigTemplate, 'name' | 'description' | 'category' | 'service_name' | 'template_content' | 'variables' | 'os_type' | 'target_path' | 'backup_before_apply' | 'restart_command' | 'validation_command' | 'is_system'>>): ConfigTemplate {
-    const now = new Date().toISOString();
-    const fields: string[] = [];
-    const params: Record<string, string | number | null> = { id, updated_at: now };
+    const updateInput: Record<string, unknown> = {};
 
-    const fieldMap: Record<string, keyof typeof updates> = {
-      'name': 'name',
-      'description': 'description',
-      'category': 'category',
-      'service_name': 'service_name',
-      'template_content': 'template_content',
-      'variables': 'variables',
-      'os_type': 'os_type',
-      'target_path': 'target_path',
-      'backup_before_apply': 'backup_before_apply',
-      'restart_command': 'restart_command',
-      'validation_command': 'validation_command',
-      'is_system': 'is_system'
+    const fieldMap: Record<string, string> = {
+      name: 'name', description: 'description', category: 'category',
+      service_name: 'service_name', template_content: 'template_content',
+      variables: 'variables', os_type: 'os_type', target_path: 'target_path',
+      backup_before_apply: 'backup_before_apply', restart_command: 'restart_command',
+      validation_command: 'validation_command', is_system: 'is_system',
     };
 
-    for (const [dbField, key] of Object.entries(fieldMap)) {
-      const value = updates[key];
+    for (const [key, dbField] of Object.entries(fieldMap)) {
+      const value = (updates as Record<string, unknown>)[key];
       if (value !== undefined) {
-        fields.push(`${dbField} = @${key}`);
-        if (typeof value === 'boolean') {
-          params[key] = value ? 1 : 0;
-        } else {
-          params[key] = value;
-        }
+        updateInput[dbField] = typeof value === 'boolean' ? (value ? 1 : 0) : value;
       }
     }
 
-    if (fields.length === 0) {
-      throw new Error('No fields to update');
-    }
-
-    fields.push('updated_at = @updated_at');
-    const sql = `UPDATE config_templates SET ${fields.join(', ')} WHERE id = @id`;
-
-    db.prepare(sql).run(params);
+    configTemplatesRepo.updateFull(id, updateInput);
     return this.getTemplate(id);
   }
 
@@ -106,7 +73,7 @@ class ConfigTemplateService {
     if (template.is_system) {
       throw new Error('Cannot delete system template');
     }
-    db.prepare('DELETE FROM config_templates WHERE id = ?').run(id);
+    configTemplatesRepo.deleteFull(id);
     logger.info(`Deleted config template: ${id}`);
   }
 
@@ -114,56 +81,23 @@ class ConfigTemplateService {
    * 获取配置模板
    */
   getTemplate(id: string): ConfigTemplate {
-    const template = db.prepare('SELECT * FROM config_templates WHERE id = ?').get(id) as ConfigTemplate | undefined;
-    if (!template) {
-      throw new Error(`Config template not found: ${id}`);
-    }
-    return template;
+    return configTemplatesRepo.getByIdOrThrow(id) as unknown as ConfigTemplate;
   }
 
   /**
    * 列出配置模板
    */
   listTemplates(filters: { category?: string; service_name?: string; os_type?: string; is_system?: boolean; page?: number; limit?: number }): { templates: ConfigTemplate[]; total: number } {
-    let sql = 'SELECT * FROM config_templates WHERE 1=1';
-    let countSql = 'SELECT COUNT(*) as count FROM config_templates WHERE 1=1';
-    const params: unknown[] = [];
+    const { templates, total } = configTemplatesRepo.listFull({
+      category: filters.category,
+      service_name: filters.service_name,
+      os_type: filters.os_type,
+      is_system: filters.is_system !== undefined ? (filters.is_system ? 1 : 0) : undefined,
+      page: filters.page,
+      limit: filters.limit,
+    });
 
-    if (filters.category) {
-      sql += ' AND category = ?';
-      countSql += ' AND category = ?';
-      params.push(filters.category);
-    }
-
-    if (filters.service_name) {
-      sql += ' AND service_name = ?';
-      countSql += ' AND service_name = ?';
-      params.push(filters.service_name);
-    }
-
-    if (filters.os_type) {
-      sql += ' AND os_type = ?';
-      countSql += ' AND os_type = ?';
-      params.push(filters.os_type);
-    }
-
-    if (filters.is_system !== undefined) {
-      sql += ' AND is_system = ?';
-      countSql += ' AND is_system = ?';
-      params.push(filters.is_system ? 1 : 0);
-    }
-
-    sql += ' ORDER BY category, service_name, created_at DESC';
-
-    const page = filters.page || 1;
-    const limit = filters.limit || 20;
-    const offset = (page - 1) * limit;
-    sql += ` LIMIT ${limit} OFFSET ${offset}`;
-
-    const templates = db.prepare(sql).all(...params) as ConfigTemplate[];
-    const totalResult = db.prepare(countSql).get(...params) as { count: number };
-
-    return { templates, total: totalResult.count };
+    return { templates: templates as unknown as ConfigTemplate[], total };
   }
 
   /**
@@ -190,7 +124,7 @@ class ConfigTemplateService {
     serverId: string,
     variables: Record<string, string>,
     userId?: string
-  ): Promise<ConfigTemplateHistory> {
+  ): Promise<unknown> {
     const template = this.getTemplate(templateId);
     const historyId = uuidv4();
     const now = new Date().toISOString();
@@ -200,19 +134,15 @@ class ConfigTemplateService {
       const _renderedContent = this.renderTemplate(templateId, variables);
 
       // 记录应用历史
-      db.prepare(`
-        INSERT INTO config_template_history (
-          id, template_id, server_id, applied_by, variables_snapshot,
-          status, applied_at
-        ) VALUES (?, ?, ?, ?, ?, 'pending', ?)
-      `).run(
-        historyId,
-        templateId,
-        serverId,
-        userId || null,
-        JSON.stringify(variables),
-        now
-      );
+      configTemplateHistoryRepo.create({
+        id: historyId,
+        template_id: templateId,
+        server_id: serverId,
+        applied_by: userId || null,
+        variables_snapshot: JSON.stringify(variables),
+        status: 'pending',
+        applied_at: now,
+      });
 
       // TODO: 实际执行配置应用（通过 SSH 服务）
       // 这里需要集成 sshService 来执行：
@@ -225,26 +155,16 @@ class ConfigTemplateService {
       const success = true;
       const backupPath = template.backup_before_apply ? `${template.target_path}.bak.${Date.now()}` : null;
 
-      db.prepare(`
-        UPDATE config_template_history
-        SET status = ?, backup_path = ?, result = ?, applied_at = ?
-        WHERE id = ?
-      `).run(
+      configTemplateHistoryRepo.updateStatus(
+        historyId,
         success ? 'success' : 'failed',
         backupPath,
         success ? 'Configuration applied successfully' : 'Failed to apply configuration',
-        now,
-        historyId
+        now
       );
 
       // 更新模板使用统计
-      db.prepare(`
-        UPDATE config_templates
-        SET usage_count = usage_count + 1,
-            success_count = success_count + CASE WHEN ? THEN 1 ELSE 0 END,
-            updated_at = ?
-        WHERE id = ?
-      `).run(success ? 1 : 0, now, templateId);
+      configTemplatesRepo.incrementUsage(templateId, success, now);
 
       logger.info(`Applied config template ${template.name} to server ${serverId}: ${success ? 'success' : 'failed'}`);
 
@@ -254,11 +174,7 @@ class ConfigTemplateService {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(`Failed to apply config template ${templateId}:`, error);
 
-      db.prepare(`
-        UPDATE config_template_history
-        SET status = 'failed', error_message = ?, applied_at = ?
-        WHERE id = ?
-      `).run(errorMsg, now, historyId);
+      configTemplateHistoryRepo.updateError(historyId, errorMsg, now);
 
       throw error;
     }
@@ -267,51 +183,15 @@ class ConfigTemplateService {
   /**
    * 获取应用历史
    */
-  getHistory(id: string): ConfigTemplateHistory {
-    const history = db.prepare('SELECT * FROM config_template_history WHERE id = ?').get(id) as ConfigTemplateHistory | undefined;
-    if (!history) {
-      throw new Error(`Config template history not found: ${id}`);
-    }
-    return history;
+  getHistory(id: string): unknown {
+    return configTemplateHistoryRepo.getByIdOrThrow(id);
   }
 
   /**
    * 列出应用历史
    */
-  listHistory(filters: { template_id?: string; server_id?: string; status?: string; page?: number; limit?: number }): { histories: ConfigTemplateHistory[]; total: number } {
-    let sql = 'SELECT * FROM config_template_history WHERE 1=1';
-    let countSql = 'SELECT COUNT(*) as count FROM config_template_history WHERE 1=1';
-    const params: unknown[] = [];
-
-    if (filters.template_id) {
-      sql += ' AND template_id = ?';
-      countSql += ' AND template_id = ?';
-      params.push(filters.template_id);
-    }
-
-    if (filters.server_id) {
-      sql += ' AND server_id = ?';
-      countSql += ' AND server_id = ?';
-      params.push(filters.server_id);
-    }
-
-    if (filters.status) {
-      sql += ' AND status = ?';
-      countSql += ' AND status = ?';
-      params.push(filters.status);
-    }
-
-    sql += ' ORDER BY applied_at DESC';
-
-    const page = filters.page || 1;
-    const limit = filters.limit || 20;
-    const offset = (page - 1) * limit;
-    sql += ` LIMIT ${limit} OFFSET ${offset}`;
-
-    const histories = db.prepare(sql).all(...params) as ConfigTemplateHistory[];
-    const totalResult = db.prepare(countSql).get(...params) as { count: number };
-
-    return { histories, total: totalResult.count };
+  listHistory(filters: { template_id?: string; server_id?: string; status?: string; page?: number; limit?: number }): { histories: unknown[]; total: number } {
+    return configTemplateHistoryRepo.list(filters);
   }
 
   /**
@@ -360,16 +240,14 @@ class ConfigTemplateService {
    * 获取所有分类
    */
   getCategories(): string[] {
-    const result = db.prepare('SELECT DISTINCT category FROM config_templates ORDER BY category').all() as Array<{ category: string }>;
-    return result.map(r => r.category);
+    return configTemplatesRepo.getCategories();
   }
 
   /**
    * 获取所有服务名称
    */
   getServiceNames(): string[] {
-    const result = db.prepare('SELECT DISTINCT service_name FROM config_templates ORDER BY service_name').all() as Array<{ service_name: string }>;
-    return result.map(r => r.service_name);
+    return configTemplatesRepo.getServiceNames();
   }
 }
 

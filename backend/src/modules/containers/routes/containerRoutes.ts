@@ -80,7 +80,7 @@ router.post('/endpoints', requireRole('admin', 'operator'), async (req: Request,
       tls_ca: tlsCa, tls_cert: tlsCert, tls_key: tlsKey,
     }).then(result => {
       const status = result.success ? 'active' : 'error';
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // eslint-disable-next-line @typescript-eslint/no-require-imports, no-restricted-imports
       const db = require('../../../models/database').db;
       db.prepare('UPDATE docker_endpoints SET status=?, error_message=? WHERE id=?')
         .run(status, result.message || null, endpoint.id);
@@ -146,23 +146,23 @@ router.get('/', async (req: Request, res: Response) => {
     const status = (req.query.status as string || '').toLowerCase();
     const endpointId = req.query.endpointId as string | undefined;
 
-    let allContainers: any[];
+    let allContainers: Array<Record<string, unknown>>;
     if (endpointId && endpointId !== 'local') {
       const d = getDocker(req);
-      allContainers = await d.listContainers({ all: true });
+      allContainers = await d.listContainers({ all: true }) as unknown as Array<Record<string, unknown>>;
     } else {
-      allContainers = await dockerService.listContainers(true);
+      allContainers = await dockerService.listContainers(true) as unknown as Array<Record<string, unknown>>;
     }
 
     let filtered = allContainers;
     if (search) {
-      filtered = filtered.filter((c: any) =>
-        (c.name || c.Names?.[0] || '').toLowerCase().includes(search) ||
-        (c.image || c.Image || '').toLowerCase().includes(search)
+      filtered = filtered.filter((c) =>
+        (String(c.name || (c.Names as string[])?.[0] || '')).toLowerCase().includes(search) ||
+        (String(c.image || c.Image || '')).toLowerCase().includes(search)
       );
     }
     if (status) {
-      filtered = filtered.filter((c: any) => (c.state || c.State || '').toLowerCase() === status);
+      filtered = filtered.filter((c) => (String(c.state || c.State || '')).toLowerCase() === status);
     }
     const total = filtered.length;
     const data = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -324,7 +324,7 @@ router.post('/images/pull', requireRole('admin', 'operator'), async (req: Reques
     const d = getDocker(req);
     const stream = await d.pull(image);
     await new Promise<void>((resolve, reject) => {
-      d.modem.followProgress(stream, (err: any) => err ? reject(err) : resolve(), () => {});
+      d.modem.followProgress(stream, (err: Error | null) => err ? reject(err) : resolve(), () => {});
     });
     res.json({ success: true, message: `镜像 ${image} 拉取成功` });
   } catch (err: unknown) { res.status(500).json({ success: false, message: getErrorMessage(err) }); }
@@ -378,25 +378,25 @@ router.delete('/volumes/:id', requireRole('admin', 'operator'), async (req: Requ
 // ═══════════════════════════════════════════════════
 
 /** 将 Docker API 返回的 PascalCase 字段转为 camelCase，确保前端兼容 */
-function normalizeNetwork(raw: any): any {
+function normalizeNetwork(raw: Docker.NetworkInspectInfo): Record<string, unknown> {
   return {
-    id: raw.Id || raw.id,
-    name: raw.Name || raw.name,
-    driver: raw.Driver || raw.driver,
-    scope: raw.Scope || raw.scope,
-    internal: raw.Internal ?? raw.internal ?? false,
-    attachable: raw.Attachable ?? raw.attachable ?? false,
+    id: raw.Id || (raw as unknown as Record<string, unknown>).id,
+    name: raw.Name || (raw as unknown as Record<string, unknown>).name,
+    driver: raw.Driver || (raw as unknown as Record<string, unknown>).driver,
+    scope: raw.Scope || (raw as unknown as Record<string, unknown>).scope,
+    internal: raw.Internal ?? (raw as unknown as Record<string, unknown>).internal ?? false,
+    attachable: raw.Attachable ?? (raw as unknown as Record<string, unknown>).attachable ?? false,
     ipam: raw.IPAM ? {
-      driver: raw.IPAM.Driver || raw.IPAM.driver,
-      config: (((raw.IPAM as any).Config || (raw.IPAM as any).config || []) as any[]).map((c: any) => ({
+      driver: raw.IPAM.Driver || (raw.IPAM as unknown as Record<string, unknown>).driver,
+      config: (((raw.IPAM as unknown as Record<string, unknown>).Config || (raw.IPAM as unknown as Record<string, unknown>).config || []) as Array<Record<string, unknown>>).map((c) => ({
         subnet: c.Subnet || c.subnet,
         gateway: c.Gateway || c.gateway,
       })),
-    } : raw.ipam || { driver: '', config: [] },
-    containers: raw.Containers || raw.containers || {},
-    options: raw.Options || raw.options || {},
-    labels: raw.Labels || raw.labels || {},
-    created: raw.Created || raw.created,
+    } : (raw as unknown as Record<string, unknown>).ipam || { driver: '', config: [] },
+    containers: raw.Containers || (raw as unknown as Record<string, unknown>).containers || {},
+    options: raw.Options || (raw as unknown as Record<string, unknown>).options || {},
+    labels: raw.Labels || (raw as unknown as Record<string, unknown>).labels || {},
+    created: raw.Created || (raw as unknown as Record<string, unknown>).created,
   };
 }
 
@@ -424,7 +424,7 @@ router.post('/networks', requireRole('admin', 'operator'), async (req: Request, 
   try {
     const { name, driver, subnet, gateway, internal, attachable } = req.body;
     const d = getDocker(req);
-    const opts: any = { Name: name, Driver: driver || 'bridge', Internal: !!internal, Attachable: !!attachable };
+    const opts: Docker.NetworkCreateOptions = { Name: name, Driver: driver || 'bridge', Internal: !!internal, Attachable: !!attachable };
     if (subnet) {
       opts.IPAM = { Config: [{ Subnet: subnet, Gateway: gateway || undefined }] };
     }

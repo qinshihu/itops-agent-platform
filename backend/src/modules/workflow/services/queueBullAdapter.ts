@@ -14,6 +14,7 @@
  */
 
 import type { QueueJob, QueueAdapter, QueueStats } from './queueService';
+import { logger } from '../../../utils/logger';
 
 // 延迟导入，仅在启用 Redis 时加载
 let Bull: Record<string, unknown> | null = null;
@@ -63,9 +64,9 @@ export class BullQueueAdapter implements QueueAdapter {
       });
 
       this.initialized = true;
-      console.log('BullMQ queue initialized (Redis backend)');
+      logger.info('BullMQ queue initialized (Redis backend)');
     } catch (error) {
-      console.error('Failed to initialize BullMQ:', error);
+      logger.error('Failed to initialize BullMQ:', error);
       throw error;
     }
   }

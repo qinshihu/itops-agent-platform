@@ -1,6 +1,7 @@
 // ── correlations 子 repository ──
 
 import db from '../../models/database';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { AlertCorrelationGroup, AlertCorrelationMember } from '../types/alert';
 import type {
   AlertCorrelationGroupCreateInput,

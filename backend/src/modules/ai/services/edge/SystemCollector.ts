@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import os from 'os';
 import { logger } from '../../../../utils/logger';
 import type {

@@ -2,19 +2,19 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  Plus, 
+  Plus as _Plus, 
   Play, 
   RefreshCw, 
   Wrench, 
   Cpu, 
   Box, 
-  Code, 
+  Code as _Code, 
   Activity, 
   Search,
   Terminal,
   Network,
   Database,
-  Monitor,
+  Monitor as _Monitor,
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../../lib/api';
@@ -25,7 +25,7 @@ interface AgentTool {
   name: string;
   description: string;
   category: string;
-  schema: any;
+  schema: unknown;
 }
 
 export default function Tools() {
@@ -41,14 +41,14 @@ export default function Tools() {
     queryKey: ['tools', selectedCategory],
     queryFn: async () => {
       const params = selectedCategory ? { category: selectedCategory } : undefined;
-      const res = await api.get('/api/agents/tools/list', { params });
+      const res = await api.get('/agents/tools/list', { params });
       return res.data.data as AgentTool[];
     },
   });
 
   const testMutation = useMutation({
-    mutationFn: async ({ toolId, args }: { toolId: string; args: any }) => {
-      const res = await api.post('/api/agents/tools/test', { toolId, args });
+    mutationFn: async ({ toolId, args }: { toolId: string; args: Record<string, unknown> }) => {
+      const res = await api.post('/agents/tools/test', { toolId, args });
       return res.data.data;
     },
   });
@@ -196,14 +196,14 @@ export default function Tools() {
                 
                 <p className="text-sm text-slate-300 mb-5 line-clamp-3">{tool.description}</p>
 
-                {tool.schema && (
+                {tool.schema ? (
                   <div className="mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700">
                     <p className="text-xs text-slate-400 mb-1.5">参数:</p>
                     <pre className="text-xs text-slate-300 overflow-x-auto max-h-24">
-                      {JSON.stringify(tool.schema.properties, null, 2)}
+                      {JSON.stringify((tool.schema as { properties?: unknown }).properties, null, 2)}
                     </pre>
                   </div>
-                )}
+                ) : null}
 
                 <button
                   onClick={() => handleTest(tool)}

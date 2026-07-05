@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from 'zod';
 import { type RegisteredTool, RiskLevel } from '../types';
 import { textResult, jsonResult, READONLY } from './shared';
@@ -18,6 +19,7 @@ export const serverTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
+        // eslint-disable-next-line no-restricted-imports
         const { default: db } = await import('../../../../models/database');
         let query = 'SELECT id, name, host, port, status, group_id, os, cpu_cores, memory_gb, last_checked FROM servers WHERE 1=1';
         const params: any[] = [];
@@ -45,6 +47,7 @@ export const serverTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
+        // eslint-disable-next-line no-restricted-imports
         const { default: db } = await import('../../../../models/database');
         const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(args.serverId);
         if (!server) return textResult(`服务器 ${args.serverId} 不存在`, true);

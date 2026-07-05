@@ -24,7 +24,7 @@ export default function ChatWidget() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const { theme } = useTheme();
-  const isDark = theme === 'dark';
+  const _isDark = theme === 'dark';
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -35,7 +35,7 @@ export default function ChatWidget() {
     queryKey: ['copilot-suggestions'],
     queryFn: async () => {
       try {
-        const res = await api.get('/api/copilot/suggestions');
+        const res = await api.get('/copilot/suggestions');
         return res.data.data || [];
       } catch {
         return ['查看当前告警状态', '服务器状态怎么样', '最近执行了哪些任务'];
@@ -47,7 +47,7 @@ export default function ChatWidget() {
     queryKey: ['copilot-conversations'],
     queryFn: async () => {
       try {
-        const res = await api.get('/api/copilot/conversations');
+        const res = await api.get('/copilot/conversations');
         return res.data.data || [];
       } catch {
         return [];
@@ -56,15 +56,15 @@ export default function ChatWidget() {
   });
 
   // 检查是否是需要修改密码的错误
-  const isPasswordChangeRequired = (error: any) => {
-    return error?.response?.status === 403;
+  const isPasswordChangeRequired = (error: unknown) => {
+    return (error as { response?: { status?: number } })?.response?.status === 403;
   };
 
   const currentConversation = conversations?.find((c: Conversation) => c.id === currentConversationId);
 
   const sendMessageMutation = useMutation({
     mutationFn: async ({ conversationId, message }: { conversationId?: string, message: string }) => {
-      const res = await api.post('/api/copilot/chat', {
+      const res = await api.post('/copilot/chat', {
         conversationId,
         message
       });
@@ -105,7 +105,7 @@ export default function ChatWidget() {
 
   const createConversationMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/api/copilot/conversations');
+      const res = await api.post('/copilot/conversations');
       return res.data;
     },
     onSuccess: (data) => {
@@ -123,7 +123,7 @@ export default function ChatWidget() {
 
   const deleteConversationMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/copilot/conversations/${id}`);
+      await api.delete(`/copilot/conversations/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['copilot-conversations'] });

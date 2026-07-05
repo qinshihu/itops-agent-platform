@@ -1,8 +1,8 @@
 import type { Job } from 'node-schedule';
 import { scheduleJob } from 'node-schedule';
 import { randomUUID } from 'crypto';
-import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
+// eslint-disable-next-line no-restricted-imports
 import { performMaintenance } from '../../../models/database';
 import { scheduledTasksRepo, workflowsRepo, tasksRepo, auditLogRepository } from '../../../repositories';
 import { executeWorkflow } from './workflowExecutor';

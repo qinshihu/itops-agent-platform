@@ -73,7 +73,7 @@ class ContainerMonitorService {
   /**
    * 获取所有运行中容器的摘要统计（一次性快照）
    */
-  async getClusterSnapshot(): Promise<any> {
+  async getClusterSnapshot(): Promise<unknown> {
     try {
       const containers = await dockerService.listContainers(true);
       const statsPromises = containers
@@ -90,6 +90,7 @@ class ContainerMonitorService {
       
       // 聚合计算
       let totalCpu = 0, totalMemUsage = 0, totalMemLimit = 0;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       results.forEach((r: any) => {
         totalCpu += parseFloat(r.cpuPercent || 0);
         totalMemUsage += r.memory?.usage || 0;

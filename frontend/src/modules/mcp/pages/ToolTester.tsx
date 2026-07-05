@@ -1,10 +1,18 @@
 import React, { useState } from 'react';
-import { Card, Input, Button, Typography, Select, Space, Tag, message, Table, Tabs } from 'antd';
-import { SendOutlined, HistoryOutlined, CodeOutlined } from '@ant-design/icons';
-import { callTool, fetchManifest, type McpTool, type ToolCallResult } from '../api';
+import { Card, Input, Button, Typography, Select, Space, Tag, message, Table as _Table, Tabs as _Tabs } from 'antd';
+import { SendOutlined, HistoryOutlined, CodeOutlined as _CodeOutlined } from '@ant-design/icons';
+import { callTool, fetchManifest } from '../api';
+import type { McpTool, ToolCallResult } from '../api';
+import { getAxiosErrorMessage } from '@/lib/errorHandler';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
+
+interface ToolProperty {
+  default?: unknown;
+  type?: string;
+  [key: string]: unknown;
+}
 
 const ToolTester: React.FC = () => {
   const [tools, setTools] = useState<McpTool[]>([]);
@@ -31,10 +39,11 @@ const ToolTester: React.FC = () => {
       const props = tool.inputSchema?.properties || {};
       const defaultArgs: Record<string, unknown> = {};
       for (const [key, prop] of Object.entries(props)) {
-        if ((prop as any).default !== undefined) {
-          defaultArgs[key] = (prop as any).default;
+        const p = prop as ToolProperty;
+        if (p.default !== undefined) {
+          defaultArgs[key] = p.default;
         } else if (required.includes(key)) {
-          defaultArgs[key] = (prop as any).type === 'number' ? 0 : '';
+          defaultArgs[key] = p.type === 'number' ? 0 : '';
         }
       }
       setArgs(JSON.stringify(defaultArgs, null, 2));
@@ -58,9 +67,9 @@ const ToolTester: React.FC = () => {
         result: res,
         time: Date.now(),
       }, ...prev].slice(0, 20));
-    } catch (err: any) {
+    } catch (err: unknown) {
       setResult({
-        content: [{ type: 'text', text: `调用失败: ${err?.response?.data?.error || err.message}` }],
+        content: [{ type: 'text', text: `调用失败: ${getAxiosErrorMessage(err)}` }],
         isError: true,
       });
     } finally {

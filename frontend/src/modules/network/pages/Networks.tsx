@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Network, Plus, Trash2, Search, RefreshCw, Edit, Globe,
+  Network, Plus, _Trash2, Search, RefreshCw, Edit, Globe,
   Router, MapPin, Layers, ArrowLeft, Check, X, AlertCircle,
-  MoreHorizontal, Upload,
+  _MoreHorizontal, _Upload,
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 import { useToast } from '../../../contexts/ToastContext';
 
 // ==================== 类型定义 ====================
@@ -94,7 +95,7 @@ export default function Networks() {
   const { data: subnets = [], isLoading } = useQuery<SubnetInfo[]>({
     queryKey: ['network-subnets'],
     queryFn: async () => {
-      const res = await api.get('/api/network-subnets');
+      const res = await api.get('/network-subnets');
       return res.data.data as SubnetInfo[];
     },
     refetchInterval: 30000,
@@ -104,7 +105,7 @@ export default function Networks() {
   const { data: ipData, isLoading: ipsLoading } = useQuery<IpListData>({
     queryKey: ['network-subnet-ips', selectedSubnet?.id, ipStatusFilter, ipSearch],
     queryFn: async () => {
-      const res = await api.get(`/api/network-subnets/${selectedSubnet!.id}/ips`, {
+      const res = await api.get(`/network-subnets/${selectedSubnet!.id}/ips`, {
         params: { status: ipStatusFilter || undefined, search: ipSearch || undefined, pageSize: 500 },
       });
       return res.data.data as IpListData;
@@ -115,7 +116,7 @@ export default function Networks() {
   // ==================== 创建子网 ====================
   const createMutation = useMutation({
     mutationFn: async () => {
-      return api.post('/api/network-subnets', {
+      return api.post('/network-subnets', {
         name: subnetName, cidr: subnetCidr, gateway: subnetGateway || undefined,
         vlan_id: subnetVlan ? parseInt(subnetVlan) : undefined, network_type: subnetType,
         location: subnetLocation || undefined, description: subnetDesc || undefined,
@@ -126,13 +127,13 @@ export default function Networks() {
       toast.success('子网已创建');
       closeSubnetModal();
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || '创建失败'),
+    onError: (err: unknown) => toast.error(getAxiosErrorMessage(err, '创建失败')),
   });
 
   // ==================== 更新子网 ====================
   const updateMutation = useMutation({
     mutationFn: async () => {
-      return api.put(`/api/network-subnets/${editingSubnet!.id}`, {
+      return api.put(`/network-subnets/${editingSubnet!.id}`, {
         name: subnetName, gateway: subnetGateway || null, vlan_id: subnetVlan ? parseInt(subnetVlan) : null,
         network_type: subnetType, location: subnetLocation || null, description: subnetDesc || null,
       });
@@ -142,12 +143,12 @@ export default function Networks() {
       toast.success('子网已更新');
       closeSubnetModal();
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || '更新失败'),
+    onError: (err: unknown) => toast.error(getAxiosErrorMessage(err, '更新失败')),
   });
 
   // ==================== 删除子网 ====================
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/network-subnets/${id}`),
+    mutationFn: (id: string) => api.delete(`/network-subnets/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['network-subnets'] });
       toast.success('子网已删除');
@@ -158,7 +159,7 @@ export default function Networks() {
   // ==================== 批量操作IP ====================
   const batchIpMutation = useMutation({
     mutationFn: async (status: string) => {
-      return api.post(`/api/network-subnets/${selectedSubnet!.id}/ips/batch`, {
+      return api.post(`/network-subnets/${selectedSubnet!.id}/ips/batch`, {
         ip_ids: Array.from(selectedIps),
         status,
         device_name: status === 'used' ? '手动分配' : undefined,

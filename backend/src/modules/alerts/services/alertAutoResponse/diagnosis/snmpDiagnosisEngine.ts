@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * =============================================================================
  * AARS v2 — SNMP 诊断引擎（网络设备）

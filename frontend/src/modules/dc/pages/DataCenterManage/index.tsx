@@ -1,146 +1,30 @@
-import { Button, Modal, Form, Input, Select, Tag, Space, Popconfirm, Card, Tabs, InputNumber, Badge, Table } from 'antd';
+import { Button, Input, Tag, Card, Tabs } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
-  Plus, Edit, Trash2, Server, Monitor, Wifi, LayoutGrid, CuboidIcon as Cube,
-  Search, Download, Upload, Database, Clock, AlertTriangle, Thermometer,
-  HardDrive, Cpu, MemoryStick, ToggleLeft, HardDrive as Hdd, ArrowUpDown,
+  Plus, Server, Monitor, Wifi, LayoutGrid, CuboidIcon as Cube,
+  Search, Upload, Database, Clock, Cpu, ToggleLeft, ArrowUpDown,
 } from 'lucide-react';
 import useDataCenter from './useDataCenter';
-import { deviceTypeColors, actionColors } from './types';
-import type { Room, Rack, Slot, PDU, LifecycleRecord, Manufacturer, DeviceTypeInfo, PowerPanel, PowerFeed, Cable, DeviceSummary } from './types';
 import OverviewTab from './OverviewTab';
 import DevicesTab from './DevicesTab';
 import SlotsPanel from './SlotsPanel';
+import RoomManagement from './RoomManagement';
+import RackManagement from './RackManagement';
+import PDUManagement from './PDUManagement';
+import LifecycleTab from './LifecycleTab';
+import ExportImportTab from './ExportImportTab';
+import SlotModals from './SlotModals';
+import { ManufacturersTab, DeviceTypesTab, PowerPanelsTab, PowerFeedsTab, CablesTab } from './NetboxTabs';
 
 export default function DataCenterManage() {
   const dc = useDataCenter();
   const navigate = useNavigate();
 
-  // ===== 打开添加机房的 Modal 快捷方式 =====
   const handleAddRoom = () => {
     dc.setEditingRoom(null);
     dc.roomForm.resetFields();
     dc.setRoomModalOpen(true);
   };
-
-  // ===== 列定义 =====
-  const filteredRooms = dc.rooms.filter((r: Room) =>
-    !dc.roomSearch ||
-    r.name?.toLowerCase().includes(dc.roomSearch.toLowerCase()) ||
-    r.label?.toLowerCase().includes(dc.roomSearch.toLowerCase())
-  );
-
-  const filteredRacks = dc.racks.filter((r: Rack) =>
-    (!dc.rackSearch || r.name?.toLowerCase().includes(dc.rackSearch.toLowerCase())) &&
-    (!dc.rackStatusFilter || r.status === dc.rackStatusFilter)
-  );
-
-  const roomColumns = [
-    { title: '名称', dataIndex: 'name', key: 'name' },
-    { title: '标签', dataIndex: 'label', key: 'label', render: (v: string) => <Tag>{v}</Tag> },
-    { title: '尺寸', key: 'size', render: (_: unknown, r: Room) => `${r.width_m || 20}m × ${r.depth_m || 15}m` },
-    { title: '排序', dataIndex: 'sort_order', key: 'sort_order' },
-    {
-      title: '操作', key: 'action', render: (_: unknown, rec: Room) => (
-        <Space>
-          <Button type="link" size="small" icon={<Edit size={14} />}
-            onClick={() => { dc.setEditingRoom(rec); dc.roomForm.setFieldsValue(rec); dc.setRoomModalOpen(true); }}>编辑</Button>
-          <Popconfirm title="确定删除?" onConfirm={() => dc.deleteRoom(rec.id)}>
-            <Button type="link" size="small" danger icon={<Trash2 size={14} />}>删除</Button>
-          </Popconfirm>
-        </Space>
-      )
-    },
-  ];
-
-  const rackColumns = [
-    {
-      title: '编号', dataIndex: 'name', key: 'name', render: (v: string, r: Rack) => (
-        <Space>
-          <span>{v}</span>
-          {r.status === 'warning' && <Tag color="orange" style={{ fontSize: 10 }}>⚠️</Tag>}
-        </Space>
-      )
-    },
-    { title: '机房', dataIndex: 'room_name', key: 'room_name' },
-    { title: '排号', dataIndex: 'row_number', key: 'row_number' },
-    { title: 'U位', dataIndex: 'total_u', key: 'total_u' },
-    {
-      title: '已用', key: 'used_u', render: (_: unknown, r: Rack) => {
-        const pct = r.total_u > 0 ? Math.round(((r.used_u || 0) / r.total_u) * 100) : 0;
-        const barColor = pct > 85 ? 'bg-red-500' : pct > 70 ? 'bg-yellow-500' : 'bg-green-500';
-        return (
-          <div className="flex items-center gap-2">
-            <div className="w-16 h-2 bg-gray-700 rounded-full">
-              <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
-            </div>
-            <span className="text-xs">{r.used_u || 0}/{r.total_u || 42}</span>
-          </div>
-        );
-      }
-    },
-    { title: '设备数', dataIndex: 'device_count', key: 'device_count' },
-    {
-      title: '告警', key: 'alerts', render: (_: unknown, r: Rack) => {
-        const ac = dc.rackAlertMap[r.id] || 0;
-        return ac > 0 ? <Badge count={ac} size="small"><span className="text-red-400">🚨</span></Badge> : <span className="text-text-tertiary">-</span>;
-      }
-    },
-    {
-      title: '操作', key: 'action', render: (_: unknown, rec: Rack) => (
-        <Space>
-          <Button type="link" size="small" icon={<LayoutGrid size={14} />}
-            onClick={() => { dc.setActiveTab('slots'); setTimeout(() => dc.selectRack(rec), 100); }}>U位</Button>
-          <Button type="link" size="small" icon={<Edit size={14} />}
-            onClick={() => { dc.setEditingRack(rec); dc.rackForm.setFieldsValue(rec); dc.setRackModalOpen(true); }}>编辑</Button>
-          <Popconfirm title="确定删除?" onConfirm={() => dc.deleteRack(rec.id)}>
-            <Button type="link" size="small" danger icon={<Trash2 size={14} />}>删除</Button>
-          </Popconfirm>
-        </Space>
-      )
-    },
-  ];
-
-  const lifecycleColumns = [
-    { title: '时间', dataIndex: 'created_at', key: 'created_at', width: 160 },
-    {
-      title: '动作', dataIndex: 'action', key: 'action', render: (v: string) => (
-        <Tag color={actionColors[v] || 'default'}>
-          {v === 'mounted' ? '上架' : v === 'unmounted' ? '下架' : v === 'moved' ? '迁移' : v === 'maintenance' ? '维护' : v}
-        </Tag>
-      )
-    },
-    { title: '设备类型', dataIndex: 'device_type', key: 'device_type', render: (v: string) => <Tag>{v}</Tag> },
-    { title: '来源位置', dataIndex: 'from_location', key: 'from_location', render: (v: string) => v !== 'N/A' ? v : '-' },
-    { title: '目标位置', dataIndex: 'to_location', key: 'to_location', render: (v: string) => v !== 'N/A' ? v : '-' },
-    { title: '操作人', dataIndex: 'performed_by', key: 'performed_by' },
-    { title: '备注', dataIndex: 'notes', key: 'notes', render: (v: string) => v || '-' },
-  ];
-
-  const pduColumns = [
-    { title: '名称', dataIndex: 'name', key: 'name' },
-    { title: '类型', dataIndex: 'type', key: 'type', render: (v: string) => <Tag color={deviceTypeColors[v] || 'default'}>{v === 'pdu' ? 'PDU' : v === 'ups' ? 'UPS' : v}</Tag> },
-    { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => {
-      const c = v === 'active' ? 'green' : v === 'warning' ? 'orange' : v === 'error' ? 'red' : 'default';
-      return <Tag color={c}>{v === 'active' ? '正常运行' : v === 'warning' ? '告警' : v === 'error' ? '故障' : v}</Tag>;
-    }},
-    { title: '所在机柜', dataIndex: 'rack_name', key: 'rack_name', render: (v: string) => v || '未分配' },
-    { title: '额定功率(W)', dataIndex: 'power_capacity_w', key: 'power_capacity_w', render: (v: number) => v ? `${v}W` : '-' },
-    { title: '当前负载(W)', dataIndex: 'current_load_w', key: 'current_load_w', render: (v: number) => v !== null && v !== undefined ? `${v}W` : '-' },
-    { title: '输入电压(V)', dataIndex: 'input_voltage', key: 'input_voltage', render: (v: number) => v ? `${v}V` : '-' },
-    { title: 'IP地址', dataIndex: 'ip_address', key: 'ip_address', render: (v: string) => v || '-' },
-    {
-      title: '操作', key: 'action', render: (_: unknown, rec: PDU) => (
-        <Space>
-          <Button type="link" size="small" icon={<Edit size={14} />}
-            onClick={() => { dc.setEditingPdu(rec); dc.pduForm.setFieldsValue(rec); dc.setPduModalOpen(true); }}>编辑</Button>
-          <Popconfirm title="确定删除?" onConfirm={() => dc.deletePdu(rec.id)}>
-            <Button type="link" size="small" danger icon={<Trash2 size={14} />}>删除</Button>
-          </Popconfirm>
-        </Space>
-      )
-    },
-  ];
 
   // ===== Tab 项配置 =====
   const tabItems = [
@@ -173,52 +57,12 @@ export default function DataCenterManage() {
     {
       key: 'rooms',
       label: <span><Database size={14} className="inline mr-1" />机房</span>,
-      children: (
-        <div>
-          <Input
-            prefix={<Search size={14} className="text-text-tertiary" />}
-            placeholder="搜索机房名称/标签..."
-            className="mb-4 max-w-xs"
-            value={dc.roomSearch}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => dc.setRoomSearch(e.target.value)}
-            allowClear
-          />
-          <Table columns={roomColumns} dataSource={filteredRooms.map((r: Room) => ({ ...r, key: r.id }))} loading={dc.loading} pagination={false} />
-        </div>
-      ),
+      children: <RoomManagement dc={dc} />,
     },
     {
       key: 'racks',
       label: <span><LayoutGrid size={14} className="inline mr-1" />机柜</span>,
-      children: (
-        <div>
-          <Space className="mb-4">
-            <Input
-              prefix={<Search size={14} className="text-text-tertiary" />}
-              placeholder="搜索机柜编号..."
-              value={dc.rackSearch}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => dc.setRackSearch(e.target.value)}
-              allowClear
-              style={{ width: 200 }}
-            />
-            <Select
-              placeholder="状态筛选"
-              allowClear
-              style={{ width: 120 }}
-              value={dc.rackStatusFilter || undefined}
-              onChange={(v: string) => dc.setRackStatusFilter(v || '')}
-            >
-              <Select.Option value="normal">正常</Select.Option>
-              <Select.Option value="warning">警告</Select.Option>
-              <Select.Option value="critical">严重</Select.Option>
-            </Select>
-          </Space>
-          <Table columns={rackColumns} dataSource={filteredRacks.map((r: Rack) => {
-            const room = dc.rooms.find(rm => rm.id === r.room_id);
-            return { ...r, key: r.id, room_name: room?.name || room?.label || r.room_id };
-          })} loading={dc.loading} pagination={false} scroll={{ x: 900 }} />
-        </div>
-      ),
+      children: <RackManagement dc={dc} />,
     },
     {
       key: 'slots',
@@ -257,226 +101,42 @@ export default function DataCenterManage() {
     {
       key: 'lifecycle',
       label: <span><Clock size={14} className="inline mr-1" />生命周期</span>,
-      children: (
-        <div>
-          <Space className="mb-4">
-            <Select
-              placeholder="动作筛选"
-              allowClear
-              style={{ width: 130 }}
-              value={dc.lifecycleFilter || undefined}
-              onChange={(v: string) => dc.setLifecycleFilter(v || '')}
-            >
-              <Select.Option value="mounted">上架</Select.Option>
-              <Select.Option value="unmounted">下架</Select.Option>
-              <Select.Option value="moved">迁移</Select.Option>
-              <Select.Option value="maintenance">维护</Select.Option>
-            </Select>
-            <Button icon={<Search size={14} />} onClick={dc.loadLifecycles}>刷新</Button>
-          </Space>
-          <Table columns={lifecycleColumns} dataSource={dc.lifecycles.map((l: LifecycleRecord) => ({ ...l, key: l.id }))}
-            pagination={{ pageSize: 50 }} scroll={{ x: 800 }} loading={dc.lifecyclesLoading} />
-        </div>
-      ),
+      children: <LifecycleTab dc={dc} />,
     },
     {
       key: 'pdus',
       label: <span><ToggleLeft size={14} className="inline mr-1" />PDU/UPS</span>,
-      children: (
-        <Table columns={pduColumns} dataSource={dc.pdus.map((p: PDU) => ({ ...p, key: p.id }))}
-          pagination={false} scroll={{ x: 1000 }} loading={dc.pdusLoading} />
-      ),
+      children: <PDUManagement dc={dc} />,
     },
     {
       key: 'export',
       label: <span><Upload size={14} className="inline mr-1" />导入/导出</span>,
-      children: (
-        <div>
-          <div className="mb-4 text-sm text-text-secondary">
-            导出数据中心完整布局数据为 JSON 格式，包含机房、机柜、U位、生命周期和供电设备信息。
-          </div>
-
-          {/* 导出区域 */}
-          <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-3 mb-3">
-              <Download size={18} className="text-blue-400" />
-              <span className="text-sm font-medium text-text-primary">导出数据</span>
-            </div>
-            {dc.exportData ? (
-              <>
-                <p className="text-xs text-text-tertiary mb-3">
-                  包含 {dc.exportData.summary?.rooms || 0} 个机房, {dc.exportData.summary?.racks || 0} 个机柜, {dc.exportData.summary?.devices || 0} 个设备
-                </p>
-                <div className="flex gap-2">
-                  <Button icon={<Download size={14} />} onClick={dc.handleExportDownload}>下载 JSON 文件</Button>
-                  <Button icon={<HardDrive size={14} />} onClick={dc.handleExportCopy}>复制到剪贴板</Button>
-                </div>
-              </>
-            ) : (
-              <Button icon={<Download size={14} />} onClick={dc.loadExport}>加载导出数据</Button>
-            )}
-          </div>
-
-          {/* 导入区域 */}
-          <div className="bg-gray-900 border border-gray-700 rounded-lg p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <Upload size={18} className="text-green-400" />
-              <span className="text-sm font-medium text-text-primary">导入数据</span>
-            </div>
-            <Button icon={<Upload size={14} />} onClick={() => dc.setImportModalOpen(true)}>打开导入窗口</Button>
-          </div>
-        </div>
-      ),
+      children: <ExportImportTab dc={dc} />,
     },
     {
       key: 'manufacturers',
       label: <span><Database size={14} className="inline mr-1" />制造商</span>,
-      children: (
-        <Table
-          columns={[
-            { title: '名称', dataIndex: 'name', key: 'name' },
-            { title: '描述', dataIndex: 'description', key: 'description', render: (v: string) => v || '-' },
-            { title: '型号数量', dataIndex: 'type_count', key: 'type_count' },
-            {
-              title: '操作', key: 'action', render: (_: unknown, rec: Manufacturer) => (
-                <Space>
-                  <Button type="link" size="small" icon={<Edit size={14} />}
-                    onClick={() => { dc.setEditingMf(rec); dc.mfForm.setFieldsValue(rec); dc.setMfModalOpen(true); }}>编辑</Button>
-                  <Popconfirm title="确定删除?" onConfirm={() => dc.deleteManufacturer(rec.id)}>
-                    <Button type="link" size="small" danger icon={<Trash2 size={14} />}>删除</Button>
-                  </Popconfirm>
-                </Space>
-              )
-            },
-          ]}
-          dataSource={dc.manufacturers.map((m: Manufacturer) => ({ ...m, key: m.id }))}
-          loading={dc.mfLoading}
-          pagination={false}
-        />
-      ),
+      children: <ManufacturersTab dc={dc} />,
     },
     {
       key: 'deviceTypes',
       label: <span><Cpu size={14} className="inline mr-1" />设备型号</span>,
-      children: (
-        <Table
-          columns={[
-            { title: '型号', dataIndex: 'model', key: 'model' },
-            { title: '制造商', dataIndex: 'manufacturer_name', key: 'manufacturer_name' },
-            { title: '类型', dataIndex: 'device_type', key: 'device_type', render: (v: string) => <Tag>{v}</Tag> },
-            { title: '高度(U)', dataIndex: 'u_height', key: 'u_height' },
-            { title: '实例数', dataIndex: 'instance_count', key: 'instance_count' },
-            {
-              title: '操作', key: 'action', render: (_: unknown, rec: DeviceTypeInfo) => (
-                <Space>
-                  <Button type="link" size="small" icon={<Edit size={14} />}
-                    onClick={() => { dc.setEditingDt(rec); dc.dtForm.setFieldsValue(rec); dc.setDtModalOpen(true); }}>编辑</Button>
-                  <Popconfirm title="确定删除?" onConfirm={() => dc.deleteDeviceType(rec.id)}>
-                    <Button type="link" size="small" danger icon={<Trash2 size={14} />}>删除</Button>
-                  </Popconfirm>
-                </Space>
-              )
-            },
-          ]}
-          dataSource={dc.deviceTypes.map((t: DeviceTypeInfo) => ({ ...t, key: t.id }))}
-          loading={dc.dtLoading}
-          pagination={false}
-        />
-      ),
+      children: <DeviceTypesTab dc={dc} />,
     },
     {
       key: 'powerPanels',
       label: <span><ToggleLeft size={14} className="inline mr-1" />配电柜</span>,
-      children: (
-        <Table
-          columns={[
-            { title: '名称', dataIndex: 'name', key: 'name' },
-            { title: '机房', dataIndex: 'room_name', key: 'room_name' },
-            { title: '类型', dataIndex: 'type', key: 'type', render: (v: string) => <Tag>{v}</Tag> },
-            { title: '相位', dataIndex: 'phase', key: 'phase' },
-            { title: '电压(V)', dataIndex: 'voltage', key: 'voltage' },
-            { title: '馈线数', dataIndex: 'feed_count', key: 'feed_count' },
-            {
-              title: '操作', key: 'action', render: (_: unknown, rec: PowerPanel) => (
-                <Space>
-                  <Button type="link" size="small" icon={<Edit size={14} />}
-                    onClick={() => { dc.setEditingPp(rec); dc.ppForm.setFieldsValue(rec); dc.setPpModalOpen(true); }}>编辑</Button>
-                  <Popconfirm title="确定删除?" onConfirm={() => dc.deletePowerPanel(rec.id)}>
-                    <Button type="link" size="small" danger icon={<Trash2 size={14} />}>删除</Button>
-                  </Popconfirm>
-                </Space>
-              )
-            },
-          ]}
-          dataSource={dc.powerPanels.map((p: PowerPanel) => ({ ...p, key: p.id }))}
-          loading={dc.ppLoading}
-          pagination={false}
-        />
-      ),
+      children: <PowerPanelsTab dc={dc} />,
     },
     {
       key: 'powerFeeds',
       label: <span><Wifi size={14} className="inline mr-1" />供电线路</span>,
-      children: (
-        <Table
-          columns={[
-            { title: '名称', dataIndex: 'name', key: 'name' },
-            { title: '配电柜', dataIndex: 'panel_name', key: 'panel_name' },
-            { title: '机柜', dataIndex: 'rack_name', key: 'rack_name', render: (v: string) => v || '未分配' },
-            { title: '相位', dataIndex: 'phase', key: 'phase' },
-            { title: '电压(V)', dataIndex: 'voltage', key: 'voltage' },
-            { title: '电流(A)', dataIndex: 'amperage', key: 'amperage' },
-            { title: '功率(W)', dataIndex: 'max_power', key: 'max_power', render: (v: number) => v ? `${v}W` : '-' },
-            {
-              title: '操作', key: 'action', render: (_: unknown, rec: PowerFeed) => (
-                <Space>
-                  <Button type="link" size="small" icon={<Edit size={14} />}
-                    onClick={() => { dc.setEditingPf(rec); dc.pfForm.setFieldsValue(rec); dc.setPfModalOpen(true); }}>编辑</Button>
-                  <Popconfirm title="确定删除?" onConfirm={() => dc.deletePowerFeed(rec.id)}>
-                    <Button type="link" size="small" danger icon={<Trash2 size={14} />}>删除</Button>
-                  </Popconfirm>
-                </Space>
-              )
-            },
-          ]}
-          dataSource={dc.powerFeeds.map((f: PowerFeed) => ({ ...f, key: f.id }))}
-          loading={dc.pfLoading}
-          pagination={false}
-        />
-      ),
+      children: <PowerFeedsTab dc={dc} />,
     },
     {
       key: 'cables',
       label: <span><ArrowUpDown size={14} className="inline mr-1" />线缆管理</span>,
-      children: (
-        <Table
-          columns={[
-            { title: '标签', dataIndex: 'label', key: 'label' },
-            { title: '类型', dataIndex: 'type', key: 'type', render: (v: string) => <Tag>{v}</Tag> },
-            { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => {
-              const c = v === 'connected' ? 'green' : v === 'planned' ? 'blue' : 'default';
-              return <Tag color={c}>{v}</Tag>;
-            }},
-            { title: 'A端设备', dataIndex: 'a_device_name', key: 'a_device_name' },
-            { title: 'B端设备', dataIndex: 'b_device_name', key: 'b_device_name' },
-            { title: '长度(m)', dataIndex: 'length_m', key: 'length_m', render: (v: number) => v ? `${v}m` : '-' },
-            {
-              title: '操作', key: 'action', render: (_: unknown, rec: Cable) => (
-                <Space>
-                  <Button type="link" size="small" icon={<Edit size={14} />}
-                    onClick={() => { dc.setEditingCable(rec); dc.cableForm.setFieldsValue(rec); dc.setCableModalOpen(true); }}>编辑</Button>
-                  <Popconfirm title="确定删除?" onConfirm={() => dc.deleteCable(rec.id)}>
-                    <Button type="link" size="small" danger icon={<Trash2 size={14} />}>删除</Button>
-                  </Popconfirm>
-                </Space>
-              )
-            },
-          ]}
-          dataSource={dc.cables.map((c: Cable) => ({ ...c, key: c.id }))}
-          loading={dc.cableLoading}
-          pagination={false}
-        />
-      ),
+      children: <CablesTab dc={dc} />,
     },
   ];
 
@@ -563,398 +223,7 @@ export default function DataCenterManage() {
 
       <Tabs activeKey={dc.activeTab} onChange={dc.onTabChange} items={tabItems} className="dc-tabs" />
 
-      {/* ==================== MODALS ==================== */}
-
-      {/* 机房 Modal */}
-      <Modal
-        title={dc.editingRoom ? '编辑机房' : '添加机房'}
-        open={dc.roomModalOpen}
-        onOk={dc.saveRoom}
-        onCancel={() => { dc.setRoomModalOpen(false); dc.setEditingRoom(null); dc.roomForm.resetFields(); }}
-        okText="保存"
-        cancelText="取消"
-      >
-        <Form form={dc.roomForm} layout="vertical" size="small">
-          <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入机房名称' }]}>
-            <Input placeholder="如：A栋-2层" />
-          </Form.Item>
-          <Form.Item name="label" label="标签">
-            <Input placeholder="可选别名" />
-          </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea rows={2} placeholder="可选描述信息" />
-          </Form.Item>
-          <Space className="w-full" style={{ display: 'flex' }}>
-            <Form.Item name="width_m" label="宽度(m)"><InputNumber min={1} step={1} /></Form.Item>
-            <Form.Item name="depth_m" label="深度(m)"><InputNumber min={1} step={1} /></Form.Item>
-            <Form.Item name="sort_order" label="排序"><InputNumber min={0} step={1} /></Form.Item>
-          </Space>
-        </Form>
-      </Modal>
-
-      {/* 机柜 Modal */}
-      <Modal
-        title={dc.editingRack ? '编辑机柜' : '添加机柜'}
-        open={dc.rackModalOpen}
-        onOk={dc.saveRack}
-        onCancel={() => { dc.setRackModalOpen(false); dc.setEditingRack(null); dc.rackForm.resetFields(); }}
-        okText="保存"
-        cancelText="取消"
-      >
-        <Form form={dc.rackForm} layout="vertical" size="small">
-          <Form.Item name="name" label="机柜编号" rules={[{ required: true, message: '请输入机柜编号' }]}>
-            <Input placeholder="如：A01" />
-          </Form.Item>
-          <Form.Item name="room_id" label="所属机房" rules={[{ required: true, message: '请选择机房' }]}>
-            <Select placeholder="选择机房...">
-              {dc.rooms.map(r => (
-                <Select.Option key={r.id} value={r.id}>{r.name || r.label}</Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="row_number" label="排号">
-            <InputNumber min={1} step={1} className="w-full" />
-          </Form.Item>
-          <Form.Item name="total_u" label="U位数" rules={[{ required: true, message: '请输入U位数' }]}>
-            <InputNumber min={1} max={100} step={1} className="w-full" />
-          </Form.Item>
-          <Form.Item name="sort_order" label="排序">
-            <InputNumber min={0} step={1} className="w-full" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 分配 U 位 Modal */}
-      <Modal
-        title={`分配设备 - ${dc.selectedRack?.name || ''}`}
-        open={dc.slotModalOpen}
-        onOk={dc.assignSlot}
-        onCancel={() => { dc.setSlotModalOpen(false); dc.slotForm.resetFields(); }}
-        okText="分配"
-        cancelText="取消"
-        afterOpenChange={(open) => { if (open) dc.fetchAvailDevices(); }}
-      >
-        <Form form={dc.slotForm} layout="vertical" size="small">
-          <Form.Item name="device_id" label="选择设备" rules={[{ required: true, message: '请选择设备' }]}>
-            <Select placeholder="选择要分配到该机柜的设备..." showSearch filterOption={(input, option) =>
-              (option?.label as string || '').toLowerCase().includes(input.toLowerCase())
-            }>
-              {dc.availDevices.map((d: DeviceSummary) => (
-                <Select.Option key={d.id} value={d.id}
-                  label={`${d.name || d.device_name || '未命名'} (${d.device_type || '?'})`}>
-                  <div className="flex justify-between">
-                    <span>{d.name || d.device_name || '未命名'}</span>
-                    <Tag color={deviceTypeColors[d.device_type || ''] || 'default'} className="text-[10px]">
-                      {d.device_type}
-                    </Tag>
-                  </div>
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="start_u" label="起始U位" rules={[{ required: true, message: '请输入起始U位' }]}>
-            <InputNumber min={1} max={dc.selectedRack?.total_u || 42} step={1} className="w-full" />
-          </Form.Item>
-          <Form.Item name="end_u" label="结束U位" rules={[{ required: true, message: '请输入结束U位' }]}>
-            <InputNumber min={1} max={dc.selectedRack?.total_u || 42} step={1} className="w-full" />
-          </Form.Item>
-          <Form.Item name="position_face" label="朝向" initialValue="front">
-            <Select>
-              <Select.Option value="front">正面</Select.Option>
-              <Select.Option value="rear">背面</Select.Option>
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 设备操作 Modal（下架/移位） */}
-      <Modal
-        title="设备操作"
-        open={dc.deviceActionModal}
-        onCancel={() => { dc.setDeviceActionModal(false); dc.setSelectedSlot(null); }}
-        footer={[
-          <Button key="move" icon={<ArrowUpDown size={14} />} onClick={() => {
-            dc.setDeviceActionModal(false);
-            dc.moveForm.resetFields();
-            dc.moveForm.setFieldsValue({
-              rack_id: dc.selectedSlot?.rack_id,
-              start_u: dc.selectedSlot?.start_u,
-              end_u: dc.selectedSlot?.end_u,
-              position_face: dc.selectedSlot?.position_face || 'front',
-            });
-            dc.setMoveModalOpen(true);
-          }}>
-            移位
-          </Button>,
-          <Popconfirm key="remove" title="确认下架该设备?" onConfirm={dc.confirmRemoveSlot}>
-            <Button danger icon={<Trash2 size={14} />}>下架</Button>
-          </Popconfirm>,
-          <Button key="cancel" onClick={() => { dc.setDeviceActionModal(false); dc.setSelectedSlot(null); }}>取消</Button>,
-        ]}
-      >
-        {dc.selectedSlot && (
-          <div className="text-sm space-y-2">
-            <p><span className="text-text-secondary">设备:</span> {dc.selectedSlot.device_name || '(未命名)'}</p>
-            <p><span className="text-text-secondary">类型:</span> {dc.selectedSlot.device_type}</p>
-            <p><span className="text-text-secondary">U位:</span> U{dc.selectedSlot.start_u}-U{dc.selectedSlot.end_u}</p>
-            {dc.selectedSlot.ip_address && (
-              <p><span className="text-text-secondary">IP:</span> {dc.selectedSlot.ip_address}</p>
-            )}
-          </div>
-        )}
-      </Modal>
-
-      {/* 移位 Modal */}
-      <Modal
-        title="设备移位"
-        open={dc.moveModalOpen}
-        onOk={dc.handleMove}
-        onCancel={() => { dc.setMoveModalOpen(false); dc.moveForm.resetFields(); dc.setSelectedSlot(null); }}
-        okText="确认移位"
-        cancelText="取消"
-      >
-        <Form form={dc.moveForm} layout="vertical" size="small">
-          <Form.Item name="rack_id" label="目标机柜" rules={[{ required: true, message: '请选择机柜' }]}>
-            <Select placeholder="选择目标机柜..." showSearch filterOption={(input, option) =>
-              (option?.label as string || '').toLowerCase().includes(input.toLowerCase())
-            }>
-              {dc.racks.map(r => (
-                <Select.Option key={r.id} value={r.id}
-                  label={`${r.room_label || r.room_name || ''} - ${r.name}`}>
-                  {r.room_label || r.room_name || ''} - {r.name}
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="start_u" label="起始U位" rules={[{ required: true, message: '请输入起始U位' }]}>
-            <InputNumber min={1} max={100} step={1} className="w-full" />
-          </Form.Item>
-          <Form.Item name="end_u" label="结束U位" rules={[{ required: true, message: '请输入结束U位' }]}>
-            <InputNumber min={1} max={100} step={1} className="w-full" />
-          </Form.Item>
-          <Form.Item name="position_face" label="朝向" initialValue="front">
-            <Select><Select.Option value="front">正面</Select.Option><Select.Option value="rear">背面</Select.Option></Select>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* PDU Modal */}
-      <Modal
-        title={dc.editingPdu ? '编辑PDU/UPS' : '添加PDU/UPS'}
-        open={dc.pduModalOpen}
-        onOk={dc.savePdu}
-        onCancel={() => { dc.setPduModalOpen(false); dc.setEditingPdu(null); dc.pduForm.resetFields(); }}
-        okText="保存"
-        cancelText="取消"
-        width={640}
-      >
-        <Form form={dc.pduForm} layout="vertical" size="small">
-          <Space className="w-full" style={{ display: 'flex' }}>
-            <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}><Input /></Form.Item>
-            <Form.Item name="type" label="类型" rules={[{ required: true }]}>
-              <Select><Select.Option value="pdu">PDU</Select.Option><Select.Option value="ups">UPS</Select.Option></Select>
-            </Form.Item>
-          </Space>
-          <Form.Item name="rack_id" label="所在机柜">
-            <Select placeholder="选择机柜（可选）..." allowClear>
-              {dc.racks.map(r => <Select.Option key={r.id} value={r.id}>{r.name}</Select.Option>)}
-            </Select>
-          </Form.Item>
-          <Form.Item name="status" label="状态" initialValue="active">
-            <Select><Select.Option value="active">正常运行</Select.Option><Select.Option value="warning">告警</Select.Option><Select.Option value="error">故障</Select.Option></Select>
-          </Form.Item>
-          <Space className="w-full" style={{ display: 'flex' }}>
-            <Form.Item name="power_capacity_w" label="额定功率(W)"><InputNumber min={0} step={100} className="w-full" /></Form.Item>
-            <Form.Item name="current_load_w" label="当前负载(W)"><InputNumber min={0} step={10} className="w-full" /></Form.Item>
-            <Form.Item name="input_voltage" label="输入电压(V)"><InputNumber min={0} step={10} className="w-full" /></Form.Item>
-          </Space>
-          <Form.Item name="output_sockets" label="输出插座数"><InputNumber min={0} step={1} className="w-full" /></Form.Item>
-          <Space className="w-full" style={{ display: 'flex' }}>
-            <Form.Item name="model" label="型号"><Input /></Form.Item>
-            <Form.Item name="ip_address" label="IP地址"><Input /></Form.Item>
-            <Form.Item name="snmp_community" label="SNMP社区"><Input /></Form.Item>
-          </Space>
-          <Form.Item name="notes" label="备注"><Input.TextArea rows={2} /></Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 导入 Modal */}
-      <Modal
-        title="导入数据中心数据"
-        open={dc.importModalOpen}
-        onOk={dc.handleImport}
-        onCancel={() => { dc.setImportModalOpen(false); dc.setImportText(''); }}
-        okText="导入"
-        cancelText="取消"
-        confirmLoading={dc.importLoading}
-        width={700}
-      >
-        <div className="mb-2 text-xs text-text-tertiary">
-          粘贴 JSON 数据。格式与导出数据一致，可包含 rooms, racks, slots, pdus 等字段。
-        </div>
-        <Input.TextArea
-          rows={12}
-          value={dc.importText}
-          onChange={(e) => dc.setImportText(e.target.value)}
-          placeholder='{"rooms": [...], "racks": [...], "slots": [...], "pdus": [...]}'
-          className="font-mono text-xs"
-        />
-      </Modal>
-
-      {/* 制造商 Modal */}
-      <Modal
-        title={dc.editingMf ? '编辑制造商' : '添加制造商'}
-        open={dc.mfModalOpen}
-        onOk={dc.saveManufacturer}
-        onCancel={() => { dc.setMfModalOpen(false); dc.setEditingMf(null); dc.mfForm.resetFields(); }}
-        okText="保存" cancelText="取消"
-      >
-        <Form form={dc.mfForm} layout="vertical" size="small">
-          <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入制造商名称' }]}>
-            <Input placeholder="如：华为、思科、戴尔" />
-          </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea rows={2} placeholder="可选描述" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 设备型号 Modal */}
-      <Modal
-        title={dc.editingDt ? '编辑设备型号' : '添加设备型号'}
-        open={dc.dtModalOpen}
-        onOk={dc.saveDeviceType}
-        onCancel={() => { dc.setDtModalOpen(false); dc.setEditingDt(null); dc.dtForm.resetFields(); }}
-        okText="保存" cancelText="取消"
-      >
-        <Form form={dc.dtForm} layout="vertical" size="small">
-          <Form.Item name="model" label="型号名称" rules={[{ required: true, message: '请输入型号' }]}>
-            <Input placeholder="如：USG6320、S5720-36C-EI" />
-          </Form.Item>
-          <Form.Item name="manufacturer_id" label="制造商" rules={[{ required: true, message: '请选择制造商' }]}>
-            <Select placeholder="选择制造商...">
-              {dc.manufacturers.map((m: Manufacturer) => (
-                <Select.Option key={m.id} value={m.id}>{m.name}</Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="device_type" label="设备类型" rules={[{ required: true }]}>
-            <Select placeholder="选择类型...">
-              <Select.Option value="server">服务器</Select.Option>
-              <Select.Option value="network_device">网络设备</Select.Option>
-              <Select.Option value="storage">存储设备</Select.Option>
-              <Select.Option value="pdu">PDU</Select.Option>
-              <Select.Option value="ups">UPS</Select.Option>
-              <Select.Option value="other">其他</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="u_height" label="U位高度" rules={[{ required: true }]}>
-            <InputNumber min={1} max={48} step={1} className="w-full" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 配电柜 Modal */}
-      <Modal
-        title={dc.editingPp ? '编辑配电柜' : '添加配电柜'}
-        open={dc.ppModalOpen}
-        onOk={dc.savePowerPanel}
-        onCancel={() => { dc.setPpModalOpen(false); dc.setEditingPp(null); dc.ppForm.resetFields(); }}
-        okText="保存" cancelText="取消"
-      >
-        <Form form={dc.ppForm} layout="vertical" size="small">
-          <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
-            <Input placeholder="如：A栋-2F-配电柜-01" />
-          </Form.Item>
-          <Form.Item name="room_id" label="所属机房">
-            <Select placeholder="选择机房（可选）..." allowClear>
-              {dc.rooms.map(r => <Select.Option key={r.id} value={r.id}>{r.name || r.label}</Select.Option>)}
-            </Select>
-          </Form.Item>
-          <Form.Item name="type" label="类型">
-            <Select placeholder="选择类型...">
-              <Select.Option value="main">主配电柜</Select.Option>
-              <Select.Option value="distribution">分配电柜</Select.Option>
-              <Select.Option value="row">列头柜</Select.Option>
-            </Select>
-          </Form.Item>
-          <Space className="w-full" style={{ display: 'flex' }}>
-            <Form.Item name="phase" label="相位"><Select><Select.Option value="single">单相</Select.Option><Select.Option value="three">三相</Select.Option></Select></Form.Item>
-            <Form.Item name="voltage" label="电压(V)"><InputNumber min={0} step={10} className="w-full" /></Form.Item>
-          </Space>
-        </Form>
-      </Modal>
-
-      {/* 供电线路 Modal */}
-      <Modal
-        title={dc.editingPf ? '编辑供电线路' : '添加供电线路'}
-        open={dc.pfModalOpen}
-        onOk={dc.savePowerFeed}
-        onCancel={() => { dc.setPfModalOpen(false); dc.setEditingPf(null); dc.pfForm.resetFields(); }}
-        okText="保存" cancelText="取消"
-      >
-        <Form form={dc.pfForm} layout="vertical" size="small">
-          <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
-            <Input placeholder="如：A-01供电线路" />
-          </Form.Item>
-          <Form.Item name="power_panel_id" label="配电柜" rules={[{ required: true, message: '请选择配电柜' }]}>
-            <Select placeholder="选择配电柜...">
-              {dc.powerPanels.map((p: PowerPanel) => (
-                <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="rack_id" label="目标机柜">
-            <Select placeholder="选择机柜（可选）..." allowClear>
-              {dc.racks.map(r => <Select.Option key={r.id} value={r.id}>{r.name}</Select.Option>)}
-            </Select>
-          </Form.Item>
-          <Space className="w-full" style={{ display: 'flex' }}>
-            <Form.Item name="phase" label="相位"><Select><Select.Option value="single">单相</Select.Option><Select.Option value="three">三相</Select.Option></Select></Form.Item>
-            <Form.Item name="voltage" label="电压(V)"><InputNumber min={0} step={10} className="w-full" /></Form.Item>
-            <Form.Item name="amperage" label="电流(A)"><InputNumber min={0} step={1} className="w-full" /></Form.Item>
-          </Space>
-          <Form.Item name="max_power" label="最大功率(W)"><InputNumber min={0} step={100} className="w-full" /></Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 线缆 Modal */}
-      <Modal
-        title={dc.editingCable ? '编辑线缆' : '添加线缆'}
-        open={dc.cableModalOpen}
-        onOk={dc.saveCable}
-        onCancel={() => { dc.setCableModalOpen(false); dc.setEditingCable(null); dc.cableForm.resetFields(); }}
-        okText="保存" cancelText="取消"
-      >
-        <Form form={dc.cableForm} layout="vertical" size="small">
-          <Form.Item name="label" label="标签" rules={[{ required: true, message: '请输入标签' }]}>
-            <Input placeholder="如：A01-U12→B03-U05" />
-          </Form.Item>
-          <Form.Item name="type" label="类型">
-            <Select placeholder="选择类型...">
-              <Select.Option value="power">电源线</Select.Option>
-              <Select.Option value="network">网线</Select.Option>
-              <Select.Option value="fiber">光纤</Select.Option>
-              <Select.Option value="console">串口线</Select.Option>
-              <Select.Option value="other">其他</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="status" label="状态" initialValue="planned">
-            <Select>
-              <Select.Option value="planned">规划中</Select.Option>
-              <Select.Option value="connected">已连接</Select.Option>
-              <Select.Option value="disconnected">已断开</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="a_device_id" label="A端设备ID">
-            <Input placeholder="设备ID（可选）" />
-          </Form.Item>
-          <Form.Item name="b_device_id" label="B端设备ID">
-            <Input placeholder="设备ID（可选）" />
-          </Form.Item>
-          <Form.Item name="length_m" label="长度(m)"><InputNumber min={0} step={0.5} className="w-full" /></Form.Item>
-        </Form>
-      </Modal>
+      <SlotModals dc={dc} />
     </div>
   );
 }

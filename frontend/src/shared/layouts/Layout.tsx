@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import api from '../../lib/api';
 import {
+  /* eslint-disable @typescript-eslint/no-unused-vars */
   LayoutDashboard,
   Bot,
   Brain,
@@ -62,6 +63,7 @@ import {
   Router,
   Camera,
   Package,
+  /* eslint-enable @typescript-eslint/no-unused-vars */
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -105,7 +107,7 @@ export default function Layout() {
   const { data: agentCount } = useQuery({
     queryKey: ['agents-count'],
     queryFn: async () => {
-      const res = await api.get('/api/agents');
+      const res = await api.get('/agents');
       return (res.data.data as Array<{ enabled: number }>).filter((a) => a.enabled === 1).length;
     },
     refetchInterval: 60000,
@@ -115,7 +117,7 @@ export default function Layout() {
   const { data: workflowCount } = useQuery({
     queryKey: ['workflows-count'],
     queryFn: async () => {
-      const res = await api.get('/api/workflows');
+      const res = await api.get('/workflows');
       return (res.data.data as Array<{ is_template: number }>).filter((w) => w.is_template === 1).length;
     },
     refetchInterval: 60000,

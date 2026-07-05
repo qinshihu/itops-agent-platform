@@ -101,7 +101,7 @@ router.post('/:id/compliance', requireRole('admin', 'operator'), async (req: Req
 
     res.json({ success: true, data: results });
   } catch (error) {
-    console.error('Compliance check error:', error);
+    logger.error('Compliance check error:', error);
     res.status(500).json({ success: false, error: 'Failed to run compliance check' });
   }
 });

@@ -63,7 +63,7 @@ export default function PodList({ pods, loading, error, onRetry, context, search
     queryKey: ['kubernetes-pod-detail', context, podDetailTarget?.namespace, podDetailTarget?.name],
     queryFn: async () => {
       if (!podDetailTarget || !context) return null;
-      const res = await api.get(`/api/kubernetes/pods/${podDetailTarget.namespace}/${podDetailTarget.name}`, {
+      const res = await api.get(`/kubernetes/pods/${podDetailTarget.namespace}/${podDetailTarget.name}`, {
         params: { context },
       });
       return res.data.data as PodDetail;
@@ -79,7 +79,7 @@ export default function PodList({ pods, loading, error, onRetry, context, search
     queryKey: ['kubernetes-pod-logs', context, podLogsTarget?.namespace, podLogsTarget?.name],
     queryFn: async () => {
       if (!podLogsTarget || !context) return '';
-      const res = await api.get(`/api/kubernetes/pods/${podLogsTarget.namespace}/${podLogsTarget.name}/logs`, {
+      const res = await api.get(`/kubernetes/pods/${podLogsTarget.namespace}/${podLogsTarget.name}/logs`, {
         params: { tail: 500, context },
       });
       return (res.data.data?.logs || res.data.data || res.data) as string;

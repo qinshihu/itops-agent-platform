@@ -1,6 +1,7 @@
 // ── autoAnalysis 子 repository（alert_auto_analysis 表）──
 
 import db from '../../models/database';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { AlertAutoAnalysis } from '../types/alert';
 
 /** alert_auto_analysis 表记录 */

@@ -21,11 +21,11 @@ interface RateLimitConfig {
 }
 
 const rateLimitConfig: RateLimitConfig = {
-  '/api/auth/login': { windowMs: 15 * 60 * 1000, max: 5 },
-  '/api/auth': { windowMs: 60 * 1000, max: 20 },
-  '/api/copilot': { windowMs: 60 * 1000, max: 30 },
-  '/api/settings/api-keys': { windowMs: 60 * 1000, max: 10 },
-  '/api/webhooks': { windowMs: 1000, max: 10 },
+  '/api/v1/auth/login': { windowMs: 15 * 60 * 1000, max: 5 },
+  '/api/v1/auth': { windowMs: 60 * 1000, max: 20 },
+  '/api/v1/copilot': { windowMs: 60 * 1000, max: 30 },
+  '/api/v1/settings/api-keys': { windowMs: 60 * 1000, max: 10 },
+  '/api/v1/webhooks': { windowMs: 1000, max: 10 },
 };
 
 const ipWhitelist: readonly string[] = env.WEBHOOK_IP_WHITELIST
@@ -117,7 +117,7 @@ function cleanupExpired(): number {
 export function webhookIpFilter(req: Request, res: Response, next: NextFunction) {
   const clientIp = req.ip || req.socket.remoteAddress;
 
-  if (ipWhitelist.length > 0 && req.path.startsWith('/api/webhooks')) {
+  if (ipWhitelist.length > 0 && req.path.startsWith('/api/v1/webhooks')) {
     if (!isIpWhitelisted(clientIp)) {
       logger.warn(`Webhook request blocked: IP ${clientIp} not in whitelist`, {
         path: req.path,

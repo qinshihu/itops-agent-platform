@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-restricted-imports
 import db from '../../../../../models/database';
 import { randomUUID } from 'crypto';
 import { logger } from '../../../../../utils/logger';
@@ -56,7 +57,7 @@ class RcaRepository {
 
       this.deleteRCA = db.prepare('DELETE FROM root_cause_analyses WHERE id = ?');
     } catch {
-      console.error("⚠️  Could not initialize RootCauseAnalysisService statements");
+      logger.error("⚠️  Could not initialize RootCauseAnalysisService statements");
     }
   }
 

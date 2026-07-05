@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * 分析引擎：SSH 诊断执行 + AI 分析 + 告警分析编排
  */
@@ -159,7 +160,7 @@ ${rawOutput.substring(0, 8000)}
     let riskLevel: 'low' | 'medium' | 'high' | undefined;
 
     const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
-    if (jsonMatch && jsonMatch[1]) {
+    if (jsonMatch?.[1]) {
       try {
         const jsonData = JSON.parse(jsonMatch[1].trim());
         if (Array.isArray(jsonData.remediation_commands)) {

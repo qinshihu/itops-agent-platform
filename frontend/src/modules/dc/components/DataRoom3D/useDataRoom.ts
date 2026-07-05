@@ -1,8 +1,43 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { logger } from '@/lib/logger';
 import api from '../../../../lib/api';
 import { useSocketIO } from '../../../../lib/useSocketIO';
 import type { DCStatusPayload } from '../../../../lib/useSocketIO';
 import type { Rack3D, SlotInfo, OverviewData, AlertItem } from './types';
+
+interface RawSlotItem {
+  rack_id: string;
+  slot_id: string;
+  start_u: number;
+  end_u: number;
+  device_name?: string;
+  device_id?: string;
+  device_type?: string;
+  device_status?: string;
+  server_status?: string;
+  cpu_usage?: number | null;
+  memory_usage?: number | null;
+  disk_usage?: number | null;
+}
+
+interface RawRackItem {
+  id: string;
+  name: string;
+  row_number?: number;
+  total_u?: number;
+  used_u?: number;
+  device_count?: number;
+  position_x?: number;
+  position_z?: number;
+}
+
+interface RawAlertItem {
+  id: string;
+  title: string;
+  severity: string;
+  source?: string;
+  created_at?: string;
+}
 
 interface UseDataRoomReturn {
   loading: boolean;
@@ -41,9 +76,9 @@ export default function useDataRoom(): UseDataRoomReturn {
     const load = async () => {
       try {
         const [ovRes, rackRes, slotsRes] = await Promise.all([
-          api.get('/api/dc/overview'),
-          api.get('/api/dc/racks'),
-          api.get('/api/dc/batch-slots').catch(() => ({ data: { data: [] } })),
+          api.get('/dc/overview'),
+          api.get('/dc/racks'),
+          api.get('/dc/batch-slots').catch(() => ({ data: { data: [] } })),
         ]);
 
         if (cancelled) return;
@@ -54,14 +89,14 @@ export default function useDataRoom(): UseDataRoomReturn {
 
         // 按机柜分组 U 位
         const slotsByRack: Record<string, SlotInfo[]> = {};
-        for (const s of (slotsRes.data.data || []) as any[]) {
+        for (const s of (slotsRes.data.data || []) as RawSlotItem[]) {
           if (!slotsByRack[s.rack_id]) slotsByRack[s.rack_id] = [];
           slotsByRack[s.rack_id].push({
             id: s.slot_id,
             startU: s.start_u,
             endU: s.end_u,
-            deviceName: s.device_name || s.device_id,
-            deviceType: s.device_type,
+            deviceName: s.device_name || s.device_id || '',
+            deviceType: s.device_type || '',
             deviceStatus: s.device_status || 'unknown',
             cpuUsage: null,
             memUsage: null,
@@ -71,9 +106,9 @@ export default function useDataRoom(): UseDataRoomReturn {
         setRackSlotsMap(slotsByRack);
 
         // 处理机柜列表
-        const rawRacks = (rackRes.data.data || []) as any[];
+        const rawRacks = (rackRes.data.data || []) as RawRackItem[];
         if (rawRacks.length > 0) {
-          setRacks(rawRacks.map((r: any) => ({
+          setRacks(rawRacks.map((r: RawRackItem) => ({
             id: r.id,
             name: r.name,
             roomName: '',
@@ -88,6 +123,7 @@ export default function useDataRoom(): UseDataRoomReturn {
             sceneZ: r.position_z || 0,
           })));
         } else if (ov.rackData) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           setRacks(ov.rackData.map((r: any, i: number) => ({
             id: r.id || `mock-${i}`,
             name: r.name,
@@ -106,7 +142,7 @@ export default function useDataRoom(): UseDataRoomReturn {
           setRacks([]);
         }
       } catch (err) {
-        console.error('加载数据中心数据失败:', err);
+        logger.error('加载数据中心数据失败:', err);
         // 演示数据降级
         if (!cancelled) {
           setRacks(getDemoRacks());
@@ -126,10 +162,10 @@ export default function useDataRoom(): UseDataRoomReturn {
   useEffect(() => {
     let cancelled = false;
 
-    api.get('/api/alerts', { params: { limit: 50, status: 'open' } })
+    api.get('/alerts', { params: { limit: 50, status: 'open' } })
       .then(res => {
         if (cancelled) return;
-        const items = (res.data.data || []) as any[];
+        const items = (res.data.data || []) as RawAlertItem[];
         setAlerts(items);
         setAlertsList(items);
       })
@@ -150,7 +186,7 @@ export default function useDataRoom(): UseDataRoomReturn {
       // 更新机柜利用率
       if (payload.rackUtil?.length > 0) {
         setRacks(prev => prev.map(r => {
-          const update = payload.rackUtil.find((u: any) => u.id === r.id);
+          const update = payload.rackUtil.find((u) => u.id === r.id);
           if (update) {
             return { ...r, usedU: update.used_u, deviceCount: update.device_count };
           }
@@ -168,21 +204,21 @@ export default function useDataRoom(): UseDataRoomReturn {
   /** 加载选中机柜的 U 位详情 */
   const fetchRackSlots = useCallback(async (rackId: string) => {
     try {
-      const res = await api.get(`/api/dc/slots/${rackId}`);
-      const data = (res.data.data || []) as any[];
-      setRackSlots(data.map((s: any) => ({
-        id: s.slot_id || s.id,
+      const res = await api.get(`/dc/slots/${rackId}`);
+      const data = (res.data.data || []) as RawSlotItem[];
+      setRackSlots(data.map((s: RawSlotItem) => ({
+        id: s.slot_id,
         startU: s.start_u,
         endU: s.end_u,
-        deviceName: s.device_name || s.device_id,
-        deviceType: s.device_type,
+        deviceName: s.device_name || s.device_id || '',
+        deviceType: s.device_type || '',
         deviceStatus: s.device_status || s.server_status || 'unknown',
         cpuUsage: s.cpu_usage ?? null,
         memUsage: s.memory_usage ?? null,
         diskUsage: s.disk_usage ?? null,
       })));
     } catch (err) {
-      console.error('加载机柜 U 位失败:', err);
+      logger.error('加载机柜 U 位失败:', err);
       setRackSlots([]);
     }
   }, []);

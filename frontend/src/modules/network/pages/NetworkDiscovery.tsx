@@ -3,13 +3,14 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Radio, Search, Loader2, CheckCircle2, AlertCircle, XCircle,
-  Plus, Trash2, Play, Square, Wifi, Map, Download, Monitor,
-  Globe, Server, RefreshCw, Clock, HardDrive
+  Plus as _Plus, _Trash2, Play, Square, Wifi, _Map, Download, Monitor,
+  Globe, Server, _RefreshCw, Clock, HardDrive
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 import { useToast } from '../../../contexts/ToastContext';
-import { safeFormatDistance } from '../../../lib/date';
+import { _safeFormatDistance } from '../../../lib/date';
 
 interface DiscoveryJob {
   id: string;
@@ -43,10 +44,16 @@ interface DiscoveryResult {
   created_at: string;
 }
 
+interface SnmpCredential {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+}
+
 export default function NetworkDiscovery() {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState<'jobs' | 'results'>('jobs');
+  const [_activeTab, _setActiveTab] = useState<'jobs' | 'results'>('jobs');
 
   // 扫描表单
   const [scanName, setScanName] = useState('');
@@ -65,12 +72,12 @@ export default function NetworkDiscovery() {
   // 查询
   const { data: credentials = [] } = useQuery({
     queryKey: ['snmp-credentials'],
-    queryFn: () => api.get('/api/snmp/credentials').then(r => r.data.data || []),
+    queryFn: () => api.get('/snmp/credentials').then(r => r.data.data || []),
   });
 
   const { data: jobs = [], isLoading: jobsLoading } = useQuery({
     queryKey: ['network-discovery-jobs'],
-    queryFn: () => api.get('/api/network-discovery/jobs').then(r => r.data.data || []),
+    queryFn: () => api.get('/network-discovery/jobs').then(r => r.data.data || []),
     refetchInterval: 3000, // 3 秒刷新
   });
 
@@ -80,7 +87,7 @@ export default function NetworkDiscovery() {
   const selectedJob = jobsList.find((j: DiscoveryJob) => j.id === selectedJobId) as DiscoveryJob | undefined;
   const { data: resultsData, isLoading: resultsLoading } = useQuery({
     queryKey: ['network-discovery-results', selectedJobId],
-    queryFn: () => api.get(`/api/network-discovery/results`, {
+    queryFn: () => api.get(`/network-discovery/results`, {
       params: { jobId: selectedJobId || undefined, limit: 500 }
     }).then(r => ({ data: r.data.data as DiscoveryResult[], total: r.data.total as number })),
     enabled: !!selectedJobId,
@@ -93,7 +100,7 @@ export default function NetworkDiscovery() {
 
   // 创建扫描
   const createJob = useMutation({
-    mutationFn: () => api.post('/api/network-discovery/jobs', {
+    mutationFn: () => api.post('/network-discovery/jobs', {
       name: scanName || `${startIp}-${endIp}`,
       start_ip: startIp,
       end_ip: endIp,
@@ -103,21 +110,21 @@ export default function NetworkDiscovery() {
       queryClient.invalidateQueries({ queryKey: ['network-discovery-jobs'] });
       toast.success('扫描任务已创建');
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.error || '创建失败');
+    onError: (err: unknown) => {
+      toast.error(getAxiosErrorMessage(err, '创建失败'));
     },
   });
 
   // 取消扫描
   const cancelJob = useMutation({
-    mutationFn: (jobId: string) => api.post(`/api/network-discovery/jobs/${jobId}/cancel`),
+    mutationFn: (jobId: string) => api.post(`/network-discovery/jobs/${jobId}/cancel`),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['network-discovery-jobs'] }); },
   });
 
   // 删除扫描
   const deleteJob = useMutation({
-    mutationFn: (jobId: string) => api.delete(`/api/network-discovery/jobs/${jobId}`),
-    onSuccess: (_data: any, variables: string) => {
+    mutationFn: (jobId: string) => api.delete(`/network-discovery/jobs/${jobId}`),
+    onSuccess: (_data: unknown, variables: string) => {
       queryClient.invalidateQueries({ queryKey: ['network-discovery-jobs'] });
       if (selectedJobId === variables) setSelectedJobId(null);
     },
@@ -125,7 +132,7 @@ export default function NetworkDiscovery() {
 
   // 导入设备
   const importDevices = useMutation({
-    mutationFn: () => api.post('/api/network-discovery/import', {
+    mutationFn: () => api.post('/network-discovery/import', {
       result_ids: Array.from(selectedResults),
       ssh_username: sshUsername,
       ssh_password: sshPassword || undefined,
@@ -135,8 +142,8 @@ export default function NetworkDiscovery() {
       setImportResult(res.data.data);
       queryClient.invalidateQueries({ queryKey: ['network-devices'] });
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.error || '导入失败');
+    onError: (err: unknown) => {
+      toast.error(getAxiosErrorMessage(err, '导入失败'));
     },
   });
 
@@ -188,7 +195,7 @@ export default function NetworkDiscovery() {
                 {credentials.length === 0 ? (
                   <span className="text-xs text-text-tertiary">暂无凭证</span>
                 ) : (
-                  (credentials as any[]).map((cred: any) => (
+                  (credentials as SnmpCredential[]).map((cred) => (
                     <button key={cred.id}
                       onClick={() => {
                         setCredentialIds(prev =>

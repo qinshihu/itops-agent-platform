@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import db from '../../../../models/database';
+import { aiModelRepository, settingsRepository, agentRepository } from '../../../../repositories';
 import { logger } from '../../../../utils/logger';
 import { getApiBase, buildApiEndpoint } from '../../../../utils/apiConfig';
 import axios from 'axios';
@@ -116,85 +116,47 @@ function parseModel(raw: RawAIModel): AIModel {
 }
 
 export function getAllModels(): AIModel[] {
-  const models = db.prepare(`
-    SELECT * FROM ai_models 
-    ORDER BY sort_order ASC, created_at ASC
-  `).all() as RawAIModel[];
-  
+  const models = aiModelRepository.listAll() as RawAIModel[];
   return models.map(parseModel);
 }
 
 export function getEnabledModels(): AIModel[] {
-  const models = db.prepare(`
-    SELECT * FROM ai_models 
-    WHERE enabled = 1 
-    ORDER BY sort_order ASC, created_at ASC
-  `).all() as RawAIModel[];
-  
+  const models = aiModelRepository.listEnabled() as RawAIModel[];
   return models.map(parseModel);
 }
 
 export function getModelById(id: string): AIModel | undefined {
-  const model = db.prepare(`
-    SELECT * FROM ai_models WHERE id = ?
-  `).get(id) as RawAIModel | undefined;
-  
+  const model = aiModelRepository.getById(id) as RawAIModel | undefined;
   if (!model) return undefined;
-  
   return parseModel(model);
 }
 
 export function getDefaultModel(): AIModel | undefined {
-  const defaultModel = db.prepare(`
-    SELECT * FROM ai_models 
-    WHERE enabled = 1 AND is_default = 1 
-    ORDER BY sort_order ASC 
-    LIMIT 1
-  `).get() as RawAIModel | undefined;
-  
-  if (defaultModel) {
-    return parseModel(defaultModel);
-  }
-  
-  const firstEnabled = db.prepare(`
-    SELECT * FROM ai_models 
-    WHERE enabled = 1 
-    ORDER BY sort_order ASC 
-    LIMIT 1
-  `).get() as RawAIModel | undefined;
-  
-  if (firstEnabled) {
-    return parseModel(firstEnabled);
-  }
-  
+  const defaultModel = aiModelRepository.getDefault() as RawAIModel | undefined;
+  if (defaultModel) return parseModel(defaultModel);
   return undefined;
 }
 
 export function createModel(dto: CreateAIModelDTO): AIModel {
   const id = randomUUID();
   
-  const maxSortOrder = db.prepare('SELECT MAX(sort_order) as max_order FROM ai_models').get() as { max_order: number | null };
-  const sortOrder = (maxSortOrder?.max_order ?? -1) + 1;
+  const maxSortOrder = aiModelRepository.getMaxSortOrder();
+  const sortOrder = maxSortOrder + 1;
   
-  const isFirstModel = getAllModels().length === 0;
+  const isFirstModel = aiModelRepository.listAll().length === 0;
   
-  db.prepare(`
-    INSERT INTO ai_models (
-      id, name, provider_type, api_key, api_base, model_id, 
-      enabled, sort_order, is_default, tags
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  aiModelRepository.create({
     id,
-    dto.name,
-    dto.provider_type,
-    dto.api_key || null,
-    dto.api_base || null,
-    dto.model_id,
-    1,
-    sortOrder,
-    isFirstModel ? 1 : 0,
-    dto.tags ? JSON.stringify(dto.tags) : null
-  );
+    name: dto.name,
+    provider_type: dto.provider_type,
+    api_key: dto.api_key || null,
+    api_base: dto.api_base || null,
+    model_id: dto.model_id,
+    enabled: 1,
+    sort_order: sortOrder,
+    is_default: isFirstModel ? 1 : 0,
+    tags: dto.tags ? JSON.stringify(dto.tags) : null,
+  });
   
   const model = getModelById(id);
   if (!model) {
@@ -211,64 +173,31 @@ export function updateModel(id: string, dto: UpdateAIModelDTO): AIModel {
     throw new Error('Model not found');
   }
   
-  const updates: string[] = [];
-  const values: unknown[] = [];
+  const updates: Record<string, unknown> = {};
   
-  if (dto.name !== undefined) {
-    updates.push('name = ?');
-    values.push(dto.name);
-  }
-  
-  if (dto.provider_type !== undefined) {
-    updates.push('provider_type = ?');
-    values.push(dto.provider_type);
-  }
-  
-  if (dto.model_id !== undefined) {
-    updates.push('model_id = ?');
-    values.push(dto.model_id);
-  }
-  
-  if (dto.api_key !== undefined) {
-    updates.push('api_key = ?');
-    values.push(dto.api_key || null);
-  }
-  
-  if (dto.api_base !== undefined) {
-    updates.push('api_base = ?');
-    values.push(dto.api_base || null);
-  }
-  
-  if (dto.enabled !== undefined) {
-    updates.push('enabled = ?');
-    values.push(dto.enabled);
-  }
+  if (dto.name !== undefined) { updates.name = dto.name; }
+  if (dto.provider_type !== undefined) { updates.provider_type = dto.provider_type; }
+  if (dto.model_id !== undefined) { updates.model_id = dto.model_id; }
+  if (dto.api_key !== undefined) { updates.api_key = dto.api_key || null; }
+  if (dto.api_base !== undefined) { updates.api_base = dto.api_base || null; }
+  if (dto.enabled !== undefined) { updates.enabled = dto.enabled; }
   
   if (dto.is_default !== undefined) {
     if (dto.is_default === 1) {
-      db.prepare('UPDATE ai_models SET is_default = 0').run();
+      aiModelRepository.clearAllDefaults();
     }
-    updates.push('is_default = ?');
-    values.push(dto.is_default);
+    updates.is_default = dto.is_default;
   }
   
   if (dto.tags !== undefined) {
-    updates.push('tags = ?');
-    values.push(dto.tags ? JSON.stringify(dto.tags) : null);
+    updates.tags = dto.tags ? JSON.stringify(dto.tags) : null;
   }
   
-  if (updates.length === 0) {
+  if (Object.keys(updates).length === 0) {
     return existingModel;
   }
   
-  updates.push('updated_at = datetime(\'now\',\'localtime\')');
-  values.push(id);
-  
-  db.prepare(`
-    UPDATE ai_models 
-    SET ${updates.join(', ')} 
-    WHERE id = ?
-  `).run(...values);
+  aiModelRepository.update(id, updates);
   
   const updatedModel = getModelById(id);
   if (!updatedModel) {
@@ -285,32 +214,24 @@ export function deleteModel(id: string): void {
     throw new Error('Model not found');
   }
   
-  const primaryAgentCount = db.prepare(
-    'SELECT COUNT(*) as count FROM agents WHERE primary_model_id = ?'
-  ).get(id) as { count: number };
-  
-  if (primaryAgentCount.count > 0) {
-    throw new Error(`无法删除模型: 该模型正在被 ${primaryAgentCount.count} 个 Agent 作为主模型使用`);
+  const primaryAgentCount = agentRepository.countByPrimaryModelId(id);
+  if (primaryAgentCount > 0) {
+    throw new Error(`无法删除模型: 该模型正在被 ${primaryAgentCount} 个 Agent 作为主模型使用`);
   }
   
-  const fallbackAgentCount = db.prepare(
-    'SELECT COUNT(*) as count FROM agents WHERE fallback_model_id = ?'
-  ).get(id) as { count: number };
-  
-  if (fallbackAgentCount.count > 0) {
-    throw new Error(`无法删除模型: 该模型正在被 ${fallbackAgentCount.count} 个 Agent 作为备选模型使用`);
+  const fallbackAgentCount = agentRepository.countByFallbackModelId(id);
+  if (fallbackAgentCount > 0) {
+    throw new Error(`无法删除模型: 该模型正在被 ${fallbackAgentCount} 个 Agent 作为备选模型使用`);
   }
   
-  db.prepare('DELETE FROM ai_models WHERE id = ?').run(id);
+  aiModelRepository.delete(id);
   
   logger.info(`AI model deleted: ${existingModel.name} (${id})`);
 }
 
 export function reorderModels(modelIds: string[]): void {
-  const stmt = db.prepare('UPDATE ai_models SET sort_order = ?, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?');
-  
   modelIds.forEach((id, index) => {
-    stmt.run(index, id);
+    aiModelRepository.updateSortOrder(id, index);
   });
   
   logger.info(`AI models reordered: ${modelIds.length} models updated`);
@@ -364,11 +285,7 @@ export async function testModelConnectivity(modelId: string): Promise<{
     
     const latency = Date.now() - startTime;
     
-    db.prepare(`
-      UPDATE ai_models 
-      SET last_test_status = 'success', last_test_time = datetime('now','localtime'), updated_at = datetime('now','localtime') 
-      WHERE id = ?
-    `).run(modelId);
+    aiModelRepository.updateTestStatus(modelId, 'success');
     
     return {
       success: true,
@@ -379,11 +296,7 @@ export async function testModelConnectivity(modelId: string): Promise<{
     const errorMessage = error instanceof Error ? error.message : String(error);
     const latency = Date.now() - startTime;
     
-    db.prepare(`
-      UPDATE ai_models 
-      SET last_test_status = 'failed', last_test_time = datetime('now','localtime'), updated_at = datetime('now','localtime') 
-      WHERE id = ?
-    `).run(modelId);
+    aiModelRepository.updateTestStatus(modelId, 'failed');
     
     return {
       success: false,
@@ -402,47 +315,47 @@ export function migrateOldConfigToAIModels(): void {
   
   logger.info('Migrating old configuration to AI models...');
   
-  const doubaoKey = db.prepare('SELECT value FROM settings WHERE key = ?').get('DOUBAO_API_KEY') as { value: string } | undefined;
-  const doubaoModel = db.prepare('SELECT value FROM settings WHERE key = ?').get('DOUBAO_MODEL') as { value: string } | undefined;
-  const doubaoApiBase = db.prepare('SELECT value FROM settings WHERE key = ?').get('DOUBAO_API_BASE') as { value: string } | undefined;
+  const doubaoKey = settingsRepository.getValue('DOUBAO_API_KEY');
+  const doubaoModel = settingsRepository.getValue('DOUBAO_MODEL');
+  const doubaoApiBase = settingsRepository.getValue('DOUBAO_API_BASE');
   
-  if (doubaoKey?.value && doubaoKey.value !== 'your-doubao-api-key-here') {
+  if (doubaoKey && doubaoKey !== 'your-doubao-api-key-here') {
     createModel({
       name: '火山引擎 (默认)',
       provider_type: 'volcengine',
-      model_id: doubaoModel?.value || 'doubao-1-5-lite-32k-250115',
-      api_key: doubaoKey.value,
-      api_base: doubaoApiBase?.value || undefined,
+      model_id: doubaoModel || 'doubao-1-5-lite-32k-250115',
+      api_key: doubaoKey,
+      api_base: doubaoApiBase || undefined,
       tags: ['默认配置']
     });
     logger.info('Migrated VolcEngine configuration');
   }
   
-  const openaiKey = db.prepare('SELECT value FROM settings WHERE key = ?').get('OPENAI_API_KEY') as { value: string } | undefined;
-  const openaiModel = db.prepare('SELECT value FROM settings WHERE key = ?').get('OPENAI_MODEL') as { value: string } | undefined;
-  const openaiApiBase = db.prepare('SELECT value FROM settings WHERE key = ?').get('OPENAI_API_BASE') as { value: string } | undefined;
+  const openaiKey = settingsRepository.getValue('OPENAI_API_KEY');
+  const openaiModel = settingsRepository.getValue('OPENAI_MODEL');
+  const openaiApiBase = settingsRepository.getValue('OPENAI_API_BASE');
   
-  if (openaiKey?.value && openaiKey.value !== 'your-openai-api-key-here') {
+  if (openaiKey && openaiKey !== 'your-openai-api-key-here') {
     createModel({
       name: 'OpenAI (默认)',
       provider_type: 'openai',
-      model_id: openaiModel?.value || 'gpt-4o',
-      api_key: openaiKey.value,
-      api_base: openaiApiBase?.value || undefined,
+      model_id: openaiModel || 'gpt-4o',
+      api_key: openaiKey,
+      api_base: openaiApiBase || undefined,
       tags: ['默认配置']
     });
     logger.info('Migrated OpenAI configuration');
   }
   
-  const localAiApiBase = db.prepare('SELECT value FROM settings WHERE key = ?').get('LOCAL_AI_API_BASE') as { value: string } | undefined;
-  const localAiModel = db.prepare('SELECT value FROM settings WHERE key = ?').get('LOCAL_AI_MODEL') as { value: string } | undefined;
+  const localAiApiBase = settingsRepository.getValue('LOCAL_AI_API_BASE');
+  const localAiModel = settingsRepository.getValue('LOCAL_AI_MODEL');
   
-  if (localAiApiBase?.value && localAiApiBase.value !== 'http://host.docker.internal:11434/v1') {
+  if (localAiApiBase && localAiApiBase !== 'http://host.docker.internal:11434/v1') {
     createModel({
       name: '本地 AI (默认)',
       provider_type: 'local',
-      model_id: localAiModel?.value || 'qwen2.5:7b',
-      api_base: localAiApiBase.value,
+      model_id: localAiModel || 'qwen2.5:7b',
+      api_base: localAiApiBase,
       tags: ['默认配置']
     });
     logger.info('Migrated Local AI configuration');
@@ -462,6 +375,9 @@ export function migrateOldConfigToAIModels(): void {
 export function migrateOldAgents(): void {
   logger.info('Migrating old agents to use primary_model_id...');
   
+  // db.exec is a bulk operation, keep it as-is for now since it's a migration script
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, no-restricted-imports
+  const db = require('../../../../models/database').default;
   db.exec(`
     UPDATE agents 
     SET primary_model_id = (

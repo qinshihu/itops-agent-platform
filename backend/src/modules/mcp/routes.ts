@@ -2,7 +2,7 @@
  * MCP (Model Context Protocol) 模块路由入口
  *
  * MCP 路由实现位于 services/mcp/gateway.ts，该文件已是一个完整的 Express Router，
- * 包含所有 `/api/mcp/*` 端点：
+ * 包含所有 `/api/v1/mcp/*` 端点：
  *   - REST: health, manifest, call
  *   - JSON-RPC: rpc
  *   - SSE: sse, message

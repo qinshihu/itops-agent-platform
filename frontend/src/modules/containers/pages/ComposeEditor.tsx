@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Tag, Space, message, Drawer, Form, Input, Popconfirm, Select } from 'antd';
+import { Table, Button, Modal, Tag, Space, message, Drawer, Form, Input, Popconfirm, Select as _Select } from 'antd';
 import { Plus, Edit, Trash2, Search, RefreshCw, Play, Square, RotateCcw, Eye, FileText } from 'lucide-react';
 import api from '../../../lib/api';
 
@@ -49,7 +49,7 @@ export default function ComposeEditor() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/api/compose', { params: { page, pageSize, search } });
+      const res = await api.get('/compose', { params: { page, pageSize, search } });
       setData(res.data.data || []);
       setTotal(res.data.total || 0);
     } catch { message.error('加载失败'); }
@@ -62,10 +62,10 @@ export default function ComposeEditor() {
     const values = await form.validateFields();
     try {
       if (editing) {
-        await api.put(`/api/compose/${editing.id}`, values);
+        await api.put(`/compose/${editing.id}`, values);
         message.success('更新成功');
       } else {
-        await api.post('/api/compose', values);
+        await api.post('/compose', values);
         message.success('创建成功');
       }
       setModalOpen(false);
@@ -76,11 +76,11 @@ export default function ComposeEditor() {
   };
 
   const handleDelete = async (id: string) => {
-    try { await api.delete(`/api/compose/${id}`); message.success('删除成功'); fetchData(); } catch { message.error('删除失败'); }
+    try { await api.delete(`/compose/${id}`); message.success('删除成功'); fetchData(); } catch { message.error('删除失败'); }
   };
 
   const handleAction = async (id: string, action: string) => {
-    try { await api.post(`/api/compose/${id}/${action}`); message.success('操作成功'); fetchData(); } catch { message.error('操作失败'); }
+    try { await api.post(`/compose/${id}/${action}`); message.success('操作成功'); fetchData(); } catch { message.error('操作失败'); }
   };
 
   const handleValidate = async () => {
@@ -88,7 +88,7 @@ export default function ComposeEditor() {
     if (!yaml) { message.warning('请输入 YAML 内容'); return; }
     setValidating(true);
     try {
-      const res = await api.post('/api/compose/validate', { content: yaml });
+      const res = await api.post('/compose/validate', { content: yaml });
       if (res.data.valid) {
         message.success('YAML 语法验证通过');
       } else {
@@ -103,7 +103,7 @@ export default function ComposeEditor() {
     setServicesDrawer(true);
     setServicesLoading(true);
     try {
-      const res = await api.get(`/api/compose/${record.id}/services`);
+      const res = await api.get(`/compose/${record.id}/services`);
       setServicesData(res.data.data || []);
     } catch { message.error('获取服务列表失败'); setServicesData([]); }
     finally { setServicesLoading(false); }
@@ -114,7 +114,7 @@ export default function ComposeEditor() {
     setLogModalOpen(true);
     setLogsLoading(true);
     try {
-      const res = await api.get(`/api/compose/${record.id}/logs`, { params: { tail: 100 } });
+      const res = await api.get(`/compose/${record.id}/logs`, { params: { tail: 100 } });
       setLogs(typeof res.data.data === 'string' ? res.data.data : JSON.stringify(res.data.data, null, 2));
     } catch { message.error('获取日志失败'); setLogs(''); }
     finally { setLogsLoading(false); }
@@ -132,7 +132,7 @@ export default function ComposeEditor() {
     { title: '服务数', dataIndex: 'service_count', key: 'service_count' },
     { title: '运行数', dataIndex: 'running_count', key: 'running_count', render: (v: number) => <Tag color={v > 0 ? 'green' : 'default'}>{v ?? 0}</Tag> },
     { title: '更新时间', dataIndex: 'updated_at', key: 'updated_at' },
-    { title: '操作', key: 'action', width: 320, render: (_: any, record: ComposeProject) => (
+    { title: '操作', key: 'action', width: 320, render: (_: unknown, record: ComposeProject) => (
       <Space>
         <Button type="link" size="small" icon={<Play size={14} />} style={{ color: '#52c41a' }} onClick={() => handleAction(record.id, 'up')}>启动</Button>
         <Button type="link" size="small" danger icon={<Square size={14} />} onClick={() => handleAction(record.id, 'down')}>停止</Button>

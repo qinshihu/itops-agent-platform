@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import type { Socket } from 'socket.io-client';
 import { io } from 'socket.io-client';
 import { ArrowLeft, MonitorPlay, PowerOff, AlertCircle } from 'lucide-react';
+import { logger } from '@/lib/logger';
 import { useAuth } from '../../../contexts/AuthContext';
-import { clsx } from 'clsx';
 
 interface Server {
   id: string;
@@ -28,7 +28,7 @@ export default function RemoteDesktop() {
   const [selectedServer, setSelectedServer] = useState<string | undefined>(serverId);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [vncConfig, setVncConfig] = useState<VNCConfig | null>(null);
+  const [_vncConfig, _setVncConfig] = useState<VNCConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -52,7 +52,7 @@ export default function RemoteDesktop() {
           }
         }
       } catch (err) {
-        console.error('Failed to load servers:', err);
+        logger.error('Failed to load servers:', err);
       } finally {
         setIsLoading(false);
       }
@@ -110,6 +110,7 @@ export default function RemoteDesktop() {
         setIsConnected(true);
       });
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       socket.on('vnc:error', (data: any) => {
         setError(data.message);
         setIsConnected(false);
@@ -132,7 +133,7 @@ export default function RemoteDesktop() {
       }
 
     } catch (err) {
-      console.error('Failed to connect:', err);
+      logger.error('Failed to connect:', err);
       setError('连接失败: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setIsLoading(false);

@@ -94,6 +94,19 @@ export const tasksRepo = {
   },
 
   /**
+   * 统计停滞任务数（running 超过 1 小时）
+   * 对应 selfMonitorService.ts
+   */
+  countStalled(): number {
+    const row = db.prepare(`
+      SELECT COUNT(*) as count FROM tasks
+      WHERE status = 'running'
+      AND julianday('now') - julianday(created_at) > 0.0417
+    `).get() as { count: number };
+    return row.count;
+  },
+
+  /**
    * 创建任务（5 字段，status 硬编码 'pending'，含 context）
    * 对应 taskRoutes.ts T-INSERT-1
    */

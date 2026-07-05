@@ -51,6 +51,7 @@ class CostAnalysisService {
       for (const c of containers) {
         try {
           const info = await dockerService.getContainer(c.id);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const hostConfig = info.hostConfig as any;
           const cpuShares = hostConfig?.cpuShares || 1024;
           const cpuCores = Math.max(cpuShares / 1024, 0.1);
@@ -79,6 +80,7 @@ class CostAnalysisService {
 
   async getVMCosts(): Promise<{ data: CostItem[]; totalMonthly: number }> {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows = virtualMachineRepository.list({ status: 'running' }) as any[];
       const items: CostItem[] = [];
       let totalMonthly = 0;
@@ -153,7 +155,7 @@ class CostAnalysisService {
     return { data: recommendations, totalSaving };
   }
 
-  async getSummary(): Promise<any> {
+  async getSummary(): Promise<unknown> {
     const [containerResult, vmResult, recommendationResult] = await Promise.all([
       this.getContainerCosts(),
       this.getVMCosts(),

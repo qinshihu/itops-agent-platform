@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * 统一 API 响应格式工具
  * 所有路由统一使用此工具返回，保证前端始终收到一致格式

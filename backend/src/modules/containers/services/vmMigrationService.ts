@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { logger } from '../../../utils/logger';
 import { randomUUID } from 'crypto';
-import db from '../../../models/database';
+import { vmMigrationRepository, virtualMachineRepository } from '../../../../repositories';
 import { vmManagementService } from '../../containers/services/vmManagement';
 
 interface MigrationTask {
@@ -42,10 +43,17 @@ class VmMigrationService {
         createdAt: new Date().toISOString(),
       };
 
-      db.prepare(`
-        INSERT INTO vm_migrations (id, vm_id, vm_name, source_host, target_host, platform_id, status, reason, started_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(task.id, vmId, vm.name, task.sourceHost, targetHost, platformId, 'running', reason || null, task.startedAt);
+      vmMigrationRepository.create({
+        id: task.id,
+        vm_id: vmId,
+        vm_name: vm.name,
+        source_host: task.sourceHost,
+        target_host: targetHost,
+        platform_id: platformId,
+        status: 'running',
+        reason: reason || null,
+        started_at: task.startedAt,
+      });
 
       this.activeMigrations.set(task.id, task);
 
@@ -73,17 +81,16 @@ class VmMigrationService {
         clearInterval(interval);
         this.progressIntervals.delete(task.id);
 
-        db.prepare(`
-          UPDATE vm_migrations SET status='completed', progress=100, completed_at=? WHERE id=?
-        `).run(task.completedAt, task.id);
+        vmMigrationRepository.updateStatus(task.id, 'completed');
+        vmMigrationRepository.updateProgress(task.id, 100);
 
-        db.prepare("UPDATE virtual_machines SET host=?, updated_at=datetime('now','localtime') WHERE name=?").run(task.targetHost, task.vmName);
+        virtualMachineRepository.update(task.vmId, { host: task.targetHost });
 
         logger.info(`✅ VM migration completed: ${task.vmName} → ${task.targetHost}`);
       }
 
       task.progress = progress;
-      db.prepare('UPDATE vm_migrations SET progress=? WHERE id=?').run(progress, task.id);
+      vmMigrationRepository.updateProgress(task.id, progress);
     }, 2000);
 
     this.progressIntervals.set(task.id, interval);
@@ -101,24 +108,20 @@ class VmMigrationService {
 
     task.status = 'cancelled';
     this.activeMigrations.delete(migrationId);
-    db.prepare("UPDATE vm_migrations SET status='cancelled' WHERE id=?").run(migrationId);
+    vmMigrationRepository.updateStatus(migrationId, 'cancelled');
 
     return true;
   }
 
   getMigration(migrationId: string): MigrationTask | null {
-    const row = db.prepare('SELECT * FROM vm_migrations WHERE id = ?').get(migrationId) as any;
+    const row = vmMigrationRepository.getById(migrationId);
     if (!row) return null;
     return this.rowToTask(row);
   }
 
   listMigrations(vmId?: string): MigrationTask[] {
-    let query = 'SELECT * FROM vm_migrations';
-    const params: any[] = [];
-    if (vmId) { query += ' WHERE vm_id = ?'; params.push(vmId); }
-    query += ' ORDER BY created_at DESC LIMIT 50';
-    const rows = db.prepare(query).all(...params) as any[];
-    return rows.map((r: any) => this.rowToTask(r));
+    const { rows } = vmMigrationRepository.list({ vm_id: vmId });
+    return rows.map((r) => this.rowToTask(r));
   }
 
   getActiveMigrations(): MigrationTask[] {

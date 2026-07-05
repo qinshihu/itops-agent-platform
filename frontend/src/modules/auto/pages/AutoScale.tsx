@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, Table, Tabs, Row, Col, Tag, Button, Modal, Input, Select, InputNumber, Switch, Space, message, Spin, Empty, DatePicker, Statistic } from 'antd';
 import { ReloadOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { TrendingUp, Activity, ArrowUpRight, ArrowDownRight, Server, Zap, Play, Pause } from 'lucide-react';
+import { TrendingUp, _Activity, ArrowUpRight, ArrowDownRight, Server, Zap, Play as _Play, Pause as _Pause } from 'lucide-react';
 import api from '../../../lib/api';
 
 // ==================== 类型定义 ====================
@@ -69,7 +69,7 @@ export default function AutoScale() {
   const fetchRules = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get('/api/auto-scale/rules');
+      const res = await api.get('/auto-scale/rules');
       setRules(res.data.data || []);
     } catch { message.error('获取规则列表失败'); }
     finally { setLoading(false); }
@@ -83,7 +83,7 @@ export default function AutoScale() {
         params.startTime = timeRange[0];
         params.endTime = timeRange[1];
       }
-      const res = await api.get('/api/auto-scale/history', { params });
+      const res = await api.get('/auto-scale/history', { params });
       setHistory(res.data.data || []);
       setHistoryTotal(res.data.total || 0);
     } catch { message.error('获取伸缩历史失败'); }
@@ -92,7 +92,7 @@ export default function AutoScale() {
 
   const fetchSummary = useCallback(async () => {
     try {
-      const res = await api.get('/api/auto-scale/summary');
+      const res = await api.get('/auto-scale/summary');
       setSummary(res.data.data || { activeRules: 0, todayScaleUp: 0, todayScaleDown: 0, totalManagedInstances: 0 });
     } catch { /* ignore */ }
   }, []);
@@ -133,10 +133,10 @@ export default function AutoScale() {
     }
     try {
       if (editingRule) {
-        await api.put(`/api/auto-scale/rules/${editingRule.id}`, ruleForm);
+        await api.put(`/auto-scale/rules/${editingRule.id}`, ruleForm);
         message.success('规则已更新');
       } else {
-        await api.post('/api/auto-scale/rules', ruleForm);
+        await api.post('/auto-scale/rules', ruleForm);
         message.success('规则已创建');
       }
       setRuleModalVisible(false);
@@ -154,7 +154,7 @@ export default function AutoScale() {
       cancelText: '取消',
       onOk: async () => {
         try {
-          await api.delete(`/api/auto-scale/rules/${rule.id}`);
+          await api.delete(`/auto-scale/rules/${rule.id}`);
           message.success('规则已删除');
           fetchRules();
           fetchSummary();
@@ -165,7 +165,7 @@ export default function AutoScale() {
 
   const toggleRule = async (rule: ScaleRule, checked: boolean) => {
     try {
-      await api.put(`/api/auto-scale/rules/${rule.id}`, { ...rule, enabled: checked });
+      await api.put(`/auto-scale/rules/${rule.id}`, { ...rule, enabled: checked });
       message.success(checked ? '规则已启用' : '规则已禁用');
       fetchRules();
     } catch { message.error('操作失败'); }
@@ -316,7 +316,7 @@ export default function AutoScale() {
                   <DatePicker.RangePicker
                     showTime
                     onChange={(dates) => {
-                      if (dates && dates[0] && dates[1]) {
+                      if (dates?.[0] && dates?.[1]) {
                         setTimeRange([dates[0].toISOString(), dates[1].toISOString()]);
                       } else {
                         setTimeRange(null);

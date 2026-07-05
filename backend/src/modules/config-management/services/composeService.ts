@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
-import db from '../../../models/database';
+import { composeProjectsRepo } from '../../../repositories/configRepository';
 import fs from 'fs';
 import path from 'path';
 import { getErrorMessage } from '../../../utils/errorHelpers';
@@ -45,7 +46,7 @@ class ComposeService {
    * 列出所有 Compose 项目
    */
   listProjects(): ComposeProject[] {
-    const rows = db.prepare('SELECT * FROM compose_projects ORDER BY updated_at DESC').all() as any[];
+    const rows = composeProjectsRepo.listAll();
     return rows.map(r => ({
       id: r.id, name: r.name, description: r.description,
       composeContent: r.compose_content,
@@ -60,7 +61,7 @@ class ComposeService {
    * 获取项目详情
    */
   getProject(projectId: string): ComposeProject | null {
-    const row = db.prepare('SELECT * FROM compose_projects WHERE id = ?').get(projectId) as any;
+    const row = composeProjectsRepo.getById(projectId);
     if (!row) return null;
     return {
       id: row.id, name: row.name, description: row.description,
@@ -83,10 +84,14 @@ class ComposeService {
     fs.mkdirSync(projectDir, { recursive: true });
     fs.writeFileSync(path.join(projectDir, 'docker-compose.yml'), composeContent);
 
-    db.prepare(`
-      INSERT INTO compose_projects (id, name, description, compose_content, working_dir, tags)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, name, description || '', composeContent, projectDir, JSON.stringify(tags || []));
+    composeProjectsRepo.create({
+      id,
+      name,
+      description: description || '',
+      compose_content: composeContent,
+      working_dir: projectDir,
+      tags: JSON.stringify(tags || []),
+    });
 
     return this.getProject(id)!;
   }
@@ -105,16 +110,13 @@ class ComposeService {
     }
 
     const now = new Date().toISOString();
-    db.prepare(`
-      UPDATE compose_projects SET name=?, description=?, compose_content=?, tags=?, updated_at=?
-      WHERE id=?
-    `).run(
-      updates.name || existing.name,
-      updates.description !== undefined ? updates.description : existing.description,
-      updates.composeContent || existing.composeContent,
-      updates.tags ? JSON.stringify(updates.tags) : JSON.stringify(existing.tags || []),
-      now, projectId
-    );
+    composeProjectsRepo.updateNamesAndContent(projectId, {
+      name: updates.name || existing.name,
+      description: updates.description !== undefined ? updates.description : existing.description,
+      compose_content: updates.composeContent || existing.composeContent,
+      tags: updates.tags ? JSON.stringify(updates.tags) : JSON.stringify(existing.tags || []),
+      updated_at: now,
+    });
 
     return this.getProject(projectId)!;
   }
@@ -134,7 +136,7 @@ class ComposeService {
       fs.rmSync(project.workingDir, { recursive: true, force: true });
     }
 
-    db.prepare('DELETE FROM compose_projects WHERE id = ?').run(projectId);
+    composeProjectsRepo.delete(projectId);
   }
 
   /**
@@ -144,7 +146,7 @@ class ComposeService {
     const project = this.getProject(projectId);
     if (!project) throw new Error('项目不存在');
 
-    db.prepare(`UPDATE compose_projects SET status='deploying', updated_at=datetime('now','localtime') WHERE id=?`).run(projectId);
+    composeProjectsRepo.setDeploying(projectId);
 
     try {
       const { stdout, stderr } = await execAsync('docker compose up -d', {
@@ -155,7 +157,7 @@ class ComposeService {
       await this.refreshStatus(projectId);
       return stdout || stderr;
     } catch (err: unknown) {
-      db.prepare(`UPDATE compose_projects SET status='error', updated_at=datetime('now','localtime') WHERE id=?`).run(projectId);
+      composeProjectsRepo.setError(projectId);
       throw new Error((err as { stderr?: string }).stderr || getErrorMessage(err));
     }
   }
@@ -172,7 +174,7 @@ class ComposeService {
         cwd: project.workingDir || this.composeDataDir,
         timeout: 60000,
       });
-      db.prepare(`UPDATE compose_projects SET status='stopped', running_count=0, updated_at=datetime('now','localtime') WHERE id=?`).run(projectId);
+      composeProjectsRepo.setStopped(projectId);
       return stdout || stderr;
     } catch (err: unknown) {
       throw new Error((err as { stderr?: string }).stderr || getErrorMessage(err));
@@ -271,10 +273,7 @@ class ComposeService {
       const services = await this.listServices(projectId);
       const runningCount = services.filter(s => s.status.toLowerCase().includes('up')).length;
 
-      db.prepare(`
-        UPDATE compose_projects SET status=?, service_count=?, running_count=?, updated_at=datetime('now','localtime')
-        WHERE id=?
-      `).run(runningCount > 0 ? 'running' : 'stopped', services.length, runningCount, projectId);
+      composeProjectsRepo.updateStatus(projectId, runningCount > 0 ? 'running' : 'stopped', services.length, runningCount);
     } catch (err) {
       logger.error('Failed to refresh compose status:', err);
     }

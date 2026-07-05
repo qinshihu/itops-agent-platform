@@ -46,7 +46,7 @@ export default function RCADetail() {
   const { data: detail, isLoading } = useQuery({
     queryKey: ['root-cause-analysis', id],
     queryFn: async () => {
-      const res = await api.get(`/api/root-cause-analysis/${id}`);
+      const res = await api.get(`/root-cause-analysis/${id}`);
       return res.data.data as RCADetail;
     },
     enabled: !!id,

@@ -16,6 +16,7 @@
  */
 
 import db from '../models/database';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { KnowledgeEntry } from './types/ai';
 
 // ── 类型定义 ──

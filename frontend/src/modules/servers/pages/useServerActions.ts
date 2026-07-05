@@ -29,11 +29,11 @@ interface ServerImportItem {
   group_id?: string;
 }
 
-interface ImportResult {
+export interface ImportResult {
   success: number;
   failed: number;
   skipped?: number;
-  details?: Array<{ name: string; error?: string }>;
+  details?: Array<{ name: string; hostname?: string; status?: string; error?: string }>;
   errors?: string[];
 }
 
@@ -167,7 +167,7 @@ export function useServerActions() {
   const { data: agents } = useQuery({
     queryKey: ['agents'],
     queryFn: async () => {
-      const res = await api.get('/api/agents');
+      const res = await api.get('/agents');
       return res.data.data as Array<{ id: string; name: string; enabled: number; category?: string }>;
     },
     enabled: true,
@@ -176,7 +176,7 @@ export function useServerActions() {
   const { data: sshKeys } = useQuery({
     queryKey: ['ssh-keys'],
     queryFn: async () => {
-      const res = await api.get('/api/ssh-keys');
+      const res = await api.get('/ssh-keys');
       return res.data.data as Array<{ id: string; name: string; key_type: string; fingerprint: string | null; usage_count: number }>;
     },
   });
@@ -184,7 +184,7 @@ export function useServerActions() {
   const { data: groupsData } = useQuery({
     queryKey: ['server-groups'],
     queryFn: async () => {
-      const res = await api.get('/api/server-groups/tree');
+      const res = await api.get('/server-groups/tree');
       return res.data.data as ServerGroup[];
     },
   });
@@ -192,7 +192,7 @@ export function useServerActions() {
   const { data: servers, isLoading } = useQuery({
     queryKey: ['servers'],
     queryFn: async () => {
-      const res = await api.get('/api/servers');
+      const res = await api.get('/servers');
       return res.data.data as Server[];
     },
   });
@@ -243,7 +243,7 @@ export function useServerActions() {
     queryKey: ['commandHistory', selectedServer?.id],
     queryFn: async () => {
       if (!selectedServer) return [];
-      const res = await api.get(`/api/servers/${selectedServer.id}/command-history`);
+      const res = await api.get(`/servers/${selectedServer.id}/command-history`);
       return res.data.data as CommandHistoryItem[];
     },
     enabled: !!selectedServer && activeTab === 'command-history',
@@ -253,7 +253,7 @@ export function useServerActions() {
     queryKey: ['complianceHistory', selectedServer?.id],
     queryFn: async () => {
       if (!selectedServer) return [];
-      const res = await api.get(`/api/servers/${selectedServer.id}/compliance-history`);
+      const res = await api.get(`/servers/${selectedServer.id}/compliance-history`);
       return res.data.data as ComplianceCheck[];
     },
     enabled: !!selectedServer && activeTab === 'compliance-history',
@@ -267,7 +267,7 @@ export function useServerActions() {
         tags: data.tags ? data.tags.split(',').map((t: string) => t.trim()) : [],
         ssh_key_id: selectedSshKeyId || undefined,
       };
-      const res = await api.post('/api/servers', payload);
+      const res = await api.post('/servers', payload);
       return res.data;
     },
     onSuccess: () => {
@@ -293,7 +293,7 @@ export function useServerActions() {
       } else {
         delete payload.private_key;
       }
-      const res = await api.put(`/api/servers/${id}`, payload);
+      const res = await api.put(`/servers/${id}`, payload);
       return res.data;
     },
     onSuccess: () => {
@@ -310,7 +310,7 @@ export function useServerActions() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/servers/${id}`);
+      await api.delete(`/servers/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['servers'] });
@@ -325,14 +325,14 @@ export function useServerActions() {
 
   const testConnectionMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.post(`/api/server-commands/${id}/test`);
+      const res = await api.post(`/server-commands/${id}/test`);
       return res.data;
     },
   });
 
   const executeCommandMutation = useMutation({
     mutationFn: async ({ id, command }: { id: string; command: string }) => {
-      const res = await api.post(`/api/server-commands/${id}/exec`, { command });
+      const res = await api.post(`/server-commands/${id}/exec`, { command });
       return res.data;
     },
     onSuccess: () => {
@@ -342,7 +342,7 @@ export function useServerActions() {
 
   const runComplianceMutation = useMutation({
     mutationFn: async ({ id, options }: { id: string; options?: { useAI?: boolean; concurrency?: number } }) => {
-      const res = await api.post(`/api/server-commands/${id}/compliance`, options || {});
+      const res = await api.post(`/server-commands/${id}/compliance`, options || {});
       return res.data;
     },
     onSuccess: () => {
@@ -352,7 +352,7 @@ export function useServerActions() {
 
   const collectInfoMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.post(`/api/server-management/${id}/collect-info`);
+      const res = await api.post(`/server-management/${id}/collect-info`);
       return res.data;
     },
     onSuccess: () => {
@@ -362,7 +362,7 @@ export function useServerActions() {
 
   const collectAllMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/api/server-management/collect-all');
+      const res = await api.post('/server-management/collect-all');
       return res.data;
     },
     onSuccess: () => {
@@ -372,7 +372,7 @@ export function useServerActions() {
 
   const collectMetricsMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.post(`/api/server-management/${id}/collect-metrics`);
+      const res = await api.post(`/server-management/${id}/collect-metrics`);
       return res.data;
     },
     onSuccess: () => {
@@ -382,7 +382,7 @@ export function useServerActions() {
 
   const collectAllMetricsMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/api/server-management/collect-all-metrics');
+      const res = await api.post('/server-management/collect-all-metrics');
       return res.data;
     },
     onSuccess: () => {
@@ -392,14 +392,14 @@ export function useServerActions() {
 
   const importServersMutation = useMutation({
     mutationFn: async (data: { servers: ServerImportItem[]; test_connection: boolean }) => {
-      const res = await api.post('/api/server-management/import', data);
+      const res = await api.post('/server-management/import', data);
       return res.data;
     },
   });
 
   const createGroupMutation = useMutation({
     mutationFn: async (data: typeof groupFormData) => {
-      const res = await api.post('/api/server-groups', data);
+      const res = await api.post('/server-groups', data);
       return res.data;
     },
     onSuccess: () => {
@@ -413,7 +413,7 @@ export function useServerActions() {
 
   const updateGroupMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: typeof groupFormData }) => {
-      const res = await api.put(`/api/server-groups/${id}`, data);
+      const res = await api.put(`/server-groups/${id}`, data);
       return res.data;
     },
     onSuccess: () => {
@@ -577,7 +577,7 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
 
 用户需求：${aiPrompt}`;
 
-      const res = await api.post(`/api/agents/${enabledAgent.id}/test`, {
+      const res = await api.post(`/agents/${enabledAgent.id}/test`, {
         input: userInput,
         serverIds: [aiCommandServer.id],
       });

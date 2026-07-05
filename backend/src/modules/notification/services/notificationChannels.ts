@@ -199,6 +199,7 @@ export async function sendNotification(
       }
 
     default:
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       logger.warn(`⚠️ 未知的通知渠道类型: ${(config as any).type}`);
       return false;
   }

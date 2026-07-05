@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import https from 'https';
 import { logger } from '../../../../../utils/logger';
 

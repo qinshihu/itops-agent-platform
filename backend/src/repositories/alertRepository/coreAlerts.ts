@@ -130,6 +130,17 @@ export function createSimple(input: {
 }
 
 /**
+ * 查找是否存在活跃告警（source + title + 未关闭状态）
+ * 对应 selfMonitorService.ts
+ */
+export function findActiveBySourceAndTitle(source: string, title: string): { id: string } | undefined {
+  return db.prepare(`
+    SELECT id FROM alerts
+    WHERE source = ? AND title = ? AND status IN ('new', 'acknowledged')
+  `).get(source, title) as { id: string } | undefined;
+}
+
+/**
  * 更新告警状态
  */
 export function updateStatus(id: string, status: 'new' | 'acknowledged' | 'resolved'): AlertRecord | undefined {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { logger } from '../../../utils/logger';
 import { workflowMappingsRepo, workflowsRepo, tasksRepo } from '../../../repositories';
 import { executeWorkflow } from '../../workflow/services/workflowExecutor';

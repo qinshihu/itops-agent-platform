@@ -1,4 +1,4 @@
-import db from '../../../models/database';
+import { changeRepository } from '../../../repositories';
 import { randomUUID } from 'crypto';
 
 export interface ChangeInput {
@@ -50,20 +50,17 @@ class ChangeService {
     const id = randomUUID();
     const now = new Date().toISOString();
 
-    db.prepare(`
-      INSERT INTO change_records (id, server_id, change_type, description, changed_by, status, related_alert_id, is_root_cause, metadata, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-    `).run(
+    changeRepository.create({
       id,
-      input.server_id,
-      input.change_type,
-      input.description || null,
-      input.changed_by || null,
-      input.status || 'completed',
-      input.related_alert_id || null,
-      input.metadata ? JSON.stringify(input.metadata) : null,
-      now
-    );
+      server_id: input.server_id,
+      change_type: input.change_type,
+      description: input.description || null,
+      changed_by: input.changed_by || null,
+      status: input.status || 'completed',
+      related_alert_id: input.related_alert_id || null,
+      metadata: input.metadata ? JSON.stringify(input.metadata) : null,
+      created_at: now,
+    });
 
     return this.getById(id)!;
   }
@@ -73,36 +70,17 @@ class ChangeService {
     const limit = filters.limit || 20;
     const offset = (page - 1) * limit;
 
-    let query = 'SELECT * FROM change_records WHERE 1=1';
-    let countQuery = 'SELECT COUNT(*) as total FROM change_records WHERE 1=1';
-    const params: unknown[] = [];
-
-    if (filters.server_id) {
-      query += ' AND server_id = ?';
-      countQuery += ' AND server_id = ?';
-      params.push(filters.server_id);
-    }
-
-    if (filters.change_type) {
-      query += ' AND change_type = ?';
-      countQuery += ' AND change_type = ?';
-      params.push(filters.change_type);
-    }
-
-    if (filters.status) {
-      query += ' AND status = ?';
-      countQuery += ' AND status = ?';
-      params.push(filters.status);
-    }
-
-    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-
-    const records = db.prepare(query).all(...params, limit, offset) as ChangeRecordDB[];
-    const totalResult = db.prepare(countQuery).get(...params) as { total: number };
+    const { records, total } = changeRepository.list({
+      server_id: filters.server_id,
+      change_type: filters.change_type,
+      status: filters.status,
+      limit,
+      offset,
+    });
 
     return {
       records: records.map(r => this.dbToChangeRecord(r)),
-      total: totalResult.total,
+      total,
       page,
       limit,
     };
@@ -155,12 +133,14 @@ class ChangeService {
       return existing;
     }
 
-    fields.push('updated_at = datetime(\'now\',\'localtime\')');
-    params.push(id);
-
-    db.prepare(`
-      UPDATE change_records SET ${fields.join(', ')} WHERE id = ?
-    `).run(...params);
+    changeRepository.update(id, {
+      change_type: input.change_type,
+      description: input.description,
+      changed_by: input.changed_by,
+      status: input.status,
+      related_alert_id: input.related_alert_id,
+      metadata: input.metadata ? JSON.stringify(input.metadata) : undefined,
+    });
 
     return this.getById(id)!;
   }
@@ -171,31 +151,23 @@ class ChangeService {
       return null;
     }
 
-    db.prepare(`
-      UPDATE change_records SET is_root_cause = 1, updated_at = datetime('now','localtime') WHERE id = ?
-    `).run(id);
+    changeRepository.markAsRootCause(id);
 
     return this.getById(id)!;
   }
 
   getRecentByServer(serverId: string, hours = 24): ChangeRecord[] {
-    const records = db.prepare(`
-      SELECT * FROM change_records 
-      WHERE server_id = ? 
-      AND created_at >= datetime('now', ?)
-      ORDER BY created_at DESC
-    `).all(serverId, `-${hours} hours`) as ChangeRecordDB[];
+    const records = changeRepository.getRecentByServer(serverId, hours) as ChangeRecordDB[];
 
     return records.map(r => this.dbToChangeRecord(r));
   }
 
   delete(id: string): boolean {
-    const result = db.prepare('DELETE FROM change_records WHERE id = ?').run(id);
-    return result.changes > 0;
+    return changeRepository.delete(id);
   }
 
   private getById(id: string): ChangeRecord | null {
-    const record = db.prepare('SELECT * FROM change_records WHERE id = ?').get(id) as ChangeRecordDB | undefined;
+    const record = changeRepository.getById(id) as ChangeRecordDB | undefined;
     if (!record) return null;
     return this.dbToChangeRecord(record);
   }

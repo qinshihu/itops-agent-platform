@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import snmp from 'net-snmp';
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';

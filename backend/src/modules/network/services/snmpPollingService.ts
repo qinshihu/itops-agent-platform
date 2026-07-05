@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * =============================================================================
  * ITOps Agent Platform - SNMP 轮询巡检服务
@@ -127,7 +128,7 @@ class SnmpPollingService {
 
     // 获取设备信息
     const device = networkDeviceRepository.getById(deviceId);
-    if (!device || !device.snmp_enabled) {
+    if (!device?.snmp_enabled) {
       logger.warn(`SNMP poll skipped: device ${deviceId} not found or SNMP disabled`);
       return null;
     }

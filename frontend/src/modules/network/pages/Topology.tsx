@@ -7,6 +7,7 @@ import api from '../../../lib/api';
 import TopologyGraph from '../../../modules/network/components/TopologyGraph';
 import type { TopologyNode, TopologyEdge } from '../../../modules/network/components/TopologyGraph';
 import { useToast } from '../../../contexts/ToastContext';
+import { getAxiosErrorMessage } from '@/lib/errorHandler';
 
 interface Dependency {
   id?: string;
@@ -59,15 +60,15 @@ function DeleteDependencyButton({ dependencyId }: { dependencyId: string }) {
   
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.delete(`/api/topology/dependency/${dependencyId}`);
+      const res = await api.delete(`/topology/dependency/${dependencyId}`);
       return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['topology'] });
       toast.success('依赖删除成功');
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.error || '删除失败');
+    onError: (err: unknown) => {
+      toast.error(getAxiosErrorMessage(err, '删除失败'));
     },
   });
 
@@ -98,7 +99,7 @@ export default function Topology() {
   const { data: topologyData, isLoading: topologyLoading, refetch: refetchTopology } = useQuery({
     queryKey: ['topology', 'global'],
     queryFn: async () => {
-      const res = await api.get('/api/topology/global');
+      const res = await api.get('/topology/global');
       return res.data.data as TopologyData;
     },
   });
@@ -106,7 +107,7 @@ export default function Topology() {
   const { data: dependencies, isLoading: depsLoading } = useQuery({
     queryKey: ['topology', 'dependencies'],
     queryFn: async () => {
-      const res = await api.get('/api/topology/dependency');
+      const res = await api.get('/topology/dependency');
       return res.data.data as Dependency[];
     },
   });
@@ -114,14 +115,14 @@ export default function Topology() {
   const { data: servers } = useQuery({
     queryKey: ['servers'],
     queryFn: async () => {
-      const res = await api.get('/api/servers');
+      const res = await api.get('/servers');
       return res.data.data as Server[];
     },
   });
 
   const addDependencyMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const res = await api.post('/api/topology/dependency', data);
+      const res = await api.post('/topology/dependency', data);
       return res.data;
     },
     onSuccess: () => {
@@ -136,8 +137,8 @@ export default function Topology() {
         port: 80,
       });
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.error || '添加失败');
+    onError: (err: unknown) => {
+      toast.error(getAxiosErrorMessage(err, '添加失败'));
     },
   });
 
@@ -151,15 +152,15 @@ export default function Topology() {
     try {
       for (const server of servers) {
         try {
-          await api.post(`/api/topology/discover/${server.id}`);
+          await api.post(`/topology/discover/${server.id}`);
         } catch {
           // 单个服务器失败不影响其他服务器
         }
       }
       queryClient.invalidateQueries({ queryKey: ['topology'] });
       toast.success('依赖发现完成');
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || '依赖发现失败');
+    } catch (err: unknown) {
+      toast.error(getAxiosErrorMessage(err, '依赖发现失败'));
     } finally {
       setIsDiscovering(false);
     }

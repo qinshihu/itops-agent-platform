@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Test setup: provides an in-memory SQLite database for isolated testing
  * All services that depend on `import db from '../models/database'` will

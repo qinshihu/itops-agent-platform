@@ -4,7 +4,7 @@
  */
 
 import api from '@/lib/api';
-import type { Agent as AgentEntity, AiModel } from '../../types/agent';
+import type { Agent as _AgentEntity, AiModel as _AiModel } from '../../types/agent';
 
 // ============================================================
 // 类型定义
@@ -187,47 +187,47 @@ export const aiApi = {
 
   /** 获取 AI 模型列表 */
   async listModels(): Promise<AIModel[]> {
-    const { data } = await api.get('/api/ai-models');
+    const { data } = await api.get('/ai-models');
     return data.data;
   },
 
   /** 创建 AI 模型 */
   async createModel(input: AIModelInput): Promise<AIModel> {
-    const { data } = await api.post('/api/ai-models', input);
+    const { data } = await api.post('/ai-models', input);
     return data.data;
   },
 
   /** 更新 AI 模型 */
   async updateModel(id: string, input: AIModelUpdate): Promise<AIModel> {
-    const { data } = await api.put(`/api/ai-models/${id}`, input);
+    const { data } = await api.put(`/ai-models/${id}`, input);
     return data.data;
   },
 
   /** 删除 AI 模型 */
   async deleteModel(id: string): Promise<void> {
-    await api.delete(`/api/ai-models/${id}`);
+    await api.delete(`/ai-models/${id}`);
   },
 
   /** 切换模型启用状态 */
   async toggleModel(id: string, enabled: boolean): Promise<AIModel> {
-    const { data } = await api.put(`/api/ai-models/${id}`, { enabled: enabled ? 1 : 0 });
+    const { data } = await api.put(`/ai-models/${id}`, { enabled: enabled ? 1 : 0 });
     return data.data;
   },
 
   /** 设置默认模型 */
   async setDefaultModel(id: string): Promise<AIModel> {
-    const { data } = await api.put(`/api/ai-models/${id}`, { is_default: 1 });
+    const { data } = await api.put(`/ai-models/${id}`, { is_default: 1 });
     return data.data;
   },
 
   /** 模型排序 */
   async reorderModels(modelIds: string[]): Promise<void> {
-    await api.put('/api/ai-models/reorder', { modelIds });
+    await api.put('/ai-models/reorder', { modelIds });
   },
 
   /** 测试模型连接 */
   async testModel(id: string): Promise<unknown> {
-    const { data } = await api.post(`/api/ai-models/${id}/test`);
+    const { data } = await api.post(`/ai-models/${id}/test`);
     return data;
   },
 
@@ -235,42 +235,42 @@ export const aiApi = {
 
   /** 获取 Agent 列表 */
   async listAgents(params?: AgentListParams): Promise<Agent[]> {
-    const { data } = await api.get('/api/agents', { params });
+    const { data } = await api.get('/agents', { params });
     return data.data;
   },
 
   /** 获取 Agent 详情 */
   async getAgent(id: string): Promise<Agent> {
-    const { data } = await api.get(`/api/agents/${id}`);
+    const { data } = await api.get(`/agents/${id}`);
     return data.data;
   },
 
   /** 创建 Agent */
   async createAgent(input: AgentInput): Promise<Agent> {
-    const { data } = await api.post('/api/agents', input);
+    const { data } = await api.post('/agents', input);
     return data.data;
   },
 
   /** 更新 Agent */
   async updateAgent(id: string, input: Partial<AgentInput>): Promise<Agent> {
-    const { data } = await api.put(`/api/agents/${id}`, input);
+    const { data } = await api.put(`/agents/${id}`, input);
     return data.data;
   },
 
   /** 删除 Agent */
   async deleteAgent(id: string): Promise<void> {
-    await api.delete(`/api/agents/${id}`);
+    await api.delete(`/agents/${id}`);
   },
 
   /** 测试 Agent */
   async testAgent(id: string, input: AgentTestInput): Promise<AgentTestResult> {
-    const { data } = await api.post(`/api/agents/${id}/test`, input);
+    const { data } = await api.post(`/agents/${id}/test`, input);
     return data.data;
   },
 
   /** 获取 Agent 执行历史 */
   async listAgentExecutions(id: string, params?: { limit?: number }): Promise<AgentExecution[]> {
-    const { data } = await api.get(`/api/agents/${id}/executions`, { params });
+    const { data } = await api.get(`/agents/${id}/executions`, { params });
     return data.data;
   },
 
@@ -278,41 +278,41 @@ export const aiApi = {
 
   /** 获取根因分析列表 */
   async listRcas(): Promise<RootCauseAnalysis[]> {
-    const { data } = await api.get('/api/root-cause-analysis');
+    const { data } = await api.get('/root-cause-analysis');
     return data.data || [];
   },
 
   /** 获取根因分析详情 */
   async getRca(id: string): Promise<RootCauseAnalysis> {
-    const { data } = await api.get(`/api/root-cause-analysis/${id}`);
+    const { data } = await api.get(`/root-cause-analysis/${id}`);
     return data.data;
   },
 
   /** 创建根因分析 */
   async createRca(input: RcaInput): Promise<RootCauseAnalysis> {
-    const { data } = await api.post('/api/root-cause-analysis', input);
+    const { data } = await api.post('/root-cause-analysis', input);
     return data.data;
   },
 
   /** 执行根因分析 */
   async analyzeRca(id: string): Promise<unknown> {
-    const { data } = await api.post(`/api/root-cause-analysis/${id}/analyze`);
+    const { data } = await api.post(`/root-cause-analysis/${id}/analyze`);
     return data;
   },
 
   /** 删除根因分析 */
   async deleteRca(id: string): Promise<void> {
-    await api.delete(`/api/root-cause-analysis/${id}`);
+    await api.delete(`/root-cause-analysis/${id}`);
   },
 
   /** 自动分析告警根因 */
   async autoAnalyzeAlert(alertId: string): Promise<void> {
-    await api.post(`/api/root-cause-analysis/auto-analyze/${alertId}`);
+    await api.post(`/root-cause-analysis/auto-analyze/${alertId}`);
   },
 
   /** 获取根因分析统计 */
   async getRcaStats(): Promise<RcaStats> {
-    const { data } = await api.get('/api/root-cause-analysis/stats');
+    const { data } = await api.get('/root-cause-analysis/stats');
     return data.data;
   },
 
@@ -320,32 +320,32 @@ export const aiApi = {
 
   /** 获取知识库列表 */
   async listKnowledge(params?: KnowledgeListParams): Promise<Knowledge[]> {
-    const { data } = await api.get('/api/knowledge', { params });
+    const { data } = await api.get('/knowledge', { params });
     return data.data;
   },
 
   /** 创建知识条目 */
   async createKnowledge(input: KnowledgeInput): Promise<Knowledge> {
-    const { data } = await api.post('/api/knowledge', input);
+    const { data } = await api.post('/knowledge', input);
     return data.data;
   },
 
   /** 更新知识条目 */
   async updateKnowledge(id: string, input: KnowledgeInput): Promise<Knowledge> {
-    const { data } = await api.put(`/api/knowledge/${id}`, input);
+    const { data } = await api.put(`/knowledge/${id}`, input);
     return data.data;
   },
 
   /** 删除知识条目 */
   async deleteKnowledge(id: string): Promise<void> {
-    await api.delete(`/api/knowledge/${id}`);
+    await api.delete(`/knowledge/${id}`);
   },
 
   // ── AI 修复 ──
 
   /** 获取 AI 修复列表 */
   async listAiRemediations(params?: { limit?: number }): Promise<AiRemediation[]> {
-    const { data } = await api.get('/api/ai-remediations', { params });
+    const { data } = await api.get('/ai-remediations', { params });
     return data.data || [];
   },
 };

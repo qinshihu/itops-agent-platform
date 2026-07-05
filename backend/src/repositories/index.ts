@@ -113,6 +113,9 @@ export type {
 export { remediationAuditRepository } from './remediationAuditRepository';
 export type { RemediationAuditRecord } from './remediationAuditRepository';
 
+export { autoScaleRepository } from './autoScaleRepository';
+export type { AutoScaleRuleRecord, AutoScaleHistoryRecord } from './autoScaleRepository';
+
 export { virtualMachineRepository } from './virtualMachineRepository';
 export type {
   VirtualMachineRecord, VirtualMachineListFilters,
@@ -124,15 +127,19 @@ export type {
   DbConnectionRecord, DbConnectionInsertInput, DbConnectionUpdateInput,
 } from './dbConnectionRepository';
 
-export { infraRepository, toolLinksRepo, scriptsRepo, notificationsRepo, configTemplatesRepo, approvalsRepo } from './infraRepository';
+export { infraRepository, toolLinksRepo, scriptsRepo, notificationsRepo, configTemplatesRepo, configTemplateHistoryRepo, reportsRepo, reportSchedulesRepo, approvalsRepo } from './infraRepository/index';
 export type {
   ToolLinkRecord, ToolLinkCreateInput, ToolLinkUpdateInput,
   ScriptRecord, ScriptRecordRaw, ScriptCreateInput, ScriptUpdateInput, ScriptListFilters,
   NotificationRecord, NotificationCreateInput, NotificationListFilters, NotificationStats,
   ConfigTemplateRecord, ConfigTemplateCreateInput, ConfigTemplateUpdateInput,
   ConfigTemplateListFilters, ConfigTemplateApplyResult,
+  ConfigTemplateFullCreateInput, ConfigTemplateFullUpdateInput, ConfigTemplateFullListFilters,
+  ConfigTemplateHistoryRecord, ConfigTemplateHistoryCreateInput, ConfigTemplateHistoryListFilters,
+  ReportRecord, ReportCreateInput, ReportUpdateInput,
+  ReportScheduleRecord, ReportScheduleCreateInput, ReportScheduleUpdateInput,
   ApprovalListFilters,
-} from './infraRepository';
+} from './infraRepository/index';
 
 export { analyticsRepository } from './analyticsRepository';
 export type {
@@ -148,3 +155,24 @@ export type {
 export { tokenBlacklistRepository } from './tokenBlacklistRepository';
 export { credentialRepository } from './credentialRepository';
 export { k8sContextRepository } from './k8sContextRepository';
+export { aiModelRepository } from './aiModelRepository';
+export type { AIModelRecord, AIModelCreateInput, AIModelUpdateInput } from './aiModelRepository';
+
+export { changeRepository } from './changeRepository';
+export type { ChangeRecord, ChangeCreateInput, ChangeListFilters, ChangeUpdateFields } from './changeRepository';
+
+export { configRepository, composeProjectsRepo, networkConfigBackupsRepo, configRepairRecordsRepo } from './configRepository';
+export type { ComposeProjectRecord, ComposeProjectCreateInput, ComposeProjectUpdateInput, NetworkConfigBackupRecord, NetworkConfigBackupWithDevice, NetworkConfigBackupCreateInput, ConfigRepairRecord, ConfigRepairCreateInput, ConfigRepairListFilters } from './configRepository';
+
+export { monitorRepository, serverMetricsRepo } from './monitorRepository';
+export type { ServerMetricRecord, ServerMetricInsertInput } from './monitorRepository';
+
+export { vmMigrationRepository, vmSnapshotPolicyRepository, vmPlatformRepository, vmAuditLogRepository, imageRegistryRepository, dockerEndpointRepository } from './containersRepository';
+export type {
+  VmMigrationRecord, VmMigrationCreateInput, VmMigrationListFilters,
+  VmSnapshotPolicyRecord, VmSnapshotPolicyCreateInput,
+  VmPlatformRecord, VmPlatformCreateInput,
+  VmAuditLogRecord, VmAuditLogCreateInput, VmAuditLogListFilters,
+  ImageRegistryRecord, ImageRegistryCreateInput,
+  DockerEndpointRecord, DockerEndpointCreateInput,
+} from './containersRepository';

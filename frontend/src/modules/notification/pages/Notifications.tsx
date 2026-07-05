@@ -28,11 +28,11 @@ export default function Notifications() {
   const { data: notificationsData, isLoading } = useQuery({
     queryKey: ['notifications', page, selectedType, selectedStatus],
     queryFn: async () => {
-      const params: any = { page, limit };
+      const params: Record<string, unknown> = { page, limit };
       if (selectedType) params.type = selectedType;
       if (selectedStatus) params.status = selectedStatus;
       
-      const res = await api.get('/api/notifications', { params });
+      const res = await api.get('/notifications', { params });
       return res.data.data;
     },
   });
@@ -40,14 +40,14 @@ export default function Notifications() {
   const { data: stats } = useQuery({
     queryKey: ['notificationStats'],
     queryFn: async () => {
-      const res = await api.get('/api/notifications/stats/summary');
+      const res = await api.get('/notifications/stats/summary');
       return res.data.data;
     },
   });
 
   const markAsSentMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.put(`/api/notifications/${id}/send`);
+      await api.put(`/notifications/${id}/send`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -57,7 +57,7 @@ export default function Notifications() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/notifications/${id}`);
+      await api.delete(`/notifications/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -134,7 +134,7 @@ export default function Notifications() {
                 <div>
                   <p className="text-sm text-text-secondary">通知类型</p>
                   <p className="text-2xl font-bold text-purple-500">
-                    {Array.from(new Set((stats.typeStats || []).map((t: any) => t.type))).length}
+                    {Array.from(new Set((stats.typeStats || []).map((t: { type: string }) => t.type))).length}
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center">

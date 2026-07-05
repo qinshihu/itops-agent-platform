@@ -8,6 +8,7 @@ import { requireRole } from '../../../middleware/auth';
 import { z } from 'zod';
 import { validateBody, validateParams } from '../../../middleware/validation';
 import { toolLinksRepo } from '../../../repositories';
+import { logger } from '../../../utils/logger';
 
 const router = Router();
 
@@ -20,7 +21,7 @@ const ensureUploadDir = () => {
     try {
       fs.mkdirSync(uploadDir, { recursive: true });
     } catch (e) {
-      console.warn(`Failed to create tool-icons upload directory: ${uploadDir}`, e);
+      logger.warn(`Failed to create tool-icons upload directory: ${uploadDir}`, e);
     }
   }
   return uploadDir;
@@ -54,7 +55,7 @@ router.get('/', requireRole('viewer'), (_req: Request, res: Response) => {
     const tools = toolLinksRepo.list();
     res.json({ success: true, data: tools });
   } catch (error) {
-    console.error('Failed to list tool links', error);
+    logger.error('Failed to list tool links', error);
     res.status(500).json({ success: false, message: 'Failed to list tool links' });
   }
 });
@@ -73,7 +74,7 @@ router.post('/', requireRole('admin'), validateBody(createToolSchema), (req: Req
     toolLinksRepo.create({ id, name, url, description, category });
     res.json({ success: true, data: toolLinksRepo.getById(id) });
   } catch (error) {
-    console.error('Failed to create tool link', error);
+    logger.error('Failed to create tool link', error);
     res.status(500).json({ success: false, message: 'Failed to create tool link' });
   }
 });
@@ -99,7 +100,7 @@ router.delete('/:id', requireRole('admin'), validateParams(z.object({ id: z.stri
     toolLinksRepo.delete(id);
     res.json({ success: true, message: 'Tool link deleted successfully' });
   } catch (error) {
-    console.error('Failed to delete tool link', error);
+    logger.error('Failed to delete tool link', error);
     res.status(500).json({ success: false, message: 'Failed to delete tool link' });
   }
 });
@@ -117,7 +118,7 @@ router.post('/:id/icon', requireRole('admin'), validateParams(z.object({ id: z.s
     toolLinksRepo.updateIcon(id, `/tool-icons/${req.file.filename}`);
     res.json({ success: true, data: toolLinksRepo.getById(id) });
   } catch (error) {
-    console.error('Failed to upload icon', error);
+    logger.error('Failed to upload icon', error);
     res.status(500).json({ success: false, message: 'Failed to upload icon' });
   }
 });
@@ -133,7 +134,7 @@ router.get('/icons/:filename', (req: Request, res: Response) => {
     }
     res.sendFile(filePath);
   } catch (error) {
-    console.error('Failed to serve icon', error);
+    logger.error('Failed to serve icon', error);
     res.status(500).end();
   }
 });

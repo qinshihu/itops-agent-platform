@@ -1,4 +1,5 @@
 import db from '../../models/database';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { ProbeExecutionStats } from '../types/alert';
 
 export interface ProbeExecutionStatsRecord {

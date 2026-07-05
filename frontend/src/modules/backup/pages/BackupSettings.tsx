@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Database, Loader2, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 
 interface Backup {
   id: string;
@@ -18,21 +19,21 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function BackupSettings() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
   const queryClient = useQueryClient();
 
   // 创建备份 mutation
   const createBackupMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/api/backups/create');
+      const res = await api.post('/backups/create');
       return res.data;
     },
     onSuccess: () => {
       alert('备份创建成功！');
       queryClient.invalidateQueries({ queryKey: ['backupHistory'] });
     },
-    onError: (err: any) => {
-      alert(err.response?.data?.error || err.response?.data?.message || '备份创建失败');
+    onError: (err: unknown) => {
+      alert(getAxiosErrorMessage(err, '备份创建失败'));
     }
   });
 
@@ -40,7 +41,7 @@ export default function BackupSettings() {
   const { data: backupHistoryData } = useQuery({
     queryKey: ['backupHistory'],
     queryFn: async () => {
-      const res = await api.get('/api/backups/history');
+      const res = await api.get('/backups/history');
       return res.data.data;
     }
   });
@@ -49,29 +50,29 @@ export default function BackupSettings() {
   // 恢复备份 mutation
   const restoreBackupMutation = useMutation({
     mutationFn: async (backupId: string) => {
-      const res = await api.post(`/api/backups/restore/${backupId}`);
+      const res = await api.post(`/backups/restore/${backupId}`);
       return res.data;
     },
     onSuccess: () => {
       alert('备份恢复成功！系统将自动重启...');
     },
-    onError: (err: any) => {
-      alert(err.response?.data?.error || err.response?.data?.message || '备份恢复失败');
+    onError: (err: unknown) => {
+      alert(getAxiosErrorMessage(err, '备份恢复失败'));
     }
   });
 
   // 删除备份 mutation
   const deleteBackupMutation = useMutation({
     mutationFn: async (backupId: string) => {
-      const res = await api.delete(`/api/backups/${backupId}`);
+      const res = await api.delete(`/backups/${backupId}`);
       return res.data;
     },
     onSuccess: () => {
       alert('备份删除成功！');
       queryClient.invalidateQueries({ queryKey: ['backupHistory'] });
     },
-    onError: (err: any) => {
-      alert(err.response?.data?.error || err.response?.data?.message || '备份删除失败');
+    onError: (err: unknown) => {
+      alert(getAxiosErrorMessage(err, '备份删除失败'));
     }
   });
 
@@ -80,7 +81,7 @@ export default function BackupSettings() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append('backup', file);
-      const res = await api.post('/api/backups/upload', formData, {
+      const res = await api.post('/backups/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       return res.data;
@@ -89,8 +90,8 @@ export default function BackupSettings() {
       alert('备份上传成功！');
       queryClient.invalidateQueries({ queryKey: ['backupHistory'] });
     },
-    onError: (err: any) => {
-      alert(err.response?.data?.error || err.response?.data?.message || '备份上传失败');
+    onError: (err: unknown) => {
+      alert(getAxiosErrorMessage(err, '备份上传失败'));
     }
   });
 

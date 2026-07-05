@@ -1,7 +1,8 @@
 import path from 'path';
-import db from '../../../models/database';
 import { randomUUID } from 'crypto';
 import PDFDocument from 'pdfkit';
+import { reportsRepo, reportSchedulesRepo } from '../../../repositories';
+import { logger } from '../../../utils/logger';
 
 export interface ReportTemplate {
   id: string;
@@ -184,34 +185,33 @@ class ReportService {
     try {
       this.initializePresetTemplates();
     } catch {
-      console.error("⚠️  ReportService initialization failed");
+      logger.error("⚠️  ReportService initialization failed");
     }
   }
 
   private initializePresetTemplates() {
     try {
-      const existingCount = db.prepare('SELECT COUNT(*) as count FROM reports WHERE is_preset = 1 AND type = \'template\'').get() as { count: number };
-      if (existingCount.count === 0) {
+      const existingCount = reportsRepo.countPresetTemplates();
+      if (existingCount === 0) {
         for (const template of this.presetTemplates) {
-          db.prepare(`
-            INSERT INTO reports (id, name, type, content, variables, is_preset, created_at, updated_at)
-            VALUES (?, ?, 'template', ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
-          `).run(
-            randomUUID(),
-            template.name,
-            template.content,
-            JSON.stringify(template.variables),
-            1
-          );
+          reportsRepo.create({
+            id: randomUUID(),
+            name: template.name,
+            type: 'template',
+            content: template.content,
+            variables: JSON.stringify(template.variables),
+            is_preset: 1,
+            created_at: new Date().toISOString(),
+          });
         }
       }
     } catch {
-      console.error("⚠️  Could not initialize report templates");
+      logger.error("⚠️  Could not initialize report templates");
     }
   }
 
   getTemplates(): ReportTemplate[] {
-    const templates = db.prepare('SELECT * FROM reports WHERE type = \'template\' ORDER BY is_preset DESC, created_at DESC').all() as ReportTemplateDB[];
+    const templates = reportsRepo.listTemplates() as ReportTemplateDB[];
     return templates.map(t => ({
       id: t.id,
       name: t.name,
@@ -226,7 +226,7 @@ class ReportService {
   }
 
   getTemplate(id: string): ReportTemplate | null {
-    const template = db.prepare('SELECT * FROM reports WHERE id = ? AND type = \'template\'').get(id) as ReportTemplateDB | undefined;
+    const template = reportsRepo.getTemplateById(id) as ReportTemplateDB | undefined;
     if (!template) return null;
     return {
       id: template.id,
@@ -244,18 +244,15 @@ class ReportService {
   createTemplate(template: Omit<ReportTemplate, 'id' | 'created_at' | 'updated_at'>): ReportTemplate {
     const id = randomUUID();
     const now = new Date().toISOString();
-    db.prepare(`
-      INSERT INTO reports (id, name, type, content, variables, is_preset, created_at, updated_at)
-      VALUES (?, ?, 'template', ?, ?, ?, ?, ?)
-    `).run(
+    reportsRepo.create({
       id,
-      template.name,
-      template.content,
-      JSON.stringify(template.variables),
-      template.is_preset ? 1 : 0,
-      now,
-      now
-    );
+      name: template.name,
+      type: 'template',
+      content: template.content,
+      variables: JSON.stringify(template.variables),
+      is_preset: template.is_preset ? 1 : 0,
+      created_at: now,
+    });
     return this.getTemplate(id)!;
   }
 
@@ -263,23 +260,19 @@ class ReportService {
     const existing = this.getTemplate(id);
     if (!existing) return null;
 
-    const updates: string[] = [];
-    const params: unknown[] = [];
-    if (template.name !== undefined) { updates.push('name = ?'); params.push(template.name); }
-    if (template.content !== undefined) { updates.push('content = ?'); params.push(template.content); }
-    if (template.variables !== undefined) { updates.push('variables = ?'); params.push(JSON.stringify(template.variables)); }
+    const updates: Record<string, string> = {};
+    if (template.name !== undefined) { updates.name = template.name; }
+    if (template.content !== undefined) { updates.content = template.content; }
+    if (template.variables !== undefined) { updates.variables = JSON.stringify(template.variables); }
 
-    if (updates.length > 0) {
-      updates.push('updated_at = ?');
-      params.push(new Date().toISOString(), id);
-      db.prepare(`UPDATE reports SET ${updates.join(', ')} WHERE id = ? AND type = 'template'`).run(...params);
+    if (Object.keys(updates).length > 0) {
+      reportsRepo.updateTemplate(id, updates);
     }
     return this.getTemplate(id);
   }
 
   deleteTemplate(id: string): boolean {
-    const result = db.prepare('DELETE FROM reports WHERE id = ? AND is_preset = 0 AND type = \'template\'').run(id);
-    return result.changes > 0;
+    return reportsRepo.deleteTemplate(id) > 0;
   }
 
   generateReport(templateId: string, variables: Record<string, string>, format: 'markdown' | 'pdf' | 'word' = 'markdown'): GeneratedReport {
@@ -296,18 +289,16 @@ class ReportService {
     const id = randomUUID();
     const now = new Date().toISOString();
 
-    db.prepare(`
-      INSERT INTO reports (id, name, type, content, format, metadata, variables, created_at)
-      VALUES (?, ?, 'generated', ?, ?, ?, ?, ?)
-    `).run(
+    reportsRepo.create({
       id,
-      `${template.name} - ${new Date().toLocaleString()}`,
+      name: `${template.name} - ${new Date().toLocaleString()}`,
+      type: 'generated',
       content,
       format,
-      JSON.stringify({ templateId, variables }),
-      JSON.stringify(variables),
-      now
-    );
+      metadata: JSON.stringify({ templateId, variables }),
+      variables: JSON.stringify(variables),
+      created_at: now,
+    });
 
     return {
       id,
@@ -321,12 +312,7 @@ class ReportService {
   }
 
   getReports(limit = 20): GeneratedReport[] {
-    const reports = db.prepare(`
-      SELECT * FROM reports 
-      WHERE type IN ('generated', 'workflow') 
-      ORDER BY created_at DESC 
-      LIMIT ?
-    `).all(limit) as GeneratedReportDB[];
+    const reports = reportsRepo.listGenerated(limit) as GeneratedReportDB[];
     
     return reports.map(r => ({
       id: r.id,
@@ -340,7 +326,7 @@ class ReportService {
   }
 
   getReport(id: string): GeneratedReport | null {
-    const report = db.prepare('SELECT * FROM reports WHERE id = ? AND type IN (\'generated\', \'workflow\')').get(id) as GeneratedReportDB | undefined;
+    const report = reportsRepo.getGeneratedById(id) as GeneratedReportDB | undefined;
     if (!report) return null;
     
     return {
@@ -355,7 +341,7 @@ class ReportService {
   }
 
   getScheduledReports(): ScheduledReport[] {
-    const reports = db.prepare('SELECT * FROM report_schedules ORDER BY created_at DESC').all() as ScheduledReportDB[];
+    const reports = reportSchedulesRepo.list() as ScheduledReportDB[];
     return reports.map(r => ({
       id: r.id,
       name: r.name,
@@ -373,25 +359,22 @@ class ReportService {
   createScheduledReport(report: Omit<ScheduledReport, 'id' | 'created_at' | 'updated_at'>): ScheduledReport {
     const id = randomUUID();
     const now = new Date().toISOString();
-    db.prepare(`
-      INSERT INTO report_schedules (id, name, template_id, cron_expression, enabled, recipients, format, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    reportSchedulesRepo.create({
       id,
-      report.name,
-      report.template_id,
-      report.cron_expression,
-      report.enabled ? 1 : 0,
-      JSON.stringify(report.recipients),
-      report.format,
-      now,
-      now
-    );
+      name: report.name,
+      template_id: report.template_id,
+      cron_expression: report.cron_expression,
+      enabled: report.enabled ? 1 : 0,
+      recipients: JSON.stringify(report.recipients),
+      format: report.format,
+      created_at: now,
+      updated_at: now,
+    });
     return this.getScheduledReport(id)!;
   }
 
   getScheduledReport(id: string): ScheduledReport | null {
-    const report = db.prepare('SELECT * FROM report_schedules WHERE id = ?').get(id) as ScheduledReportDB | undefined;
+    const report = reportSchedulesRepo.getById(id) as ScheduledReportDB | undefined;
     if (!report) return null;
     return {
       id: report.id,
@@ -411,26 +394,22 @@ class ReportService {
     const existing = this.getScheduledReport(id);
     if (!existing) return null;
 
-    const updates: string[] = [];
-    const params: unknown[] = [];
-    if (report.name !== undefined) { updates.push('name = ?'); params.push(report.name); }
-    if (report.template_id !== undefined) { updates.push('template_id = ?'); params.push(report.template_id); }
-    if (report.cron_expression !== undefined) { updates.push('cron_expression = ?'); params.push(report.cron_expression); }
-    if (report.enabled !== undefined) { updates.push('enabled = ?'); params.push(report.enabled ? 1 : 0); }
-    if (report.recipients !== undefined) { updates.push('recipients = ?'); params.push(JSON.stringify(report.recipients)); }
-    if (report.format !== undefined) { updates.push('format = ?'); params.push(report.format); }
+    const updates: Record<string, unknown> = {};
+    if (report.name !== undefined) { updates.name = report.name; }
+    if (report.template_id !== undefined) { updates.template_id = report.template_id; }
+    if (report.cron_expression !== undefined) { updates.cron_expression = report.cron_expression; }
+    if (report.enabled !== undefined) { updates.enabled = report.enabled ? 1 : 0; }
+    if (report.recipients !== undefined) { updates.recipients = JSON.stringify(report.recipients); }
+    if (report.format !== undefined) { updates.format = report.format; }
 
-    if (updates.length > 0) {
-      updates.push('updated_at = ?');
-      params.push(new Date().toISOString(), id);
-      db.prepare(`UPDATE report_schedules SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+    if (Object.keys(updates).length > 0) {
+      reportSchedulesRepo.update(id, updates);
     }
     return this.getScheduledReport(id);
   }
 
   deleteScheduledReport(id: string): boolean {
-    const result = db.prepare('DELETE FROM report_schedules WHERE id = ?').run(id);
-    return result.changes > 0;
+    return reportSchedulesRepo.delete(id) > 0;
   }
 
   async exportReport(reportId: string, format: 'pdf' | 'word' | 'markdown' = 'markdown'): Promise<{ content: string | Buffer, type: string }> {

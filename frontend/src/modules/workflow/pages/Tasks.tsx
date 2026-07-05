@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import type { Socket } from 'socket.io-client';
 import { io } from 'socket.io-client';
+import { logger } from '@/lib/logger';
 import { Play, Pause, XCircle, Clock, CheckCircle, XCircle as XIcon, FileText, Activity, List, FileCheck } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import clsx from 'clsx';
@@ -50,7 +51,7 @@ interface Report {
   task_id?: string;
 }
 
-interface SocketTaskEvent {
+interface _SocketTaskEvent {
   taskId: string;
   status?: string;
 }
@@ -68,7 +69,7 @@ export default function Tasks() {
   const { data: tasks, refetch: refetchTasks } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
-      const res = await api.get('/api/tasks');
+      const res = await api.get('/tasks');
       const taskData = res.data.data as TaskDisplay[];
       return taskData.map(task => {
         const parsedTask = { ...task };
@@ -104,7 +105,7 @@ export default function Tasks() {
   const { data: reports } = useQuery({
     queryKey: ['reports'],
     queryFn: async () => {
-      const res = await api.get('/api/reports');
+      const res = await api.get('/reports');
       return (res.data.data || []) as Report[];
     },
   });
@@ -112,7 +113,7 @@ export default function Tasks() {
   const { data: workflows } = useQuery({
     queryKey: ['workflows'],
     queryFn: async () => {
-      const res = await api.get('/api/workflows');
+      const res = await api.get('/workflows');
       return (res.data.data || []) as WorkflowDisplay[];
     },
   });
@@ -337,21 +338,21 @@ export default function Tasks() {
 
   const pauseMutation = useMutation({
     mutationFn: async (taskId: string) => {
-      await api.put(`/api/tasks/${taskId}/pause`);
+      await api.put(`/tasks/${taskId}/pause`);
     },
     onSuccess: () => refetchTasks(),
   });
 
   const resumeMutation = useMutation({
     mutationFn: async (taskId: string) => {
-      await api.put(`/api/tasks/${taskId}/resume`);
+      await api.put(`/tasks/${taskId}/resume`);
     },
     onSuccess: () => refetchTasks(),
   });
 
   const cancelMutation = useMutation({
     mutationFn: async (taskId: string) => {
-      await api.put(`/api/tasks/${taskId}/cancel`);
+      await api.put(`/tasks/${taskId}/cancel`);
     },
     onSuccess: () => refetchTasks(),
   });
@@ -362,7 +363,7 @@ export default function Tasks() {
   
   const handleDownloadReport = async (reportId: string, format: 'markdown' | 'pdf' | 'word' = 'markdown') => {
     try {
-      const response = await api.get(`/api/reports/${reportId}/export?format=${format}`, { responseType: 'blob' });
+      const response = await api.get(`/reports/${reportId}/export?format=${format}`, { responseType: 'blob' });
       const blob = response.data;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -373,7 +374,7 @@ export default function Tasks() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      console.error('Download failed:', error);
+      logger.error('Download failed:', error);
     }
   };
 
@@ -690,7 +691,7 @@ export default function Tasks() {
 
                               {result && (
                                 <div className="p-4">
-                                  {(result as Record<string, unknown>).output != null && (
+                                  {(result as Record<string, unknown>).output !== null && (
                                     <div className="mb-3">
                                       <h5 className="text-sm font-medium text-text-secondary mb-2">输出结果</h5>
                                       <div className="bg-surface rounded-lg p-3 border border-border">
@@ -698,7 +699,7 @@ export default function Tasks() {
                                       </div>
                                     </div>
                                   )}
-                                  {(result as Record<string, unknown>).error != null && (
+                                  {(result as Record<string, unknown>).error !== null && (
                                     <div>
                                       <h5 className="text-sm font-medium text-status-failed mb-2">错误信息</h5>
                                       <div className="bg-status-failed/5 rounded-lg p-3 border border-status-failed/20">
@@ -706,7 +707,7 @@ export default function Tasks() {
                                       </div>
                                     </div>
                                   )}
-                                  {(result as Record<string, unknown>).metadata != null && (
+                                  {(result as Record<string, unknown>).metadata !== null && (
                                     <div className="mt-3 pt-3 border-t border-border">
                                       <p className="text-xs text-text-secondary">
                                         执行时间: {new Date(((result as Record<string, unknown>).metadata as Record<string, unknown>).executionTime as string).toLocaleString()}

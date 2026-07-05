@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import type { Migration } from './migrationFramework';
 
 /**

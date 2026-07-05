@@ -18,13 +18,13 @@ function getSocket(): Socket {
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
     });
-    globalSocket.on('connect', () => console.debug('[WS] 数据中心已连接'));
-    globalSocket.on('disconnect', (reason) => console.debug('[WS] 数据中心断开:', reason));
+    globalSocket.on('connect', () => logger.debug('[WS] 数据中心已连接'));
+    globalSocket.on('disconnect', (reason) => logger.debug('[WS] 数据中心断开:', reason));
     /* 断线重连后，如果超过 10s 无数据，发出重连信号让组件主动 pull */
     globalSocket.on('reconnect', () => {
       const gap = Date.now() - lastPayloadTimestamp;
       if (gap > 10000 && lastPayloadTimestamp > 0) {
-        console.debug(`[WS] Reconnected after ${gap}ms gap, requesting data catch-up`);
+        logger.debug(`[WS] Reconnected after ${gap}ms gap, requesting data catch-up`);
         globalSocket?.emit('dc:catchup', { since: lastPayloadTimestamp });
       }
     });
@@ -56,7 +56,9 @@ export function useSocketIO() {
   }, []);
 
   /** 监听事件 — 返回清除函数，并自动记录时间戳用于重连追补 */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const on = useCallback(<T = any>(event: string, handler: (data: T) => void) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const wrappedHandler = (data: any) => {
       // 记录 payload 时间戳供重连判断
       if (data?.timestamp) lastPayloadTimestamp = data.timestamp;

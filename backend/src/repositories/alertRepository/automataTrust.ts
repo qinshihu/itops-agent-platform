@@ -1,4 +1,5 @@
 import db from '../../models/database';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { AutomataTrust } from '../types/alert';
 
 export interface AutomataTrustRecord {

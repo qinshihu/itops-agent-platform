@@ -10,6 +10,7 @@ const router = Router();
 
 router.get('/', (_req: Request, res: Response) => {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const workflows = workflowRepository.workflows.list() as any[];
     workflows.forEach((w) => {
       if (w.nodes) w.nodes = JSON.parse(w.nodes);
@@ -28,6 +29,7 @@ router.get('/:id', (req: Request, res: Response) => {
     if (!workflow) {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = workflow as any;
     if (w.nodes) w.nodes = JSON.parse(w.nodes as string);
     if (w.edges) w.edges = JSON.parse(w.edges as string);
@@ -126,6 +128,7 @@ router.get('/export/:id', (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = workflow as any;
     const exportData: WorkflowParsed = {
       id: '',
@@ -153,6 +156,7 @@ router.get('/providers/list', (req: Request, res: Response) => {
     let providers;
 
     if (type) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       providers = workflowProviderRegistry.listProvidersByType(type as any);
     } else {
       providers = workflowProviderRegistry.listProviders();

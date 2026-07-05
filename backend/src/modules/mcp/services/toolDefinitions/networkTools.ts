@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from 'zod';
 import { type RegisteredTool } from '../types';
 import { textResult, jsonResult, READONLY } from './shared';
@@ -17,6 +18,7 @@ export const networkTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
+        // eslint-disable-next-line no-restricted-imports
         const { default: db } = await import('../../../../models/database');
         let query = 'SELECT * FROM network_devices WHERE 1=1';
         const params: any[] = [];

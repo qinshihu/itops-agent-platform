@@ -1,6 +1,7 @@
 // ── deviceAssociations 子 repository ──
 
 import db from '../../models/database';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { AlertDeviceAssociation, AlertDeviceMatchLog } from '../types/alert';
 import type { AlertDeviceAssociationInput } from './types';
 

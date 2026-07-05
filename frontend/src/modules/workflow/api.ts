@@ -4,7 +4,7 @@
  */
 
 import api from '@/lib/api';
-import type { Workflow as WorkflowEntity, Task as TaskEntity, ScheduledTask as ScheduledTaskEntity } from '@/types/workflow';
+import type { Workflow as _WorkflowEntity, Task as _TaskEntity, ScheduledTask as _ScheduledTaskEntity } from '@/types/workflow';
 
 // ============================================================
 // 类型定义
@@ -118,97 +118,97 @@ export const workflowApi = {
 
   /** 获取工作流列表 */
   async listWorkflows(): Promise<Workflow[]> {
-    const { data } = await api.get('/api/workflows');
+    const { data } = await api.get('/workflows');
     return data.data;
   },
 
   /** 获取工作流详情 */
   async getWorkflow(id: string): Promise<Workflow> {
-    const { data } = await api.get(`/api/workflows/${id}`);
+    const { data } = await api.get(`/workflows/${id}`);
     return data.data;
   },
 
   /** 创建工作流 */
   async createWorkflow(input: WorkflowInput): Promise<Workflow> {
-    const { data } = await api.post('/api/workflows', input);
+    const { data } = await api.post('/workflows', input);
     return data.data;
   },
 
   /** 更新工作流 */
   async updateWorkflow(id: string, input: WorkflowInput): Promise<Workflow> {
-    const { data } = await api.put(`/api/workflows/${id}`, input);
+    const { data } = await api.put(`/workflows/${id}`, input);
     return data.data;
   },
 
   /** 删除工作流 */
   async deleteWorkflow(id: string): Promise<void> {
-    await api.delete(`/api/workflows/${id}`);
+    await api.delete(`/workflows/${id}`);
   },
 
   // ── 任务 ──
 
   /** 获取任务列表 */
   async listTasks(): Promise<Task[]> {
-    const { data } = await api.get('/api/tasks');
+    const { data } = await api.get('/tasks');
     return data.data;
   },
 
   /** 创建任务（执行工作流） */
   async createTask(input: CreateTaskInput): Promise<Task> {
-    const { data } = await api.post('/api/tasks', input);
+    const { data } = await api.post('/tasks', input);
     return data.data;
   },
 
   /** 暂停任务 */
   async pauseTask(taskId: string): Promise<void> {
-    await api.put(`/api/tasks/${taskId}/pause`);
+    await api.put(`/tasks/${taskId}/pause`);
   },
 
   /** 恢复任务 */
   async resumeTask(taskId: string): Promise<void> {
-    await api.put(`/api/tasks/${taskId}/resume`);
+    await api.put(`/tasks/${taskId}/resume`);
   },
 
   /** 取消任务 */
   async cancelTask(taskId: string): Promise<void> {
-    await api.put(`/api/tasks/${taskId}/cancel`);
+    await api.put(`/tasks/${taskId}/cancel`);
   },
 
   // ── 定时任务 ──
 
   /** 获取定时任务列表 */
   async listScheduledTasks(): Promise<ScheduledTask[]> {
-    const { data } = await api.get('/api/scheduled-tasks');
+    const { data } = await api.get('/scheduled-tasks');
     return data.data;
   },
 
   /** 创建定时任务 */
   async createScheduledTask(input: ScheduledTaskInput): Promise<ScheduledTask> {
-    const { data } = await api.post('/api/scheduled-tasks', input);
+    const { data } = await api.post('/scheduled-tasks', input);
     return data.data;
   },
 
   /** 更新定时任务 */
   async updateScheduledTask(id: string, input: ScheduledTaskInput): Promise<ScheduledTask> {
-    const { data } = await api.put(`/api/scheduled-tasks/${id}`, input);
+    const { data } = await api.put(`/scheduled-tasks/${id}`, input);
     return data.data;
   },
 
   /** 删除定时任务 */
   async deleteScheduledTask(id: string): Promise<void> {
-    await api.delete(`/api/scheduled-tasks/${id}`);
+    await api.delete(`/scheduled-tasks/${id}`);
   },
 
   /** 切换定时任务启用状态 */
   async toggleScheduledTask(id: string): Promise<void> {
-    await api.post(`/api/scheduled-tasks/${id}/toggle`);
+    await api.post(`/scheduled-tasks/${id}/toggle`);
   },
 
   // ── 工作流提供者 ──
 
   /** 获取工作流提供者列表 */
   async listProviders(params?: { type?: string }): Promise<WorkflowProvider[]> {
-    const { data } = await api.get('/api/workflows/providers/list', { params });
+    const { data } = await api.get('/workflows/providers/list', { params });
     return data.data;
   },
 
@@ -216,13 +216,13 @@ export const workflowApi = {
 
   /** 获取报告列表 */
   async listReports(): Promise<Report[]> {
-    const { data } = await api.get('/api/reports');
+    const { data } = await api.get('/reports');
     return data.data;
   },
 
   /** 导出报告（返回 Blob） */
   async exportReport(reportId: string, format: string): Promise<Blob> {
-    const { data } = await api.get(`/api/reports/${reportId}/export`, {
+    const { data } = await api.get(`/reports/${reportId}/export`, {
       params: { format },
       responseType: 'blob',
     });

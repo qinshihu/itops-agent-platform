@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { VendorType, InspectionType} from './vendorAdapter';
 import { createVendorAdapter } from './vendorAdapter';
 import { qanythingService } from '../../ai/services/knowledge/qanythingService';

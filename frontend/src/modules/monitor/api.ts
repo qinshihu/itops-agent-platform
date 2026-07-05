@@ -4,7 +4,7 @@
  */
 
 import api from '@/lib/api';
-import type { Dashboard, Report, CostEntry } from '../../types/monitor';
+import type { Dashboard as _Dashboard, Report as _Report, CostEntry as _CostEntry } from '../../types/monitor';
 
 // ============================================================
 // 类型定义
@@ -131,55 +131,55 @@ export const monitorApi = {
 
   /** 获取完整仪表盘数据 */
   async getDashboardFull(): Promise<DashboardFullData> {
-    const { data } = await api.get('/api/dashboard/full');
+    const { data } = await api.get('/dashboard/full');
     return data.data;
   },
 
   /** 获取告警趋势 */
   async getAlertTrends(): Promise<AlertTrends> {
-    const { data } = await api.get('/api/dashboard/alert-trends');
+    const { data } = await api.get('/dashboard/alert-trends');
     return data.data;
   },
 
   /** 获取任务趋势 */
   async getTaskTrends(): Promise<TaskTrends> {
-    const { data } = await api.get('/api/dashboard/task-trends');
+    const { data } = await api.get('/dashboard/task-trends');
     return data.data;
   },
 
   /** 获取 Agent 统计 */
   async getAgentStats(): Promise<AgentStats> {
-    const { data } = await api.get('/api/dashboard/agent-stats');
+    const { data } = await api.get('/dashboard/agent-stats');
     return data.data;
   },
 
   /** 获取任务分布 */
   async getTaskDistribution(): Promise<TaskDistribution> {
-    const { data } = await api.get('/api/dashboard/task-distribution');
+    const { data } = await api.get('/dashboard/task-distribution');
     return data.data;
   },
 
   /** 获取修复统计 */
   async getRemediationStats(): Promise<RemediationStats> {
-    const { data } = await api.get('/api/dashboard/remediation-stats');
+    const { data } = await api.get('/dashboard/remediation-stats');
     return data.data;
   },
 
   /** 获取服务器指标 */
   async getServerMetrics(): Promise<ServerMetrics> {
-    const { data } = await api.get('/api/dashboard/server-metrics');
+    const { data } = await api.get('/dashboard/server-metrics');
     return data.data;
   },
 
   /** 获取 SLA 统计 */
   async getSlaStats(): Promise<SlaStats> {
-    const { data } = await api.get('/api/dashboard/sla-stats');
+    const { data } = await api.get('/dashboard/sla-stats');
     return data.data;
   },
 
   /** 获取仪表盘联动数据 */
   async getDashboardLinkage(): Promise<unknown> {
-    const { data } = await api.get('/api/dashboard/linkage');
+    const { data } = await api.get('/dashboard/linkage');
     return data.data;
   },
 
@@ -187,48 +187,48 @@ export const monitorApi = {
 
   /** 获取报告模板列表 */
   async listReportTemplates(): Promise<ReportTemplate[]> {
-    const { data } = await api.get('/api/reports/templates');
+    const { data } = await api.get('/reports/templates');
     return data.data || [];
   },
 
   /** 获取报告列表 */
   async listReports(): Promise<ReportRecord[]> {
-    const { data } = await api.get('/api/reports');
+    const { data } = await api.get('/reports');
     return data.data || [];
   },
 
   /** 获取报告分析统计 */
   async getReportAnalytics(): Promise<ReportAnalytics> {
-    const { data } = await api.get('/api/reports/analytics');
+    const { data } = await api.get('/reports/analytics');
     return data.data;
   },
 
   /** 获取定时报告列表 */
   async listScheduledReports(): Promise<ScheduledReport[]> {
-    const { data } = await api.get('/api/reports/scheduled/all');
+    const { data } = await api.get('/reports/scheduled/all');
     return data.data || [];
   },
 
   /** 创建报告模板 */
   async createReportTemplate(input: ReportTemplateInput): Promise<ReportTemplate> {
-    const { data } = await api.post('/api/reports/templates', input);
+    const { data } = await api.post('/reports/templates', input);
     return data.data;
   },
 
   /** 生成报告 */
   async generateReport(input: GenerateReportInput): Promise<ReportRecord> {
-    const { data } = await api.post('/api/reports/generate', input);
+    const { data } = await api.post('/reports/generate', input);
     return data.data;
   },
 
   /** 删除报告模板 */
   async deleteReportTemplate(id: string): Promise<void> {
-    await api.delete(`/api/reports/templates/${id}`);
+    await api.delete(`/reports/templates/${id}`);
   },
 
   /** 导出报告（返回 Blob） */
   async exportReport(reportId: string, format: string): Promise<Blob> {
-    const { data } = await api.get(`/api/reports/${reportId}/export`, {
+    const { data } = await api.get(`/reports/${reportId}/export`, {
       params: { format },
       responseType: 'blob',
     });
@@ -239,25 +239,25 @@ export const monitorApi = {
 
   /** 获取容器成本 */
   async listContainerCosts(): Promise<ContainerCost[]> {
-    const { data } = await api.get('/api/cost-analysis/containers');
+    const { data } = await api.get('/cost-analysis/containers');
     return data.data;
   },
 
   /** 获取虚拟机成本 */
   async listVmCosts(): Promise<VMCost[]> {
-    const { data } = await api.get('/api/cost-analysis/vms');
+    const { data } = await api.get('/cost-analysis/vms');
     return data.data;
   },
 
   /** 获取成本优化建议 */
   async listCostRecommendations(): Promise<CostRecommendation[]> {
-    const { data } = await api.get('/api/cost-analysis/recommendations');
+    const { data } = await api.get('/cost-analysis/recommendations');
     return data.data;
   },
 
   /** 获取成本汇总 */
   async getCostSummary(): Promise<CostSummary> {
-    const { data } = await api.get('/api/cost-analysis/summary');
+    const { data } = await api.get('/cost-analysis/summary');
     return data.data;
   },
 };

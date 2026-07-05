@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 import { useToast } from '../../../contexts/ToastContext';
 import { useEscapeKey } from '../../../hooks/useEscapeKey';
 
@@ -54,7 +55,7 @@ export default function SSHKeys() {
   const { data: sshKeys, isLoading } = useQuery({
     queryKey: ['ssh-keys'],
     queryFn: async () => {
-      const res = await api.get('/api/ssh-keys');
+      const res = await api.get('/ssh-keys');
       return res.data.data as SSHKey[];
     },
   });
@@ -63,7 +64,7 @@ export default function SSHKeys() {
     queryKey: ['ssh-key', expandedKey],
     queryFn: async () => {
       if (!expandedKey) return null;
-      const res = await api.get(`/api/ssh-keys/${expandedKey}`);
+      const res = await api.get(`/ssh-keys/${expandedKey}`);
       return res.data.data as SSHKey & { private_key: string };
     },
     enabled: !!expandedKey,
@@ -71,7 +72,7 @@ export default function SSHKeys() {
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const res = await api.post('/api/ssh-keys', data);
+      const res = await api.post('/ssh-keys', data);
       return res.data;
     },
     onSuccess: () => {
@@ -80,15 +81,14 @@ export default function SSHKeys() {
       setIsModalOpen(false);
       toast.success('认证凭证已添加');
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || error?.message || '添加失败，请重试';
-      toast.error(message);
+    onError: (error: unknown) => {
+      toast.error(getAxiosErrorMessage(error, '添加失败，请重试'));
     },
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<typeof formData> }) => {
-      const res = await api.put(`/api/ssh-keys/${id}`, data);
+      const res = await api.put(`/ssh-keys/${id}`, data);
       return res.data;
     },
     onSuccess: () => {
@@ -98,15 +98,14 @@ export default function SSHKeys() {
       setSelectedKey(null);
       toast.success('认证凭证已更新');
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || error?.message || '更新失败，请重试';
-      toast.error(message);
+    onError: (error: unknown) => {
+      toast.error(getAxiosErrorMessage(error, '更新失败，请重试'));
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/ssh-keys/${id}`);
+      await api.delete(`/ssh-keys/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ssh-keys'] });
@@ -179,7 +178,7 @@ export default function SSHKeys() {
     setUsageLoading(true);
     setUsageServers(null);
     try {
-      const res = await api.get(`/api/ssh-keys/${key.id}/usage`);
+      const res = await api.get(`/ssh-keys/${key.id}/usage`);
       setUsageServers(res.data.data.servers);
     } catch {
       toast.error('获取使用情况失败');

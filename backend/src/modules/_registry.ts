@@ -17,8 +17,8 @@ import aiRoutes from './ai/routes';
 import alertRoutes, { alertAutoRouter, alertCorrelationRouter, webhookRouter } from './alerts/routes';
 import autoRoutes from './auto/routes';
 import backupRoutes from './backup/routes';
-import changeManagementRoutes from './change-management/routes';
-import configManagementRoutes from './config-management/routes';
+import _changeManagementRoutes from './change-management/routes';
+import _configManagementRoutes from './config-management/routes';
 import containerRoutes from './containers/routes';
 import databaseRoutes from './database/routes';
 import dcRoutes from './dc/routes';
@@ -45,32 +45,32 @@ interface ModuleConfig {
  */
 const modules: ModuleConfig[] = [
   // === 公开路由：auth + webhook ===
-  { path: '/api/auth', router: authOnlyRouter, options: { public: true } },
-  { path: '/api/webhooks', router: webhookRouter, options: { webhook: true } },
+  { path: '/api/v1/auth', router: authOnlyRouter, options: { public: true } },
+  { path: '/api/v1/webhooks', router: webhookRouter, options: { webhook: true } },
 
   // === 受保护路由（需要认证） ===
-  { path: '/api', router: aiRoutes },
-  { path: '/api', router: alertRoutes },
-  { path: '/api', router: autoRoutes },
-  { path: '/api', router: backupRoutes },
-  { path: '/api', router: containerRoutes },
-  { path: '/api', router: databaseRoutes },
-  { path: '/api', router: dcRoutes },
-  { path: '/api', router: infraRoutes },
-  { path: '/api', router: kubernetesRoutes },
-  { path: '/api', router: monitorRoutes },
-  { path: '/api', router: networkRoutes },
-  { path: '/api', router: notificationRoutes },
-  { path: '/api', router: serverRoutes },
-  { path: '/api', router: workflowRoutes },
-  { path: '/api/mcp', router: mcpRoutes },
-  { path: '/api/users', router: userRouter },
+  { path: '/api/v1', router: aiRoutes },
+  { path: '/api/v1', router: alertRoutes },
+  { path: '/api/v1', router: autoRoutes },
+  { path: '/api/v1', router: backupRoutes },
+  { path: '/api/v1', router: containerRoutes },
+  { path: '/api/v1', router: databaseRoutes },
+  { path: '/api/v1', router: dcRoutes },
+  { path: '/api/v1', router: infraRoutes },
+  { path: '/api/v1', router: kubernetesRoutes },
+  { path: '/api/v1', router: monitorRoutes },
+  { path: '/api/v1', router: networkRoutes },
+  { path: '/api/v1', router: notificationRoutes },
+  { path: '/api/v1', router: serverRoutes },
+  { path: '/api/v1', router: workflowRoutes },
+  { path: '/api/v1/mcp', router: mcpRoutes },
+  { path: '/api/v1/users', router: userRouter },
 
   // === 受保护特殊路由 ===
-  { path: '/api', router: alertAutoRouter },
-  { path: '/api', router: linkageRouter },
-  { path: '/api', router: networkDiscoveryRouter },
-  { path: '/api', router: alertCorrelationRouter },
+  { path: '/api/v1', router: alertAutoRouter },
+  { path: '/api/v1', router: linkageRouter },
+  { path: '/api/v1', router: networkDiscoveryRouter },
+  { path: '/api/v1', router: alertCorrelationRouter },
 ];
 
 /**

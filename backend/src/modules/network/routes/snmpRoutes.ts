@@ -204,7 +204,7 @@ router.post('/health-batch', async (req: Request, res: Response) => {
     if (!deviceIds || !Array.isArray(deviceIds)) {
       return res.status(400).json({ code: -1, message: 'deviceIds array required' });
     }
-    const results: Record<string, any> = {};
+    const results: Record<string, unknown> = {};
     for (const id of deviceIds) {
       results[id] = await snmpService.healthCheck(id).catch(() => null);
     }

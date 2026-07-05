@@ -1,5 +1,4 @@
-import db from '../../../../models/database';
-import { remediationPolicyRepository } from '../../../../repositories';
+import { remediationPolicyRepository, remediationAuditRepository } from '../../../../repositories';
 import { logger } from '../../../../utils/logger';
 import type { RemediationPolicy } from '../../../../types';
 
@@ -38,23 +37,8 @@ export const policyEngineMixin = {
   },
 
   _matchBySource(alert: { id: string; source: string; severity?: string; title?: string; content?: string; tags?: string[] }): RemediationPolicy[] {
-    const policies = db.prepare(`
-      SELECT * FROM remediation_policies
-      WHERE enabled = 1 AND (LOWER(alert_source) = ? OR alert_source = '*')
-      ORDER BY
-        CASE
-          WHEN alert_source = ? THEN 0 ELSE 1
-        END,
-        CASE alert_severity
-          WHEN 'disaster' THEN 1
-          WHEN 'critical' THEN 2
-          WHEN 'high' THEN 3
-          WHEN 'warning' THEN 4
-          WHEN 'medium' THEN 4
-          WHEN 'average' THEN 4
-          ELSE 5
-        END
-    `).all(alert.source === '__any__' ? '*' : alert.source, alert.source) as RemediationPolicy[];
+    const source = alert.source === '__any__' ? '*' : alert.source;
+    const policies = remediationPolicyRepository.findMatchingBySource(source, alert.source) as unknown as RemediationPolicy[];
 
     return policies.filter(policy => {
       const policySource = policy.alert_source?.toLowerCase();
@@ -108,10 +92,7 @@ export const policyEngineMixin = {
   },
 
   isInCooldown(policy: RemediationPolicy, alert: { id: string }): boolean {
-    const result = db.prepare(`
-      SELECT cooldown_until FROM remediation_cooldowns
-      WHERE policy_id = ? AND alert_id = ?
-    `).get(policy.id, alert.id) as { cooldown_until: string } | undefined;
+    const result = remediationAuditRepository.getCooldown(policy.id, alert.id);
 
     if (!result) return false;
 
@@ -121,11 +102,8 @@ export const policyEngineMixin = {
 
   isRateLimited(policy: RemediationPolicy): boolean {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const result = db.prepare(`
-      SELECT COUNT(*) as count FROM remediation_executions
-      WHERE policy_id = ? AND created_at > ?
-    `).get(policy.id, oneHourAgo) as { count: number };
+    const count = remediationAuditRepository.countRecentExecutions(policy.id, oneHourAgo);
 
-    return result.count >= policy.max_executions_per_hour;
+    return count >= policy.max_executions_per_hour;
   },
 };

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { type RegisteredTool } from '../types';
 import { textResult, jsonResult, READONLY } from './shared';
+// eslint-disable-next-line no-restricted-imports
 import db from '../../../../models/database';
 
 interface CountResult { count: number }
@@ -21,7 +22,7 @@ export const infraTools: RegisteredTool[] = [
       try {
         const { default: db } = await import('../../../../models/database');
         let query = 'SELECT * FROM dc_racks WHERE 1=1';
-        const params: any[] = [];
+        const params: unknown[] = [];
         if (args.roomId) { query += ' AND room_id = ?'; params.push(args.roomId); }
         if (args.status) { query += ' AND status = ?'; params.push(args.status); }
         query += ` LIMIT ${args.limit || 50}`;
@@ -49,12 +50,12 @@ export const infraTools: RegisteredTool[] = [
       try {
         const { default: db } = await import('../../../../models/database');
         let query = 'SELECT * FROM dc_devices WHERE 1=1';
-        const params: any[] = [];
+        const params: unknown[] = [];
         if (args.rackId) { query += ' AND rack_id = ?'; params.push(args.rackId); }
         if (args.deviceType) { query += ' AND device_type = ?'; params.push(args.deviceType); }
         query += ` LIMIT ${args.limit || 100}`;
         const devices = db.prepare(query).all(...params);
-        return jsonResult(devices, `找到 ${(devices as any[])?.length || 0} 台设备`);
+        return jsonResult(devices, `找到 ${(devices as unknown[])?.length || 0} 台设备`);
       } catch (err) {
         return textResult(`查询数据中心设备失败: ${(err as Error).message}`, true);
       }
@@ -76,7 +77,7 @@ export const infraTools: RegisteredTool[] = [
       try {
         const { default: db } = await import('../../../../models/database');
         let query = 'SELECT id, name, description, status, trigger_type, created_at, updated_at FROM workflows WHERE 1=1';
-        const params: any[] = [];
+        const params: unknown[] = [];
         if (args.status) { query += ' AND status = ?'; params.push(args.status); }
         query += ` LIMIT ${args.limit || 20}`;
         const workflows = db.prepare(query).all(...params);
@@ -103,7 +104,7 @@ export const infraTools: RegisteredTool[] = [
       try {
         const { default: db } = await import('../../../../models/database');
         let query = 'SELECT * FROM tasks WHERE 1=1';
-        const params: any[] = [];
+        const params: unknown[] = [];
         if (args.status) { query += ' AND status = ?'; params.push(args.status); }
         if (args.hostId) { query += ' AND host_id = ?'; params.push(args.hostId); }
         query += ' ORDER BY created_at DESC';
@@ -131,11 +132,11 @@ export const infraTools: RegisteredTool[] = [
       try {
         const { default: db } = await import('../../../../models/database');
         let query = 'SELECT id, name, db_type, host, port, status, version FROM databases WHERE 1=1';
-        const params: any[] = [];
+        const params: unknown[] = [];
         if (args.dbType) { query += ' AND db_type = ?'; params.push(args.dbType); }
         query += ` LIMIT ${args.limit || 20}`;
         const databases = db.prepare(query).all(...params);
-        return jsonResult(databases, `找到 ${(databases as any[])?.length || 0} 个数据库`);
+        return jsonResult(databases, `找到 ${(databases as unknown[])?.length || 0} 个数据库`);
       } catch (err) {
         return textResult(`查询数据库失败: ${(err as Error).message}`, true);
       }
@@ -158,12 +159,12 @@ export const infraTools: RegisteredTool[] = [
       try {
         const { default: db } = await import('../../../../models/database');
         let query = 'SELECT id, name, description, script_type, language, enabled FROM scripts WHERE 1=1';
-        const params: any[] = [];
+        const params: unknown[] = [];
         if (args.scriptType) { query += ' AND script_type = ?'; params.push(args.scriptType); }
         if (args.search) { query += ' AND name LIKE ?'; params.push(`%${args.search}%`); }
         query += ` LIMIT ${args.limit || 20}`;
         const scripts = db.prepare(query).all(...params);
-        return jsonResult(scripts, `找到 ${(scripts as any[])?.length || 0} 个脚本`);
+        return jsonResult(scripts, `找到 ${(scripts as unknown[])?.length || 0} 个脚本`);
       } catch (err) {
         return textResult(`查询脚本失败: ${(err as Error).message}`, true);
       }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /** snmpService 共享类型与辅助函数 */
 
 export type SnmpVersion = 'v1' | 'v2c' | 'v3';

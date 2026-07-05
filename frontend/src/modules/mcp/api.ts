@@ -136,25 +136,25 @@ export interface SecurityConfig {
 
 /** 健康检查 */
 export async function fetchHealth(): Promise<McpHealth> {
-  const { data } = await api.get('/api/mcp/health');
+  const { data } = await api.get('/mcp/health');
   return data;
 }
 
 /** 获取工具清单 */
 export async function fetchManifest(): Promise<McpManifest> {
-  const { data } = await api.get('/api/mcp/manifest');
+  const { data } = await api.get('/mcp/manifest');
   return data;
 }
 
 /** 调用工具（REST 方式） */
 export async function callTool(name: string, args: Record<string, unknown>): Promise<ToolCallResult> {
-  const { data } = await api.post('/api/mcp/call', { name, arguments: args });
+  const { data } = await api.post('/mcp/call', { name, arguments: args });
   return data;
 }
 
 /** JSON-RPC 调用 */
 export async function jsonRpc(method: string, params?: Record<string, unknown>): Promise<unknown> {
-  const { data } = await api.post('/api/mcp/rpc', {
+  const { data } = await api.post('/mcp/rpc', {
     jsonrpc: '2.0',
     id: Date.now(),
     method,
@@ -169,37 +169,37 @@ export async function jsonRpc(method: string, params?: Record<string, unknown>):
 
 /** 获取外部服务器状态 */
 export async function fetchExternalStatus(): Promise<ExternalServerStatus> {
-  const { data } = await api.get('/api/mcp/external/status');
+  const { data } = await api.get('/mcp/external/status');
   return data;
 }
 
 /** 注册外部服务器 */
 export async function registerExternalServer(config: ExternalServerConfig): Promise<{ registered: boolean; id: string }> {
-  const { data } = await api.post('/api/mcp/external/register', config);
+  const { data } = await api.post('/mcp/external/register', config);
   return data;
 }
 
 /** 启动外部服务器 */
 export async function startExternalServer(id: string): Promise<{ started: boolean; id: string }> {
-  const { data } = await api.post(`/api/mcp/external/start/${id}`);
+  const { data } = await api.post(`/mcp/external/start/${id}`);
   return data;
 }
 
 /** 启动所有外部服务器 */
 export async function startAllExternalServers(): Promise<{ results: Array<{ id: string; success: boolean; error?: string }> }> {
-  const { data } = await api.post('/api/mcp/external/start');
+  const { data } = await api.post('/mcp/external/start');
   return data;
 }
 
 /** 停止外部服务器 */
 export async function stopExternalServer(id: string): Promise<{ stopped: boolean; id: string }> {
-  const { data } = await api.post(`/api/mcp/external/stop/${id}`);
+  const { data } = await api.post(`/mcp/external/stop/${id}`);
   return data;
 }
 
 /** 注销外部服务器 */
 export async function unregisterExternalServer(id: string): Promise<{ unregistered: boolean; id: string }> {
-  const { data } = await api.delete(`/api/mcp/external/${id}`);
+  const { data } = await api.delete(`/mcp/external/${id}`);
   return data;
 }
 
@@ -211,19 +211,19 @@ export async function unregisterExternalServer(id: string): Promise<{ unregister
 export async function createApprovalTicket(
   toolName: string, userId: string, reason: string, ttlMs?: number
 ): Promise<{ ticketId: string; expiresAt: string }> {
-  const { data } = await api.post('/api/mcp/approval/create', { toolName, userId, reason, ttlMs });
+  const { data } = await api.post('/mcp/approval/create', { toolName, userId, reason, ttlMs });
   return data;
 }
 
 /** 审批通过 */
 export async function approveTicket(ticketId: string, approverId: string): Promise<{ approved: boolean }> {
-  const { data } = await api.post('/api/mcp/approval/approve', { ticketId, approverId });
+  const { data } = await api.post('/mcp/approval/approve', { ticketId, approverId });
   return data;
 }
 
 /** 查询票据状态 */
 export async function fetchTicket(ticketId: string): Promise<ApprovalTicket> {
-  const { data } = await api.get(`/api/mcp/approval/${ticketId}`);
+  const { data } = await api.get(`/mcp/approval/${ticketId}`);
   return data;
 }
 
@@ -233,12 +233,12 @@ export async function fetchTicket(ticketId: string): Promise<ApprovalTicket> {
 
 /** 获取审计日志 */
 export async function fetchAuditLog(): Promise<AuditEntry[]> {
-  const { data } = await api.get('/api/mcp/audit');
+  const { data } = await api.get('/mcp/audit');
   return data;
 }
 
 /** 获取安全门配置 */
 export async function fetchSecurityConfig(): Promise<SecurityConfig> {
-  const { data } = await api.get('/api/mcp/security/config');
+  const { data } = await api.get('/mcp/security/config');
   return data;
 }

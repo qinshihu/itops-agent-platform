@@ -27,7 +27,7 @@ export default function SlotsPanel({ rack, slots, onSelectSlot, onAddDevice }: P
 
   // 构建 U 行
   const rows: React.ReactNode[] = [];
-  const occupiedSlots = slots.filter((s) => s.device_id);
+  const _occupiedSlots = slots.filter((s) => s.device_id);
 
   for (let u = totalU; u >= 1; u--) {
     const slot = slots.find((s) => s.start_u <= u && s.end_u >= u && s.device_id);

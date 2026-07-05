@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Layers, AlertCircle, CheckCircle2, Loader2, Search,
-  Plus, Link2, Unlink, X, Clock, Eye, ChevronRight,
-  Shield, Trash2, Wrench, Bell, ExternalLink, Zap
+  Layers, AlertCircle as _AlertCircle, CheckCircle2, Loader2, Search as _Search,
+  Plus as _Plus, Link2, Unlink as _Unlink, X, Clock as _Clock, Eye as _Eye, ChevronRight,
+  Shield as _Shield, Trash2, Wrench as _Wrench, Bell, ExternalLink, Zap
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../../lib/api';
 import { useToast } from '../../../contexts/ToastContext';
-import { safeFormatDistance } from '../../../lib/date';
+import { safeFormatDistance as _safeFormatDistance } from '../../../lib/date';
 
 interface CorrelationGroup {
   id: string;
@@ -51,30 +51,30 @@ export default function AlertCorrelationGroups() {
   // 关联组列表
   const { data: groupsData, isLoading } = useQuery({
     queryKey: ['alert-correlation-groups', statusFilter],
-    queryFn: () => api.get('/api/alert-correlation/groups', {
+    queryFn: () => api.get('/alert-correlation/groups', {
       params: { status: statusFilter === 'all' ? undefined : statusFilter, limit: 50 }
     }).then(r => ({ groups: r.data.data as CorrelationGroup[], total: r.data.total as number })),
   });
 
   const groups = groupsData?.groups || [];
-  const total = groupsData?.total || 0;
+  const _total = groupsData?.total || 0;
 
   // 统计数据
   const { data: stats } = useQuery({
     queryKey: ['alert-correlation-stats'],
-    queryFn: () => api.get('/api/alert-correlation/stats').then(r => r.data.data),
+    queryFn: () => api.get('/alert-correlation/stats').then(r => r.data.data),
   });
 
   // 选中组详情
   const { data: groupDetail } = useQuery({
     queryKey: ['alert-correlation-group-detail', selectedGroupId],
-    queryFn: () => api.get(`/api/alert-correlation/groups/${selectedGroupId}`).then(r => r.data.data),
+    queryFn: () => api.get(`/alert-correlation/groups/${selectedGroupId}`).then(r => r.data.data),
     enabled: !!selectedGroupId,
   });
 
   // 解决组
   const resolveGroup = useMutation({
-    mutationFn: (groupId: string) => api.post(`/api/alert-correlation/groups/${groupId}/resolve`, {}),
+    mutationFn: (groupId: string) => api.post(`/alert-correlation/groups/${groupId}/resolve`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['alert-correlation-groups'] });
       queryClient.invalidateQueries({ queryKey: ['alert-correlation-stats'] });
@@ -84,7 +84,7 @@ export default function AlertCorrelationGroups() {
 
   // 删除组
   const deleteGroup = useMutation({
-    mutationFn: (groupId: string) => api.delete(`/api/alert-correlation/groups/${groupId}`),
+    mutationFn: (groupId: string) => api.delete(`/alert-correlation/groups/${groupId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['alert-correlation-groups'] });
       queryClient.invalidateQueries({ queryKey: ['alert-correlation-stats'] });
@@ -96,7 +96,7 @@ export default function AlertCorrelationGroups() {
 
   // 触发自动关联
   const triggerAuto = useMutation({
-    mutationFn: () => api.post('/api/alert-correlation/auto'),
+    mutationFn: () => api.post('/alert-correlation/auto'),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['alert-correlation-groups'] });
       queryClient.invalidateQueries({ queryKey: ['alert-correlation-stats'] });

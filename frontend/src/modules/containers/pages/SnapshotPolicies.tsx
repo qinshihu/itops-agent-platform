@@ -36,7 +36,7 @@ export default function SnapshotPolicies() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/api/snapshot-policies', { params: { page, pageSize, search } });
+      const res = await api.get('/snapshot-policies', { params: { page, pageSize, search } });
       setData(res.data.data || []);
       setTotal(res.data.total || 0);
     } catch { message.error('加载失败'); }
@@ -49,10 +49,10 @@ export default function SnapshotPolicies() {
     const values = await form.validateFields();
     try {
       if (editing) {
-        await api.put(`/api/snapshot-policies/${editing.id}`, values);
+        await api.put(`/snapshot-policies/${editing.id}`, values);
         message.success('更新成功');
       } else {
-        await api.post('/api/snapshot-policies', values);
+        await api.post('/snapshot-policies', values);
         message.success('创建成功');
       }
       setModalOpen(false);
@@ -63,7 +63,7 @@ export default function SnapshotPolicies() {
   };
 
   const handleDelete = async (id: string) => {
-    try { await api.delete(`/api/snapshot-policies/${id}`); message.success('删除成功'); fetchData(); } catch { message.error('删除失败'); }
+    try { await api.delete(`/snapshot-policies/${id}`); message.success('删除成功'); fetchData(); } catch { message.error('删除失败'); }
   };
 
   const openEdit = (record: SnapshotPolicy) => {
@@ -82,10 +82,10 @@ export default function SnapshotPolicies() {
     { title: 'VM ID', dataIndex: 'vmId', key: 'vmId' },
     { title: 'Cron表达式', dataIndex: 'cronExpression', key: 'cronExpression', ellipsis: true },
     { title: '保留数', dataIndex: 'retention', key: 'retention' },
-    { title: '内存快照', dataIndex: 'snapshotMemory', key: 'snapshotMemory', render: (v: any) => v ? <Tag color="blue">是</Tag> : <Tag>否</Tag> },
-    { title: '状态', dataIndex: 'enabled', key: 'enabled', render: (v: any) => v ? <Tag color="green">启用</Tag> : <Tag color="red">禁用</Tag> },
+    { title: '内存快照', dataIndex: 'snapshotMemory', key: 'snapshotMemory', render: (v: boolean) => v ? <Tag color="blue">是</Tag> : <Tag>否</Tag> },
+    { title: '状态', dataIndex: 'enabled', key: 'enabled', render: (v: boolean) => v ? <Tag color="green">启用</Tag> : <Tag color="red">禁用</Tag> },
     { title: '上次执行', dataIndex: 'lastRunAt', key: 'lastRunAt' },
-    { title: '操作', key: 'action', width: 160, render: (_: any, record: SnapshotPolicy) => (
+    { title: '操作', key: 'action', width: 160, render: (_: unknown, record: SnapshotPolicy) => (
       <Space>
         <Button type="link" size="small" icon={<Edit size={14} />} onClick={() => openEdit(record)}>编辑</Button>
         <Popconfirm title="确定删除?" onConfirm={() => handleDelete(record.id)}>

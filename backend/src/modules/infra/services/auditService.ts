@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { auditLogRepository } from '../../../repositories';
+import { logger } from '../../../utils/logger';
 
 export const createAuditLog = (data: {
   user_id?: string;
@@ -24,7 +25,7 @@ export const createAuditLog = (data: {
 
     return id;
   } catch (error) {
-    console.error('Failed to create audit log:', error);
+    logger.error('Failed to create audit log:', error);
     return null;
   }
 };

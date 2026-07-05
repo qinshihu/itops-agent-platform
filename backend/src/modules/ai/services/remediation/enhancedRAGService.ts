@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { knowledgeRepository } from '../../../../repositories';
 import type { KnowledgeRecord } from '../../../../repositories';
 import { localRuleEngine } from '../rca/localRuleEngine';
+import { logger } from '../../../../utils/logger';
 
 interface KnowledgeItem {
   id: string;
@@ -338,7 +339,7 @@ class EnhancedRAGService {
         );
         imported++;
       } catch (error) {
-        console.error('Failed to import knowledge item:', error);
+        logger.error('Failed to import knowledge item:', error);
         failed++;
       }
     }

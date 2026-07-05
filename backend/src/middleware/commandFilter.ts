@@ -95,7 +95,7 @@ export function checkCommandSafety(
   reason?: string;
   policy?: string;
 } {
-  if (!command || !command.trim()) {
+  if (!command?.trim()) {
     return { allowed: true, severity: 'safe' };
   }
 
@@ -151,7 +151,7 @@ export function checkCommandSafety(
 
     // 检查危险命令名
     const policy = DANGEROUS_COMMAND_NAMES.get(cmdName);
-    if (policy && policy.blockedRoles.includes(userRole)) {
+    if (policy?.blockedRoles?.includes(userRole)) {
       if (policy.action === 'block') {
         return {
           allowed: false,

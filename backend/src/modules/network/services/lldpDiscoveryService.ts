@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Client } from 'ssh2';
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';

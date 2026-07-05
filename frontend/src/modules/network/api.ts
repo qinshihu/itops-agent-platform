@@ -4,7 +4,7 @@
  */
 
 import api from '@/lib/api';
-import type { NetworkDevice as NetworkDeviceEntity, SnmpCredential as SnmpCredentialEntity } from '@/types/network';
+import type { NetworkDevice as _NetworkDeviceEntity, SnmpCredential as _SnmpCredentialEntity } from '@/types/network';
 
 // ============================================================
 // 类型定义
@@ -272,54 +272,54 @@ export const networkApi = {
 
   /** 获取网络设备列表 */
   async listDevices(): Promise<NetworkDevice[]> {
-    const { data } = await api.get('/api/network-devices');
+    const { data } = await api.get('/network-devices');
     return data.data;
   },
 
   /** 创建网络设备 */
   async createDevice(input: NetworkDeviceInput): Promise<NetworkDevice> {
-    const { data } = await api.post('/api/network-devices', input);
+    const { data } = await api.post('/network-devices', input);
     return data.data;
   },
 
   /** 更新网络设备 */
   async updateDevice(id: string, input: Partial<NetworkDeviceInput>): Promise<NetworkDevice> {
-    const { data } = await api.put(`/api/network-devices/${id}`, input);
+    const { data } = await api.put(`/network-devices/${id}`, input);
     return data.data;
   },
 
   /** 删除网络设备 */
   async deleteDevice(id: string): Promise<void> {
-    await api.delete(`/api/network-devices/${id}`);
+    await api.delete(`/network-devices/${id}`);
   },
 
   /** 测试设备连接 */
   async testDeviceConnection(id: string): Promise<TestConnectionResult> {
-    const { data } = await api.post(`/api/network-devices/${id}/test-connection`);
+    const { data } = await api.post(`/network-devices/${id}/test-connection`);
     return data;
   },
 
   /** 批量测试连接 */
   async testConnectionBatch(input: NetworkDeviceInput): Promise<unknown> {
-    const { data } = await api.post('/api/network-devices/test-connection', input);
+    const { data } = await api.post('/network-devices/test-connection', input);
     return data;
   },
 
   /** SNMP 巡检 */
   async inspectSnmp(id: string): Promise<unknown> {
-    const { data } = await api.post(`/api/network-devices/${id}/inspect-snmp`);
+    const { data } = await api.post(`/network-devices/${id}/inspect-snmp`);
     return data.data;
   },
 
   /** 设备巡检 */
   async inspectDevice(id: string, input: InspectionInput): Promise<unknown> {
-    const { data } = await api.post(`/api/network-devices/${id}/inspect`, input);
+    const { data } = await api.post(`/network-devices/${id}/inspect`, input);
     return data.data;
   },
 
   /** 批量巡检 */
   async batchInspect(input: BatchInspectionInput): Promise<unknown[]> {
-    const { data } = await api.post('/api/network-devices/batch-inspect', input);
+    const { data } = await api.post('/network-devices/batch-inspect', input);
     return data.data;
   },
 
@@ -327,48 +327,48 @@ export const networkApi = {
 
   /** 获取 SNMP 凭证列表 */
   async listSnmpCredentials(): Promise<SnmpCredential[]> {
-    const { data } = await api.get('/api/snmp/credentials');
+    const { data } = await api.get('/snmp/credentials');
     return data.data || [];
   },
 
   /** 创建 SNMP 凭证 */
   async createSnmpCredential(input: SnmpCredentialInput): Promise<SnmpCredential> {
-    const { data } = await api.post('/api/snmp/credentials', input);
+    const { data } = await api.post('/snmp/credentials', input);
     return data.data;
   },
 
   /** 更新 SNMP 凭证 */
   async updateSnmpCredential(id: string, input: SnmpCredentialInput): Promise<SnmpCredential> {
-    const { data } = await api.put(`/api/snmp/credentials/${id}`, input);
+    const { data } = await api.put(`/snmp/credentials/${id}`, input);
     return data.data;
   },
 
   /** 删除 SNMP 凭证 */
   async deleteSnmpCredential(id: string): Promise<void> {
-    await api.delete(`/api/snmp/credentials/${id}`);
+    await api.delete(`/snmp/credentials/${id}`);
   },
 
   /** 测试 SNMP 凭证 */
   async testSnmpCredential(id: string, params?: { host?: string }): Promise<unknown> {
-    const { data } = await api.post(`/api/snmp/credentials/${id}/test`, params);
+    const { data } = await api.post(`/snmp/credentials/${id}/test`, params);
     return data;
   },
 
   /** SNMP 连接测试 */
   async testSnmpConnection(input: SnmpTestInput): Promise<unknown> {
-    const { data } = await api.post('/api/snmp/test', input);
+    const { data } = await api.post('/snmp/test', input);
     return data;
   },
 
   /** 获取 SNMP 系统信息 */
   async getSnmpSystemInfo(input: SnmpQueryInput): Promise<unknown> {
-    const { data } = await api.post('/api/snmp/system-info', input);
+    const { data } = await api.post('/snmp/system-info', input);
     return data.data;
   },
 
   /** 获取 SNMP 接口信息 */
   async getSnmpInterfaces(input: SnmpQueryInput): Promise<unknown> {
-    const { data } = await api.post('/api/snmp/interfaces', input);
+    const { data } = await api.post('/snmp/interfaces', input);
     return data.data;
   },
 
@@ -376,49 +376,49 @@ export const networkApi = {
 
   /** 获取 Trap 列表 */
   async listTraps(params?: { limit?: number }): Promise<SnmpTrap[]> {
-    const { data } = await api.get('/api/snmp/traps', { params });
+    const { data } = await api.get('/snmp/traps', { params });
     return data.data || [];
   },
 
   /** 发送测试 Trap */
   async testTrap(): Promise<void> {
-    await api.post('/api/snmp/traps/test');
+    await api.post('/snmp/traps/test');
   },
 
   // ── 子网管理 ──
 
   /** 获取子网列表 */
   async listSubnets(): Promise<SubnetInfo[]> {
-    const { data } = await api.get('/api/network-subnets');
+    const { data } = await api.get('/network-subnets');
     return data.data;
   },
 
   /** 创建子网 */
   async createSubnet(input: SubnetInput): Promise<SubnetInfo> {
-    const { data } = await api.post('/api/network-subnets', input);
+    const { data } = await api.post('/network-subnets', input);
     return data.data;
   },
 
   /** 更新子网 */
   async updateSubnet(id: string, input: SubnetUpdateInput): Promise<SubnetInfo> {
-    const { data } = await api.put(`/api/network-subnets/${id}`, input);
+    const { data } = await api.put(`/network-subnets/${id}`, input);
     return data.data;
   },
 
   /** 删除子网 */
   async deleteSubnet(id: string): Promise<void> {
-    await api.delete(`/api/network-subnets/${id}`);
+    await api.delete(`/network-subnets/${id}`);
   },
 
   /** 获取子网 IP 列表 */
   async listSubnetIps(subnetId: string, params?: { status?: string; search?: string; pageSize?: number }): Promise<IpListData> {
-    const { data } = await api.get(`/api/network-subnets/${subnetId}/ips`, { params });
+    const { data } = await api.get(`/network-subnets/${subnetId}/ips`, { params });
     return data.data;
   },
 
   /** 批量操作 IP */
   async batchUpdateIps(subnetId: string, input: BatchIpInput): Promise<unknown> {
-    const { data } = await api.post(`/api/network-subnets/${subnetId}/ips/batch`, input);
+    const { data } = await api.post(`/network-subnets/${subnetId}/ips/batch`, input);
     return data;
   },
 
@@ -426,65 +426,65 @@ export const networkApi = {
 
   /** 获取全局拓扑 */
   async getGlobalTopology(): Promise<TopologyData> {
-    const { data } = await api.get('/api/topology/global');
+    const { data } = await api.get('/topology/global');
     return data.data;
   },
 
   /** 获取依赖关系列表 */
   async listDependencies(): Promise<Dependency[]> {
-    const { data } = await api.get('/api/topology/dependency');
+    const { data } = await api.get('/topology/dependency');
     return data.data;
   },
 
   /** 创建依赖关系 */
   async createDependency(input: DependencyInput): Promise<Dependency> {
-    const { data } = await api.post('/api/topology/dependency', input);
+    const { data } = await api.post('/topology/dependency', input);
     return data.data;
   },
 
   /** 删除依赖关系 */
   async deleteDependency(dependencyId: string): Promise<void> {
-    await api.delete(`/api/topology/dependency/${dependencyId}`);
+    await api.delete(`/topology/dependency/${dependencyId}`);
   },
 
   /** 发现服务器拓扑 */
   async discoverTopology(serverId: string): Promise<void> {
-    await api.post(`/api/topology/discover/${serverId}`);
+    await api.post(`/topology/discover/${serverId}`);
   },
 
   // ── 网络发现 ──
 
   /** 获取发现任务列表 */
   async listDiscoveryJobs(): Promise<DiscoveryJob[]> {
-    const { data } = await api.get('/api/network-discovery/jobs');
+    const { data } = await api.get('/network-discovery/jobs');
     return data.data || [];
   },
 
   /** 创建发现任务 */
   async createDiscoveryJob(input: DiscoveryJobInput): Promise<DiscoveryJob> {
-    const { data } = await api.post('/api/network-discovery/jobs', input);
+    const { data } = await api.post('/network-discovery/jobs', input);
     return data.data;
   },
 
   /** 取消发现任务 */
   async cancelDiscoveryJob(jobId: string): Promise<void> {
-    await api.post(`/api/network-discovery/jobs/${jobId}/cancel`);
+    await api.post(`/network-discovery/jobs/${jobId}/cancel`);
   },
 
   /** 删除发现任务 */
   async deleteDiscoveryJob(jobId: string): Promise<void> {
-    await api.delete(`/api/network-discovery/jobs/${jobId}`);
+    await api.delete(`/network-discovery/jobs/${jobId}`);
   },
 
   /** 获取发现结果 */
   async listDiscoveryResults(params?: { jobId?: string; limit?: number }): Promise<{ data: DiscoveryResult[]; total: number }> {
-    const { data } = await api.get('/api/network-discovery/results', { params });
+    const { data } = await api.get('/network-discovery/results', { params });
     return { data: data.data, total: data.total };
   },
 
   /** 导入发现的设备 */
   async importDiscoveryResults(input: DiscoveryImportInput): Promise<DiscoveryImportResult> {
-    const { data } = await api.post('/api/network-discovery/import', input);
+    const { data } = await api.post('/network-discovery/import', input);
     return data.data;
   },
 };

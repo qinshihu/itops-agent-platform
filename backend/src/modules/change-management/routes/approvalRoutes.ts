@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { requireRole } from '../../../middleware/auth';
 import { approvalService } from '../services/approvalService';
 import { approvalsRepo } from '../../../repositories';
+import { logger } from '../../../utils/logger';
 
 const router = Router();
 
@@ -48,13 +49,14 @@ router.post('/:id/approve', requireRole('admin', 'operator'), async (req: Reques
   try {
     const { id } = req.params;
     const { comment } = req.body;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const userId = (req as any).user?.id || 'unknown';
 
     // 异步不阻塞响应
     res.json({ success: true, message: 'Approval granted, resuming workflow' });
     setImmediate(() => {
       approvalService.approve(id, userId, comment).catch(err =>
-        console.error('Failed to approve:', err)
+        logger.error('Failed to approve:', err)
       );
     });
   } catch (_error) {
@@ -67,6 +69,7 @@ router.post('/:id/reject', requireRole('admin', 'operator'), async (req: Request
   try {
     const { id } = req.params;
     const { reason } = req.body;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const userId = (req as any).user?.id || 'unknown';
 
     if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
@@ -77,7 +80,7 @@ router.post('/:id/reject', requireRole('admin', 'operator'), async (req: Request
     res.json({ success: true, message: 'Approval rejected, workflow terminated' });
     setImmediate(() => {
       approvalService.reject(id, userId, reason).catch(err =>
-        console.error('Failed to reject:', err)
+        logger.error('Failed to reject:', err)
       );
     });
   } catch (_error) {

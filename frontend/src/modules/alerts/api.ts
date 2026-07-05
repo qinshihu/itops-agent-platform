@@ -4,7 +4,7 @@
  */
 
 import api from '@/lib/api';
-import type { Alert as AlertEntity } from '@/types/alert';
+import type { Alert as _AlertEntity } from '@/types/alert';
 
 // ============================================================
 // 类型定义
@@ -249,29 +249,29 @@ export const alertApi = {
 
   /** 获取告警列表 */
   async listAlerts(params?: AlertListParams): Promise<Alert[]> {
-    const { data } = await api.get('/api/alerts', { params });
+    const { data } = await api.get('/alerts', { params });
     return data;
   },
 
   /** 获取告警自动处理记录 */
   async getAutomationLogs(alertId: string): Promise<AutomationLog[]> {
-    const { data } = await api.get(`/api/alerts/${alertId}/automation-logs`);
+    const { data } = await api.get(`/alerts/${alertId}/automation-logs`);
     return data;
   },
 
   /** 确认告警 */
   async acknowledgeAlert(alertId: string): Promise<void> {
-    await api.put(`/api/alerts/${alertId}/acknowledge`);
+    await api.put(`/alerts/${alertId}/acknowledge`);
   },
 
   /** 解决告警 */
   async resolveAlert(alertId: string): Promise<void> {
-    await api.put(`/api/alerts/${alertId}/resolve`);
+    await api.put(`/alerts/${alertId}/resolve`);
   },
 
   /** 处理告警（匹配映射+修复策略+根因分析） */
   async processAlert(alertId: string): Promise<ProcessResult> {
-    const { data } = await api.post(`/api/alerts/${alertId}/process`);
+    const { data } = await api.post(`/alerts/${alertId}/process`);
     return data;
   },
 
@@ -279,7 +279,7 @@ export const alertApi = {
 
   /** 获取 AI 自动分析列表 */
   async listAutoAnalysis(params?: AutoAnalysisListParams): Promise<AutoAnalysisResult[]> {
-    const { data } = await api.get('/api/alert-auto-analysis', { params });
+    const { data } = await api.get('/alert-auto-analysis', { params });
     return data;
   },
 
@@ -287,35 +287,35 @@ export const alertApi = {
 
   /** 获取关联组列表 */
   async listCorrelationGroups(params?: CorrelationGroupListParams): Promise<CorrelationGroup[]> {
-    const { data } = await api.get('/api/alert-correlation/groups', { params });
+    const { data } = await api.get('/alert-correlation/groups', { params });
     return data;
   },
 
   /** 获取关联统计 */
   async getCorrelationStats(): Promise<CorrelationStats> {
-    const { data } = await api.get('/api/alert-correlation/stats');
+    const { data } = await api.get('/alert-correlation/stats');
     return data;
   },
 
   /** 获取关联组详情 */
   async getCorrelationGroup(groupId: string): Promise<CorrelationGroupDetail> {
-    const { data } = await api.get(`/api/alert-correlation/groups/${groupId}`);
+    const { data } = await api.get(`/alert-correlation/groups/${groupId}`);
     return data;
   },
 
   /** 标记关联组为已解决 */
   async resolveCorrelationGroup(groupId: string): Promise<void> {
-    await api.post(`/api/alert-correlation/groups/${groupId}/resolve`, {});
+    await api.post(`/alert-correlation/groups/${groupId}/resolve`, {});
   },
 
   /** 删除关联组 */
   async deleteCorrelationGroup(groupId: string): Promise<void> {
-    await api.delete(`/api/alert-correlation/groups/${groupId}`);
+    await api.delete(`/alert-correlation/groups/${groupId}`);
   },
 
   /** 触发自动关联 */
   async autoCorrelate(): Promise<AutoCorrelateResult> {
-    const { data } = await api.post('/api/alert-correlation/auto');
+    const { data } = await api.post('/alert-correlation/auto');
     return data;
   },
 
@@ -323,90 +323,90 @@ export const alertApi = {
 
   /** 获取告警映射列表 */
   async listMappings(): Promise<AlertMapping[]> {
-    const { data } = await api.get('/api/alert-mappings');
+    const { data } = await api.get('/alert-mappings');
     return data;
   },
 
   /** 创建告警映射 */
   async createMapping(input: AlertMappingInput): Promise<AlertMapping> {
-    const { data } = await api.post('/api/alert-mappings', input);
+    const { data } = await api.post('/alert-mappings', input);
     return data;
   },
 
   /** 更新告警映射 */
   async updateMapping(id: string, input: AlertMappingInput): Promise<AlertMapping> {
-    const { data } = await api.put(`/api/alert-mappings/${id}`, input);
+    const { data } = await api.put(`/alert-mappings/${id}`, input);
     return data;
   },
 
   /** 删除告警映射 */
   async deleteMapping(id: string): Promise<void> {
-    await api.delete(`/api/alert-mappings/${id}`);
+    await api.delete(`/alert-mappings/${id}`);
   },
 
   // ── 告警降噪 ──
 
   /** 获取降噪统计 */
   async getNoiseStats(): Promise<NoiseStats> {
-    const { data } = await api.get('/api/alert-noise/stats');
+    const { data } = await api.get('/alert-noise/stats');
     return data;
   },
 
   /** 获取已抑制告警列表 */
   async getSuppressedAlerts(): Promise<NoiseAlert[]> {
-    const { data } = await api.get('/api/alert-noise/suppressed');
+    const { data } = await api.get('/alert-noise/suppressed');
     return data;
   },
 
   /** 抑制告警 */
   async suppressAlert(params: SuppressParams): Promise<void> {
-    await api.post('/api/alert-noise/suppress', params);
+    await api.post('/alert-noise/suppress', params);
   },
 
   /** 取消抑制告警 */
   async unsuppressAlert(fingerprint: string): Promise<void> {
-    await api.post('/api/alert-noise/unsuppress', { fingerprint });
+    await api.post('/alert-noise/unsuppress', { fingerprint });
   },
 
   /** 清理降噪历史记录 */
   async cleanupNoise(daysToKeep: number): Promise<void> {
-    await api.post('/api/alert-noise/cleanup', { daysToKeep });
+    await api.post('/alert-noise/cleanup', { daysToKeep });
   },
 
   // ── 告警源配置 ──
 
   /** 获取可用告警源列表 */
   async listProviders(params?: { type?: string }): Promise<AlertProvider[]> {
-    const { data } = await api.get('/api/alerts/providers/list', { params });
+    const { data } = await api.get('/alerts/providers/list', { params });
     return data;
   },
 
   /** 获取告警源配置列表 */
   async listProviderConfigs(): Promise<AlertProviderConfig[]> {
-    const { data } = await api.get('/api/alerts/providers/configs');
+    const { data } = await api.get('/alerts/providers/configs');
     return data;
   },
 
   /** 创建告警源配置 */
   async createProviderConfig(input: AlertProviderConfigInput): Promise<AlertProviderConfig> {
-    const { data } = await api.post('/api/alerts/providers/configs', input);
+    const { data } = await api.post('/alerts/providers/configs', input);
     return data;
   },
 
   /** 更新告警源配置 */
   async updateProviderConfig(id: string, input: AlertProviderConfigInput): Promise<AlertProviderConfig> {
-    const { data } = await api.put(`/api/alerts/providers/configs/${id}`, input);
+    const { data } = await api.put(`/alerts/providers/configs/${id}`, input);
     return data;
   },
 
   /** 删除告警源配置 */
   async deleteProviderConfig(id: string): Promise<void> {
-    await api.delete(`/api/alerts/providers/configs/${id}`);
+    await api.delete(`/alerts/providers/configs/${id}`);
   },
 
   /** 测试/拉取告警源数据 */
   async fetchProvider(params: FetchProviderParams): Promise<unknown> {
-    const { data } = await api.post('/api/alerts/providers/fetch', params);
+    const { data } = await api.post('/alerts/providers/fetch', params);
     return data;
   },
 
@@ -414,13 +414,13 @@ export const alertApi = {
 
   /** 获取巡检中心列表 */
   async listInspections(params?: InspectionListParams): Promise<InspectionItem[]> {
-    const { data } = await api.get('/api/inspection-center', { params });
+    const { data } = await api.get('/inspection-center', { params });
     return data;
   },
 
   /** 获取仪表盘联动数据 */
   async getDashboardLinkage(): Promise<DashboardLinkage> {
-    const { data } = await api.get('/api/dashboard/linkage');
+    const { data } = await api.get('/dashboard/linkage');
     return data;
   },
 };

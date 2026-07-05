@@ -42,7 +42,7 @@ export default function Scripts() {
       const params: Record<string, string> = {};
       if (search) params.search = search;
       if (selectedCategory) params.category = selectedCategory;
-      const res = await api.get('/api/scripts', { params });
+      const res = await api.get('/scripts', { params });
       return res.data.data as Script[];
     },
   });
@@ -50,14 +50,14 @@ export default function Scripts() {
   const { data: categories } = useQuery({
     queryKey: ['script-categories'],
     queryFn: async () => {
-      const res = await api.get('/api/scripts/categories');
+      const res = await api.get('/scripts/categories');
       return res.data.data as string[];
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/scripts/${id}`);
+      await api.delete(`/scripts/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scripts'] });
@@ -330,9 +330,9 @@ function ScriptModal({ script, categories, onClose }: { script: Script | null, c
       }
 
       if (script) {
-        await api.put(`/api/scripts/${script.id}`, { ...data, parameters: params });
+        await api.put(`/scripts/${script.id}`, { ...data, parameters: params });
       } else {
-        await api.post('/api/scripts', { ...data, parameters: params });
+        await api.post('/scripts', { ...data, parameters: params });
       }
     },
     onSuccess: () => {

@@ -15,7 +15,8 @@ import InspectionResult from '../../../modules/alerts/components/InspectionResul
 import SnmpInspectionResult from '../../../modules/network/components/SnmpInspectionResult';
 import InspectionHistory from '../../../modules/alerts/components/InspectionHistory';
 import { useEscapeKey } from '../../../hooks/useEscapeKey';
-import { safeFormatDistance } from '../../../lib/date';
+import { _safeFormatDistance } from '../../../lib/date';
+import { getAxiosErrorMessage } from '@/lib/errorHandler';
 
 interface NetworkDevice {
   id: string;
@@ -40,6 +41,55 @@ interface NetworkDevice {
 
 interface InspectionResultData {
   _deviceName?: string;
+  inspectionId: string;
+  deviceId: string;
+  inspectionType: 'standard' | 'custom' | 'full';
+  status: 'success' | 'partial' | 'failed';
+  results: Array<{
+    type: string;
+    success: boolean;
+    value?: number | string;
+    unit?: string;
+    status: 'normal' | 'warning' | 'critical' | 'error';
+    details: string;
+    rawOutput: string;
+    timestamp: string;
+  }>;
+  commandsExecuted: number;
+  commandsFailed: number;
+  durationMs: number;
+  summary: string;
+  [key: string]: unknown;
+}
+
+interface SnmpInterfaceMetric {
+  index: number;
+  name: string;
+  operStatus: 'up' | 'down';
+  adminStatus: 'up' | 'down';
+  speed: number;
+  mtu: number;
+  mac: string;
+  inBps: number;
+  outBps: number;
+  inUtilization: number;
+  outUtilization: number;
+  inErrors: number;
+  outErrors: number;
+}
+
+interface SnmpInspectionData {
+  _deviceName?: string;
+  reachable: boolean;
+  sysName: string;
+  sysDescr: string;
+  sysUptime: number;
+  interfaces: SnmpInterfaceMetric[];
+  interfaceCount: number;
+  upCount: number;
+  downCount: number;
+  alerts: string[];
+  pollDurationMs: number;
   [key: string]: unknown;
 }
 
@@ -65,7 +115,7 @@ export default function NetworkDevices() {
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [inspectionResult, setInspectionResult] = useState<InspectionResultData | null>(null);
-  const [snmpInspectionResult, setSnmpInspectionResult] = useState<InspectionResultData | null>(null);
+  const [snmpInspectionResult, setSnmpInspectionResult] = useState<SnmpInspectionData | null>(null);
   const [showInspectionModal, setShowInspectionModal] = useState(false);
   const [inspectingDevice, setInspectingDevice] = useState<NetworkDevice | null>(null);
   const [inspectionType, setInspectionType] = useState<'standard' | 'custom' | 'full'>('standard');
@@ -87,11 +137,11 @@ export default function NetworkDevices() {
 
   const { data: devices = [], isLoading } = useQuery({
     queryKey: ['network-devices'],
-    queryFn: () => api.get('/api/network-devices').then(res => res.data.data)
+    queryFn: () => api.get('/network-devices').then(res => res.data.data)
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/network-devices/${id}`),
+    mutationFn: (id: string) => api.delete(`/network-devices/${id}`),
     onSuccess: () => {
       toast.success('设备删除成功');
       queryClient.invalidateQueries({ queryKey: ['network-devices'] });
@@ -124,13 +174,13 @@ export default function NetworkDevices() {
 
   const handleSnmpInspect = async (device: NetworkDevice) => {
     try {
-      const response = await api.post(`/api/network-devices/${device.id}/inspect-snmp`);
+      const response = await api.post(`/network-devices/${device.id}/inspect-snmp`);
       const data = response.data.data;
       data._deviceName = device.name;
       setSnmpInspectionResult(data);
       queryClient.invalidateQueries({ queryKey: ['network-devices'] });
-    } catch (error) {
-      toast.error('SNMP 巡检失败: ' + ((error as { response?: { data?: { error?: string } }; message?: string }).response?.data?.error || (error as { message?: string }).message || '未知错误'));
+    } catch (_error) {
+      toast.error('SNMP 巡检失败: ' + ((_error as { response?: { data?: { error?: string } }; message?: string }).response?.data?.error || (_error as { message?: string }).message || '未知错误'));
     }
   };
 
@@ -140,7 +190,7 @@ export default function NetworkDevices() {
       return;
     }
     try {
-      const response = await api.post(`/api/snmp/credentials/${device.snmp_credential_id}/test`, {
+      const response = await api.post(`/snmp/credentials/${device.snmp_credential_id}/test`, {
         host: device.ip_address
       });
       if (response.data.code === 0) {
@@ -156,7 +206,7 @@ export default function NetworkDevices() {
   const handleTestConnection = async (device: NetworkDevice) => {
     try {
       toast.info(`正在测试 ${device.name} 的连接...`);
-      const response = await api.post(`/api/network-devices/${device.id}/test-connection`);
+      const response = await api.post(`/network-devices/${device.id}/test-connection`);
       const result = response.data;
       
       if (result.success) {
@@ -164,7 +214,7 @@ export default function NetworkDevices() {
       } else {
         toast.error(`连接失败: ${result.data.message}`);
       }
-    } catch (error) {
+    } catch {
       toast.error('测试连接失败');
     }
   };
@@ -178,7 +228,7 @@ export default function NetworkDevices() {
 
     setIsInspecting(true);
     try {
-      const response = await api.post(`/api/network-devices/${inspectingDevice.id}/inspect`, {
+      const response = await api.post(`/network-devices/${inspectingDevice.id}/inspect`, {
         inspectionType,
         customDescription: inspectionType === 'custom' ? customDescription : undefined
       });
@@ -186,8 +236,8 @@ export default function NetworkDevices() {
       setInspectionResult(response.data.data);
       toast.success('巡检完成');
       queryClient.invalidateQueries({ queryKey: ['network-devices'] });
-    } catch (error: any) {
-      toast.error('巡检失败: ' + (error.response?.data?.error || error.message));
+    } catch (error: unknown) {
+      toast.error('巡检失败: ' + getAxiosErrorMessage(error));
     } finally {
       setIsInspecting(false);
     }
@@ -224,7 +274,7 @@ export default function NetworkDevices() {
 
     setIsBatchInspecting(true);
     try {
-      const response = await api.post('/api/network-devices/batch-inspect', {
+      const response = await api.post('/network-devices/batch-inspect', {
         deviceIds: Array.from(selectedDevices),
         inspectionType: 'standard'
       });
@@ -259,9 +309,9 @@ export default function NetworkDevices() {
   }, [devices, selectedVendor, searchQuery]);
 
   // 关联数据：各设备的最近巡检/分析/修复概览
-  const { data: linkageData = { alerts: [], analyses: [], inspections: [], executions: [] } } = useQuery({
+  const { data: _linkageData = { alerts: [], analyses: [], inspections: [], executions: [] } } = useQuery({
     queryKey: ['device-linkage'],
-    queryFn: () => api.get('/api/dashboard/linkage').then(r => r.data.data || {}),
+    queryFn: () => api.get('/dashboard/linkage').then(r => r.data.data || {}),
     refetchInterval: 60000,
   });
 
@@ -269,8 +319,8 @@ export default function NetworkDevices() {
   const { data: deviceTimeline = {} as Record<string, DeviceTimelineEntry> } = useQuery({
     queryKey: ['device-timeline'],
     queryFn: async () => {
-      const res = await api.get('/api/inspection-center?limit=300');
-      const items = (res.data.data || []) as any[];
+      const res = await api.get('/inspection-center?limit=300');
+      const items = (res.data.data || []) as TimelineItem[];
       // 按 device_id 分组，取最新一条 per source
       const map: Record<string, DeviceTimelineEntry> = {};
       items.forEach((item: TimelineItem) => {
@@ -609,7 +659,7 @@ export default function NetworkDevices() {
 
       {inspectionResult && (
         <InspectionResult
-          result={inspectionResult as any}
+          result={inspectionResult}
           deviceName={inspectingDevice?.name || ''}
           onClose={() => setInspectionResult(null)}
         />
@@ -617,7 +667,7 @@ export default function NetworkDevices() {
 
       {snmpInspectionResult && (
         <SnmpInspectionResult
-          result={snmpInspectionResult as any}
+          result={snmpInspectionResult}
           deviceName={snmpInspectionResult._deviceName || ''}
           onClose={() => setSnmpInspectionResult(null)}
         />

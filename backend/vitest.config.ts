@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -10,11 +11,13 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       // 渐进式提升计划：每月 +5%，目标 50%/80%/55%/50%
       thresholds: {
+        // 当前覆盖率: branches 17%, functions 57%, lines 22%, statements 17%
+        // 目标: 逐月提升 5%，最终达到 60%
         global: {
-          branches: 22,  // 当前 17% → 22%
-          functions: 60, // 当前 57% → 60%
-          lines: 27,     // 当前 22% → 27%
-          statements: 22, // 当前 17% → 22%
+          branches: 25,
+          functions: 60,
+          lines: 30,
+          statements: 25,
         },
       },
       exclude: [

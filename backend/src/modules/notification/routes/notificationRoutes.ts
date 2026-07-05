@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { notificationsRepo } from '../../../repositories';
-import { createNotification } from '../services/notificationService';
+import { createNotification as _createNotification } from '../services/notificationService';
 
 const router = Router();
 

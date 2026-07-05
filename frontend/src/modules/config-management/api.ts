@@ -54,30 +54,30 @@ export interface RenderResult {
 export const configManagementApi = {
   /** 获取配置模板列表 */
   async list(params?: ConfigTemplateListParams): Promise<{ templates: ConfigTemplate[]; total: number }> {
-    const { data } = await api.get('/api/config-templates', { params });
+    const { data } = await api.get('/config-templates', { params });
     return data.data;
   },
 
   /** 创建配置模板 */
   async create(input: ConfigTemplateInput): Promise<ConfigTemplate> {
-    const { data } = await api.post('/api/config-templates', input);
+    const { data } = await api.post('/config-templates', input);
     return data.data;
   },
 
   /** 更新配置模板 */
   async update(id: string, input: ConfigTemplateInput): Promise<ConfigTemplate> {
-    const { data } = await api.put(`/api/config-templates/${id}`, input);
+    const { data } = await api.put(`/config-templates/${id}`, input);
     return data.data;
   },
 
   /** 删除配置模板 */
   async delete(id: string): Promise<void> {
-    await api.delete(`/api/config-templates/${id}`);
+    await api.delete(`/config-templates/${id}`);
   },
 
   /** 渲染配置模板 */
   async render(id: string, variables?: Record<string, string>): Promise<RenderResult> {
-    const { data } = await api.post(`/api/config-templates/${id}/render`, { variables });
+    const { data } = await api.post(`/config-templates/${id}/render`, { variables });
     return data;
   },
 };

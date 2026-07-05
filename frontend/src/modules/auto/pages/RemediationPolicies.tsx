@@ -30,14 +30,14 @@ export default function RemediationPolicies() {
       if (enabledFilter !== 'all') {
         params.enabled = enabledFilter === 'enabled' ? 'true' : 'false';
       }
-      const res = await api.get('/api/remediation-policies', { params });
+      const res = await api.get('/remediation-policies', { params });
       return res.data.data;
     }
   });
 
   const toggleMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.patch(`/api/remediation-policies/${id}/toggle`);
+      await api.patch(`/remediation-policies/${id}/toggle`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['remediation-policies'] });
@@ -46,7 +46,7 @@ export default function RemediationPolicies() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/remediation-policies/${id}`);
+      await api.delete(`/remediation-policies/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['remediation-policies'] });

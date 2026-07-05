@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
-import db from '../../../models/database';
+import { vmSnapshotPolicyRepository } from '../../../../repositories';
 import { vmManagementService } from '../../containers/services/vmManagement';
 
 interface SnapshotPolicy {
@@ -35,7 +36,7 @@ class VmSnapshotSchedulerService {
 
   private loadPolicies() {
     try {
-      const rows = db.prepare('SELECT * FROM vm_snapshot_policies WHERE enabled = 1').all() as any[];
+      const rows = vmSnapshotPolicyRepository.listEnabled();
       for (const row of rows) {
         this.schedulePolicy(row);
       }
@@ -88,7 +89,7 @@ class VmSnapshotSchedulerService {
 
       await this.cleanupOldSnapshots(policy.platform_id, policy.vm_id, policy.retention);
 
-      db.prepare(`UPDATE vm_snapshot_policies SET last_run_at=datetime('now','localtime') WHERE id=?`).run(policy.id);
+      vmSnapshotPolicyRepository.updateLastRunAt(policy.id);
 
       logger.info(`✅ Snapshot policy ${policy.name} completed`);
     } catch (err) {
@@ -117,7 +118,7 @@ class VmSnapshotSchedulerService {
   }
 
   listPolicies(): SnapshotPolicy[] {
-    const rows = db.prepare('SELECT * FROM vm_snapshot_policies ORDER BY name').all() as any[];
+    const rows = vmSnapshotPolicyRepository.list();
     return rows.map(r => ({
       id: r.id, name: r.name, platformId: r.platform_id, vmId: r.vm_id,
       cronExpression: r.cron_expression, retention: r.retention,
@@ -128,7 +129,7 @@ class VmSnapshotSchedulerService {
   }
 
   getPolicy(policyId: string): SnapshotPolicy | null {
-    const row = db.prepare('SELECT * FROM vm_snapshot_policies WHERE id = ?').get(policyId) as any;
+    const row = vmSnapshotPolicyRepository.getById(policyId);
     if (!row) return null;
     return {
       id: row.id, name: row.name, platformId: row.platform_id, vmId: row.vm_id,
@@ -141,10 +142,16 @@ class VmSnapshotSchedulerService {
 
   createPolicy(data: Omit<SnapshotPolicy, 'id' | 'createdAt' | 'updatedAt'>): SnapshotPolicy {
     const id = randomUUID();
-    db.prepare(`
-      INSERT INTO vm_snapshot_policies (id, name, platform_id, vm_id, cron_expression, retention, snapshot_memory, enabled)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, data.name, data.platformId, data.vmId, data.cronExpression, data.retention, data.snapshotMemory ? 1 : 0, data.enabled ? 1 : 0);
+    vmSnapshotPolicyRepository.create({
+      id,
+      name: data.name,
+      platform_id: data.platformId,
+      vm_id: data.vmId,
+      cron_expression: data.cronExpression,
+      retention: data.retention,
+      snapshot_memory: data.snapshotMemory ? 1 : 0,
+      enabled: data.enabled ? 1 : 0,
+    });
 
     const policy = this.getPolicy(id)!;
     if (policy.enabled) {
@@ -154,23 +161,20 @@ class VmSnapshotSchedulerService {
   }
 
   private getPolicyRow(policyId: string): any {
-    return db.prepare('SELECT * FROM vm_snapshot_policies WHERE id = ?').get(policyId);
+    return vmSnapshotPolicyRepository.getById(policyId);
   }
 
   updatePolicy(policyId: string, updates: Partial<SnapshotPolicy>): SnapshotPolicy {
     const existing = this.getPolicy(policyId);
     if (!existing) throw new Error('策略不存在');
 
-    db.prepare(`
-      UPDATE vm_snapshot_policies SET name=?, cron_expression=?, retention=?, snapshot_memory=?, enabled=?, updated_at=datetime('now','localtime')
-      WHERE id=?
-    `).run(
-      updates.name || existing.name, updates.cronExpression || existing.cronExpression,
-      updates.retention !== undefined ? updates.retention : existing.retention,
-      updates.snapshotMemory !== undefined ? (updates.snapshotMemory ? 1 : 0) : (existing.snapshotMemory ? 1 : 0),
-      updates.enabled !== undefined ? (updates.enabled ? 1 : 0) : (existing.enabled ? 1 : 0),
-      policyId
-    );
+    const fields: Record<string, unknown> = {};
+    if (updates.name !== undefined) fields.name = updates.name;
+    if (updates.cronExpression !== undefined) fields.cron_expression = updates.cronExpression;
+    if (updates.retention !== undefined) fields.retention = updates.retention;
+    if (updates.snapshotMemory !== undefined) fields.snapshot_memory = updates.snapshotMemory ? 1 : 0;
+    if (updates.enabled !== undefined) fields.enabled = updates.enabled ? 1 : 0;
+    vmSnapshotPolicyRepository.update(policyId, fields);
 
     this.stopPolicy(policyId);
     const updated = this.getPolicy(policyId)!;
@@ -182,7 +186,7 @@ class VmSnapshotSchedulerService {
 
   deletePolicy(policyId: string): void {
     this.stopPolicy(policyId);
-    db.prepare('DELETE FROM vm_snapshot_policies WHERE id = ?').run(policyId);
+    vmSnapshotPolicyRepository.delete(policyId);
   }
 
   private stopPolicy(policyId: string) {

@@ -1,8 +1,7 @@
 import { randomUUID } from 'crypto';
-import db from '../../../../models/database';
 import { getIOInstance } from '../../../../shared/websocket/io';
 import { logger } from '../../../../utils/logger';
-import { knowledgeRepository, tasksRepo } from '../../../../repositories';
+import { knowledgeRepository, tasksRepo, reportsRepo } from '../../../../repositories';
 import { executeAgentNode } from '../../../ai/services/agents/agentExecutor';
 import { reportService } from '../../../infra/services/reportService';
 import { notificationService } from '../../../notification/services/notificationService';
@@ -25,12 +24,7 @@ export async function finalizeWorkflow(
 ) {
   const io = getIOInstance();
 
-  db.prepare(`
-    UPDATE tasks
-    SET status = ?, end_time = datetime('now','localtime'),
-        node_results = ?, current_node_id = NULL
-    WHERE id = ?
-  `).run(status, JSON.stringify(nodeResults), taskId);
+  tasksRepo.finalizeTask(taskId, status, JSON.stringify(nodeResults));
 
   // 故障案例自动存入知识库
   try {
@@ -123,6 +117,8 @@ export async function finalizeWorkflow(
           const ctxJson = tasksRepo.getContext(taskId);
           const ctx = ctxJson ? JSON.parse(ctxJson) : {};
           if (ctx.remediation_id) {
+            // eslint-disable-next-line no-restricted-imports
+            const { default: db } = await import('../../../../models/database');
             db.prepare(`
               UPDATE ai_remediations SET status = 'failed', execution_result = ?, updated_at = datetime('now','localtime')
               WHERE id = ?
@@ -149,6 +145,8 @@ export async function finalizeWorkflow(
           const ctxJson = tasksRepo.getContext(taskId);
           const ctx = ctxJson ? JSON.parse(ctxJson) : {};
           if (ctx.remediation_id) {
+            // eslint-disable-next-line no-restricted-imports
+            const { default: db } = await import('../../../../models/database');
             db.prepare(`
               UPDATE ai_remediations SET status = 'failed', error_message = ?, updated_at = datetime('now','localtime')
               WHERE id = ?
@@ -249,7 +247,10 @@ export async function generateWorkflowExecutionReport(
     logger.info('✅ 使用已存在的工作流执行报告模板:', workflowTemplate.id);
   }
 
-  const task = db.prepare('SELECT start_time, end_time FROM tasks WHERE id = ?').get(taskId) as { start_time?: string; end_time?: string } | undefined;
+  const task = tasksRepo.getStartEndTime(taskId);
+
+  const startTime = task?.start_time ?? undefined;
+  const endTime = task?.end_time ?? undefined;
 
   const executionOrderDesc = executionOrder.map((nodeId, index) => {
     const node = nodes.find(n => n.id === nodeId);
@@ -291,8 +292,8 @@ export async function generateWorkflowExecutionReport(
     workflow_name: workflow.name,
     task_id: taskId,
     execution_status: status === 'completed' ? '成功完成' : '执行失败',
-    start_time: task?.start_time ? new Date(task.start_time).toLocaleString() : '-',
-    end_time: task?.end_time ? new Date(task.end_time).toLocaleString() : '-',
+    start_time: startTime ? new Date(startTime).toLocaleString() : '-',
+    end_time: endTime ? new Date(endTime).toLocaleString() : '-',
     execution_order: executionOrderDesc,
     node_details: nodeDetails,
     execution_summary: executionSummary,
@@ -307,23 +308,22 @@ export async function generateWorkflowExecutionReport(
 
     try {
       logger.info('📄 正在向 reports 表插入报告...');
-      db.prepare(`
-        INSERT INTO reports (id, name, content, format, task_id, created_at)
-        VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))
-      `).run(
-        generatedReport.id,
-        generatedReport.name,
-        generatedReport.content,
-        'markdown',
-        taskId
-      );
+      reportsRepo.create({
+        id: generatedReport.id,
+        name: generatedReport.name,
+        type: 'generated',
+        content: generatedReport.content,
+        format: 'markdown',
+        task_id: taskId,
+        created_at: new Date().toISOString(),
+      });
 
       logger.info('📄 正在更新 tasks 表的 report_id 字段...');
       tasksRepo.updateReportId(taskId, generatedReport.id);
 
       logger.info('✅ 工作流执行报告已生成并关联到任务:', generatedReport.id);
 
-      const savedReport = db.prepare('SELECT * FROM reports WHERE id = ?').get(generatedReport.id);
+      const savedReport = reportsRepo.getById(generatedReport.id);
       logger.info('✅ 验证：从数据库中读取到的报告:', savedReport ? '存在' : '不存在');
 
     } catch (e) {

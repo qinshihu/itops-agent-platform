@@ -14,7 +14,7 @@ export default function AIInsights() {
   const { data: rcaData, isLoading: rcaLoading } = useQuery({
     queryKey: ['rca-stats'],
     queryFn: async () => {
-      const res = await api.get('/api/root-cause-analysis');
+      const res = await api.get('/root-cause-analysis');
       return res.data.data as Array<Record<string, unknown>>;
     }
   });
@@ -22,7 +22,7 @@ export default function AIInsights() {
   const { data: knowledgeData, isLoading: knowledgeLoading } = useQuery({
     queryKey: ['knowledge-stats'],
     queryFn: async () => {
-      const res = await api.get('/api/knowledge');
+      const res = await api.get('/knowledge');
       return res.data.data as Array<Record<string, unknown>>;
     }
   });
@@ -180,6 +180,7 @@ export default function AIInsights() {
               </div>
               {completedRCAs.length > 0 ? (
                 <div className="divide-y divide-border/30">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {completedRCAs.slice(0, 10).map((rca: any) => (
                     <div key={rca.id} className="px-6 py-4 hover:bg-border/20 transition-colors">
                       <div className="flex items-start gap-3">

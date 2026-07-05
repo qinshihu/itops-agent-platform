@@ -1,6 +1,7 @@
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
+// eslint-disable-next-line no-restricted-imports
 import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
 import { getIOInstance } from '../../../shared/websocket/io';

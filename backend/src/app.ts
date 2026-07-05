@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+// eslint-disable-next-line no-restricted-imports -- app entry point, must initialize database
 import { initializeDatabase, setIOInstance } from './models/database';
 import { healthService } from './modules/monitor/services/healthService';
 import { registerAllModules } from './modules/_registry';
@@ -10,6 +11,7 @@ import { initAllServices, shutdownAllServices } from './serviceRegistry';
 import { container } from './core/serviceContainer';
 import { setupWebSocket } from './shared/websocket/handler';
 import { vncProxyService } from './modules/network/services/vncProxyService';
+import { setupSwagger } from './swagger';
 import { logger } from './utils/logger';
 
 const app = express();
@@ -39,9 +41,9 @@ let isShuttingDown = false;
 
 const initApp = async () => {
   try {
-    console.log('正在初始化数据库...');
+    logger.info('正在初始化数据库...');
     await initializeDatabase();
-    console.log('数据库初始化成功！');
+    logger.info('数据库初始化成功！');
 
     // 创建 HTTP 服务器 + Socket.io 实例（在服务初始化前完成）
     httpServer = http.createServer(app);
@@ -52,22 +54,26 @@ const initApp = async () => {
     setIOInstance(io);
     setupWebSocket(io);
     vncProxyService.initialize(io);
-    console.log('Socket.io 初始化成功！');
+    logger.info('Socket.io 初始化成功！');
 
     // 将 io 实例注册到 DI 容器（dcStatusPush 等服务依赖它）
     container.register('io', () => io, []);
 
-    console.log('正在初始化所有服务...');
+    logger.info('正在初始化所有服务...');
     await initAllServices();
-    console.log('所有服务初始化成功！');
+    logger.info('所有服务初始化成功！');
 
-    console.log('正在注册模块路由...');
+    logger.info('正在注册模块路由...');
     registerAllModules(app);
-    console.log('模块路由注册成功！');
+    logger.info('模块路由注册成功！');
 
-    console.log('正在启动服务...');
+    // 设置 Swagger API 文档
+    setupSwagger(app);
+    logger.info('Swagger 文档已就绪，访问 /api-docs');
+
+    logger.info('正在启动服务...');
     httpServer.listen(PORT, () => {
-      console.log(`🚀 服务已启动在 http://localhost:${PORT}`);
+      logger.info(`🚀 服务已启动在 http://localhost:${PORT}`);
     });
   } catch (error) {
     console.error('服务启动失败:', error);

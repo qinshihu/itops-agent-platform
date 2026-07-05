@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
+// eslint-disable-next-line no-restricted-imports -- admin-only DB management, inherently needs DB access
 import { getDatabaseHealthStatus, getTableIndexes, getQuerySuggestions, performMaintenance } from '../../../models/database';
 import { logger } from '../../../utils/logger';
 import { requireRole } from '../../../middleware/auth';

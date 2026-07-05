@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { v4 as uuidv4 } from 'uuid';
-import db from '../../../../models/database';
 import { executeWorkflow as runWorkflowExecutor } from '../../../workflow/services/workflowExecutor';
 import { notificationService } from '../../../notification/services/notificationService';
 import { logger } from '../../../../utils/logger';
+import { workflowsRepo, tasksRepo, remediationAuditRepository } from '../../../../repositories';
 import type {
   RemediationPolicy,
   RemediationExecution,
@@ -30,20 +31,16 @@ export async function triggerRemediation(
 
   const id = uuidv4();
   const now = new Date().toISOString();
-  const approvalRequired = policy.execution_mode === 'approval' ? 1 : 0;
 
-  db.prepare(`
-    INSERT INTO remediation_executions (
-      id, policy_id, alert_id, alert_snapshot, status, approval_required, created_at
-    ) VALUES (?, ?, ?, ?, 'pending', ?, ?)
-  `).run(
+  remediationAuditRepository.createExecution({
     id,
-    policy.id,
-    alert.id,
-    JSON.stringify(alert),
-    approvalRequired,
-    now
-  );
+    policy_id: policy.id,
+    alert_id: alert.id,
+    alert_snapshot: JSON.stringify(alert),
+    status: 'pending',
+    approval_required: policy.execution_mode === 'approval' ? 1 : 0,
+    created_at: now,
+  });
 
   const execution = (service as any).getExecution(id);
 
@@ -84,9 +81,7 @@ export async function executeWorkflow(service: RemediationServiceLike, execution
   const startTime = Date.now();
 
   try {
-    const workflow = db.prepare('SELECT * FROM workflows WHERE id = ?').get(policy.workflow_id) as {
-      id: string; name: string; description: string; nodes: string; edges: string; agent_configs: string; is_template: number; created_at: string; updated_at: string;
-    } | undefined;
+    const workflow = workflowsRepo.getById(policy.workflow_id);
 
     if (!workflow) {
       (service as any).updateExecutionStatus(executionId, 'failed', 'Workflow not found');
@@ -108,10 +103,12 @@ export async function executeWorkflow(service: RemediationServiceLike, execution
       ...params,
     };
 
-    db.prepare(`
-      INSERT INTO tasks (id, workflow_id, name, status, context, created_at)
-      VALUES (?, ?, ?, 'pending', ?, datetime('now','localtime'))
-    `).run(taskId, workflow.id, `自动修复: ${workflow.name}`, JSON.stringify(alertContext));
+    tasksRepo.createPendingWithContext({
+      id: taskId,
+      workflow_id: workflow.id,
+      name: `自动修复: ${workflow.name}`,
+      context: JSON.stringify(alertContext),
+    });
 
     let nodes: WorkflowNode[] = [];
     let edges: WorkflowEdge[] = [];

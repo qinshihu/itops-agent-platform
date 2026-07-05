@@ -1,4 +1,5 @@
 import { serversRepo } from '../../../../repositories';
+// eslint-disable-next-line no-restricted-imports
 import db from '../../../../models/database';
 import { logger } from '../../../../utils/logger';
 import { generateCompletion } from '../llm/llmService';

@@ -1,8 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { randomUUID } from 'crypto';
 import { createHash } from 'crypto';
 import { Client } from 'ssh2';
-import db from '../../../models/database';
-import { networkDeviceRepository } from '../../../repositories';
+import { networkDeviceRepository, networkConfigBackupsRepo } from '../../../repositories';
 import { logger } from '../../../utils/logger';
 import { decrypt } from '../../auth/services/encryptionService';
 import { getErrorMessage } from '../../../utils/errorHelpers';
@@ -59,10 +59,13 @@ class ConfigBackupService {
       const md5 = createHash('md5').update(output).digest('hex');
 
       // 保存配置
-      db.prepare(`
-        INSERT INTO network_config_backups (id, device_id, config_md5, config_text, config_size, status)
-        VALUES (?, ?, ?, ?, ?, 'success')
-      `).run(backupId, deviceId, md5, output, Buffer.byteLength(output, 'utf-8'));
+      networkConfigBackupsRepo.save({
+        id: backupId,
+        device_id: deviceId,
+        config_md5: md5,
+        config_text: output,
+        config_size: Buffer.byteLength(output, 'utf-8'),
+      });
 
       // 清理旧配置（保留最近 30 份）
       this.cleanupOldBackups(deviceId, 30);
@@ -84,10 +87,7 @@ class ConfigBackupService {
     } catch (error: unknown) {
       logger.error(`Config backup failed for ${device.name}: ${getErrorMessage(error)}`);
 
-      db.prepare(`
-        INSERT INTO network_config_backups (id, device_id, config_md5, config_size, status, error_message)
-        VALUES (?, ?, '', 0, 'failed', ?)
-      `).run(backupId, deviceId, getErrorMessage(error).substring(0, 500));
+      networkConfigBackupsRepo.saveFailed(backupId, deviceId, getErrorMessage(error).substring(0, 500));
 
       return {
         id: backupId,
@@ -106,6 +106,8 @@ class ConfigBackupService {
    * 批量备份所有在线设备
    */
   async backupAllOnlineDevices(): Promise<{ success: number; failed: number }> {
+    // eslint-disable-next-line no-restricted-imports
+    const { default: db } = await import('../../../models/database');
     const devices = db.prepare(
       "SELECT id FROM network_devices WHERE status IN ('online', 'unknown')"
     ).all() as { id: string }[];
@@ -130,24 +132,14 @@ class ConfigBackupService {
    * 获取设备备份历史
    */
   getBackupHistory(deviceId: string, limit = 30): ConfigBackup[] {
-    return db.prepare(`
-      SELECT cb.*, nd.name as device_name
-      FROM network_config_backups cb
-      JOIN network_devices nd ON nd.id = cb.device_id
-      WHERE cb.device_id = ?
-      ORDER BY cb.created_at DESC
-      LIMIT ?
-    `).all(deviceId, limit) as ConfigBackup[];
+    return networkConfigBackupsRepo.listByDevice(deviceId, limit) as ConfigBackup[];
   }
 
   /**
    * 读取备份完整内容
    */
   getBackupContent(backupId: string): string | null {
-    const row = db.prepare(
-      'SELECT config_text FROM network_config_backups WHERE id = ?'
-    ).get(backupId) as { config_text: string } | undefined;
-    return row?.config_text || null;
+    return networkConfigBackupsRepo.getContent(backupId) ?? null;
   }
 
   /**
@@ -283,10 +275,13 @@ class ConfigBackupService {
     const backupId = randomUUID();
     const md5 = createHash('md5').update(content).digest('hex');
 
-    db.prepare(`
-      INSERT INTO network_config_backups (id, device_id, config_md5, config_text, config_size, status)
-      VALUES (?, ?, ?, ?, ?, 'success')
-    `).run(backupId, deviceId, md5, content, Buffer.byteLength(content, 'utf-8'));
+    networkConfigBackupsRepo.save({
+      id: backupId,
+      device_id: deviceId,
+      config_md5: md5,
+      config_text: content,
+      config_size: Buffer.byteLength(content, 'utf-8'),
+    });
 
     logger.info(`Config backup created for ${deviceName} (${md5.substring(0, 8)}...)`);
 
@@ -304,28 +299,15 @@ class ConfigBackupService {
   /**
    * 列出备份列表（通用版本，供 configRepairRoutes 调用）
    */
-  listBackups(deviceId: string, configPath?: string, limit = 20): ConfigBackup[] {
-    return db.prepare(`
-      SELECT cb.*, nd.name as device_name
-      FROM network_config_backups cb
-      LEFT JOIN network_devices nd ON nd.id = cb.device_id
-      WHERE cb.device_id = ?
-      ORDER BY cb.created_at DESC
-      LIMIT ?
-    `).all(deviceId, limit) as ConfigBackup[];
+  listBackups(deviceId: string, _configPath?: string, limit = 20): ConfigBackup[] {
+    return networkConfigBackupsRepo.listByDeviceLeft(deviceId, limit) as ConfigBackup[];
   }
 
   /**
    * 获取单个备份详情（供 configRepairRoutes 调用）
    */
   getBackup(backupId: string): ConfigBackup | null {
-    const row = db.prepare(`
-      SELECT cb.*, nd.name as device_name
-      FROM network_config_backups cb
-      LEFT JOIN network_devices nd ON nd.id = cb.device_id
-      WHERE cb.id = ?
-    `).get(backupId) as (ConfigBackup & { config_text?: string }) | undefined;
-    return row || null;
+    return networkConfigBackupsRepo.getWithDeviceName(backupId) as ConfigBackup | null;
   }
 
   /**
@@ -342,15 +324,7 @@ class ConfigBackupService {
   }
 
   private cleanupOldBackups(deviceId: string, keep: number): void {
-    db.prepare(`
-      DELETE FROM network_config_backups
-      WHERE device_id = ? AND id NOT IN (
-        SELECT id FROM network_config_backups
-        WHERE device_id = ?
-        ORDER BY created_at DESC
-        LIMIT ?
-      )
-    `).run(deviceId, deviceId, keep);
+    networkConfigBackupsRepo.cleanOld(deviceId, keep);
   }
 
   /**

@@ -3,6 +3,8 @@
  * 支持变量替换、简单比较、正则匹配、JavaScript 表达式
  */
 
+import { logger } from '../../../utils/logger';
+
 /** 工作流变量值类型：基础类型 + 嵌套对象 */
 type WorkflowVariableValue = string | number | boolean | null | object;
 
@@ -75,7 +77,7 @@ export function evaluateExpression(
         return evaluateSimpleCompare(resolvedExpr, variables);
     }
   } catch (error) {
-    console.error('Expression evaluation failed:', { expression, type, error });
+    logger.error('Expression evaluation failed:', { expression, type, error });
     return false;
   }
 }

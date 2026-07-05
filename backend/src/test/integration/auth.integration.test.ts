@@ -72,7 +72,7 @@ import { clearUserCache } from '../../middleware/auth';
 // ============================================================
 const app: Express = express();
 app.use(express.json());
-app.use('/api/auth', authRouter);
+app.use('/api/v1/auth', authRouter);
 
 // ============================================================
 // 测试数据
@@ -90,7 +90,7 @@ const TEST_USER = {
 // ============================================================
 async function loginAndGetTokens() {
   const res = await request(app)
-    .post('/api/auth/login')
+    .post('/api/v1/auth/login')
     .send({ username: TEST_USER.username, password: TEST_USER.password });
   return {
     token: res.body.data?.token as string,
@@ -137,13 +137,13 @@ describe('Auth Integration Tests', () => {
   });
 
   // ──────────────────────────────────────────────────────────
-  // POST /api/auth/login
+  // POST /api/v1/auth/login
   // ──────────────────────────────────────────────────────────
-  describe('POST /api/auth/login', () => {
+  describe('POST /api/v1/auth/login', () => {
 
     it('有效凭据 → 返回 token、refreshToken 和用户信息', async () => {
       const res = await request(app)
-        .post('/api/auth/login')
+        .post('/api/v1/auth/login')
         .send({ username: TEST_USER.username, password: TEST_USER.password });
 
       expect(res.status).toBe(200);
@@ -159,7 +159,7 @@ describe('Auth Integration Tests', () => {
 
     it('错误密码 → 401', async () => {
       const res = await request(app)
-        .post('/api/auth/login')
+        .post('/api/v1/auth/login')
         .send({ username: TEST_USER.username, password: 'WrongPassword1!' });
 
       expect(res.status).toBe(401);
@@ -168,7 +168,7 @@ describe('Auth Integration Tests', () => {
 
     it('不存在的用户 → 401', async () => {
       const res = await request(app)
-        .post('/api/auth/login')
+        .post('/api/v1/auth/login')
         .send({ username: 'ghost_user', password: 'SomePassword1!' });
 
       expect(res.status).toBe(401);
@@ -177,7 +177,7 @@ describe('Auth Integration Tests', () => {
 
     it('空字段 → 400（参数校验）', async () => {
       const res = await request(app)
-        .post('/api/auth/login')
+        .post('/api/v1/auth/login')
         .send({ username: '', password: '' });
 
       expect(res.status).toBe(400);
@@ -186,15 +186,15 @@ describe('Auth Integration Tests', () => {
   });
 
   // ──────────────────────────────────────────────────────────
-  // GET /api/auth/me
+  // GET /api/v1/auth/me
   // ──────────────────────────────────────────────────────────
-  describe('GET /api/auth/me', () => {
+  describe('GET /api/v1/auth/me', () => {
 
     it('有效 token → 返回用户档案', async () => {
       const { token } = await loginAndGetTokens();
 
       const res = await request(app)
-        .get('/api/auth/me')
+        .get('/api/v1/auth/me')
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -206,7 +206,7 @@ describe('Auth Integration Tests', () => {
     });
 
     it('无 token → 401', async () => {
-      const res = await request(app).get('/api/auth/me');
+      const res = await request(app).get('/api/v1/auth/me');
 
       expect(res.status).toBe(401);
       expect(res.body.success).toBe(false);
@@ -214,7 +214,7 @@ describe('Auth Integration Tests', () => {
 
     it('无效 token → 401', async () => {
       const res = await request(app)
-        .get('/api/auth/me')
+        .get('/api/v1/auth/me')
         .set('Authorization', 'Bearer invalid.jwt.token');
 
       expect(res.status).toBe(401);
@@ -223,9 +223,9 @@ describe('Auth Integration Tests', () => {
   });
 
   // ──────────────────────────────────────────────────────────
-  // POST /api/auth/refresh
+  // POST /api/v1/auth/refresh
   // ──────────────────────────────────────────────────────────
-  describe('POST /api/auth/refresh', () => {
+  describe('POST /api/v1/auth/refresh', () => {
 
     it('有效 refreshToken → 返回新的 token 对', async () => {
       const { token: oldToken, refreshToken } = await loginAndGetTokens();
@@ -234,7 +234,7 @@ describe('Auth Integration Tests', () => {
       await new Promise(r => setTimeout(r, 1100));
 
       const res = await request(app)
-        .post('/api/auth/refresh')
+        .post('/api/v1/auth/refresh')
         .send({ refreshToken });
 
       expect(res.status).toBe(200);
@@ -248,7 +248,7 @@ describe('Auth Integration Tests', () => {
 
     it('缺少 refreshToken → 400', async () => {
       const res = await request(app)
-        .post('/api/auth/refresh')
+        .post('/api/v1/auth/refresh')
         .send({});
 
       expect(res.status).toBe(400);
@@ -257,7 +257,7 @@ describe('Auth Integration Tests', () => {
 
     it('无效 refreshToken → 401', async () => {
       const res = await request(app)
-        .post('/api/auth/refresh')
+        .post('/api/v1/auth/refresh')
         .send({ refreshToken: 'invalid.refresh.token' });
 
       expect(res.status).toBe(401);
@@ -272,13 +272,13 @@ describe('Auth Integration Tests', () => {
 
       // 第一次刷新成功，旧 token 被加入黑名单
       const firstRefresh = await request(app)
-        .post('/api/auth/refresh')
+        .post('/api/v1/auth/refresh')
         .send({ refreshToken });
       expect(firstRefresh.status).toBe(200);
 
       // 第二次使用同一 refreshToken → 应被拒绝
       const secondRefresh = await request(app)
-        .post('/api/auth/refresh')
+        .post('/api/v1/auth/refresh')
         .send({ refreshToken });
 
       expect(secondRefresh.status).toBe(401);
@@ -287,16 +287,16 @@ describe('Auth Integration Tests', () => {
   });
 
   // ──────────────────────────────────────────────────────────
-  // POST /api/auth/logout
+  // POST /api/v1/auth/logout
   // ──────────────────────────────────────────────────────────
-  describe('POST /api/auth/logout', () => {
+  describe('POST /api/v1/auth/logout', () => {
 
     it('有效 token → 登出成功，token 被加入黑名单', async () => {
       const { token } = await loginAndGetTokens();
 
       // 登出
       const res = await request(app)
-        .post('/api/auth/logout')
+        .post('/api/v1/auth/logout')
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -305,7 +305,7 @@ describe('Auth Integration Tests', () => {
 
       // 验证 token 已失效 —— 用同一 token 访问 /me 应返回 401
       const meRes = await request(app)
-        .get('/api/auth/me')
+        .get('/api/v1/auth/me')
         .set('Authorization', `Bearer ${token}`);
 
       expect(meRes.status).toBe(401);
@@ -314,7 +314,7 @@ describe('Auth Integration Tests', () => {
 
     it('无 token → 401', async () => {
       const res = await request(app)
-        .post('/api/auth/logout');
+        .post('/api/v1/auth/logout');
 
       expect(res.status).toBe(401);
       expect(res.body.success).toBe(false);
@@ -354,7 +354,7 @@ describe('Auth Integration Tests', () => {
 
       // 执行登出
       await request(app)
-        .post('/api/auth/logout')
+        .post('/api/v1/auth/logout')
         .set('Authorization', `Bearer ${token}`);
 
       // 登出后：黑名单中应有此 token
@@ -373,7 +373,7 @@ describe('Auth Integration Tests', () => {
       ).run(TEST_USER.id);
 
       await request(app)
-        .post('/api/auth/login')
+        .post('/api/v1/auth/login')
         .send({ username: TEST_USER.username, password: 'WrongPass1!' });
 
       const user = db.prepare(
@@ -388,12 +388,12 @@ describe('Auth Integration Tests', () => {
 
       // 先制造一次失败登录
       await request(app)
-        .post('/api/auth/login')
+        .post('/api/v1/auth/login')
         .send({ username: TEST_USER.username, password: 'WrongPass1!' });
 
       // 然后成功登录
       await request(app)
-        .post('/api/auth/login')
+        .post('/api/v1/auth/login')
         .send({ username: TEST_USER.username, password: TEST_USER.password });
 
       const user = db.prepare(

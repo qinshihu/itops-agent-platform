@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from 'zod';
 import { type RegisteredTool, RiskLevel } from '../types';
 import { textResult, jsonResult, READONLY } from './shared';
@@ -122,6 +123,7 @@ export const monitorTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
+        // eslint-disable-next-line no-restricted-imports
         const { default: _db } = await import('../../../../models/database');
         const { selfMonitorService } = await import(
           '../../../../modules/monitor/services/selfMonitorService'

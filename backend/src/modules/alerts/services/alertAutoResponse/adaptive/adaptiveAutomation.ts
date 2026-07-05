@@ -12,6 +12,7 @@
 
 import { logger } from '../../../../../utils/logger';
 import type { RiskAssessment, TrustRecord, RemediationPlan } from '../types';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { getErrorMessage } from '../../../../../utils/errorHelpers';
 import { automataTrustRepo } from '../../../../../repositories';
 

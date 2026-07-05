@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import db from '../database';
 import { randomUUID } from 'crypto';
 import { logger } from '../../utils/logger';

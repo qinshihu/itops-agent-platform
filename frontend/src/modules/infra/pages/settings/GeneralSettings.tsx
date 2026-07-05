@@ -1,4 +1,4 @@
-import { Sun, Moon, Languages } from 'lucide-react';
+import { Sun, Moon, Languages as _Languages } from 'lucide-react';
 import { useTheme } from '../../../../hooks/useTheme';
 import { useTranslation } from 'react-i18next';
 

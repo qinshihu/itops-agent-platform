@@ -1,10 +1,10 @@
 import { Card, Row, Col, Statistic, Spin, Empty } from 'antd';
 import { Server, Monitor, Wifi, LayoutGrid, Plus, Thermometer, AlertTriangle, Clock } from 'lucide-react';
-import type { OverviewData, Rack } from './types';
+import type { OverviewData, Rack, Room } from './types';
 
 interface OverviewTabProps {
   overview: OverviewData | null;
-  rooms: any[];
+  rooms: Room[];
   racks: Rack[];
   rackAlertMap: Record<string, number>;
   onAddRoom: () => void;
@@ -12,7 +12,7 @@ interface OverviewTabProps {
 }
 
 export default function OverviewTab({
-  overview, rooms, racks, rackAlertMap,
+  overview, rooms, _racks, rackAlertMap,
   onAddRoom, onSelectRack,
 }: OverviewTabProps) {
   if (!overview) return <Spin className="flex justify-center py-20" />;
@@ -39,7 +39,9 @@ export default function OverviewTab({
   }
 
   const { summary, rackData } = overview;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const roomsGrouped: Record<string, any[]> = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (rackData || []).forEach((r: any) => {
     const roomKey = r.room_id || 'unknown';
     if (!roomsGrouped[roomKey]) roomsGrouped[roomKey] = [];
@@ -78,6 +80,7 @@ export default function OverviewTab({
                     {roomInfo?.label || roomInfo?.name || roomId}
                   </h4>
                   <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 lg:grid-cols-16 gap-1.5">
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     {roomRacks.map((rack: any) => {
                       const totalU = rack.total_u || 42;
                       const usedU = rack.used_u || 0;

@@ -74,41 +74,41 @@ export interface NotificationConfig {
 export const notificationApi = {
   /** 获取通知列表 */
   async list(params?: NotificationListParams): Promise<{ notifications: NotificationRecord[]; total?: number }> {
-    const { data } = await api.get('/api/notifications', { params });
+    const { data } = await api.get('/notifications', { params });
     return data.data;
   },
 
   /** 获取通知统计 */
   async getStats(): Promise<NotificationStats> {
-    const { data } = await api.get('/api/notifications/stats/summary');
+    const { data } = await api.get('/notifications/stats/summary');
     return data.data;
   },
 
   /** 标记通知为已发送 */
   async markAsSent(id: string): Promise<void> {
-    await api.put(`/api/notifications/${id}/send`);
+    await api.put(`/notifications/${id}/send`);
   },
 
   /** 删除通知 */
   async delete(id: string): Promise<void> {
-    await api.delete(`/api/notifications/${id}`);
+    await api.delete(`/notifications/${id}`);
   },
 
   /** 获取通知渠道配置 */
   async getConfig(): Promise<NotificationConfig> {
-    const { data } = await api.get('/api/notification-config');
+    const { data } = await api.get('/notification-config');
     return data.data;
   },
 
   /** 更新通知渠道配置 */
   async updateConfig(config: NotificationConfig): Promise<unknown> {
-    const { data } = await api.put('/api/notification-config', config);
+    const { data } = await api.put('/notification-config', config);
     return data;
   },
 
   /** 测试通知渠道 */
   async testChannel(channel: string, body?: Record<string, unknown>): Promise<{ success: boolean; message?: string; error?: string }> {
-    const { data } = await api.post(`/api/notification-config/test/${channel}`, body);
+    const { data } = await api.post(`/notification-config/test/${channel}`, body);
     return data;
   },
 };

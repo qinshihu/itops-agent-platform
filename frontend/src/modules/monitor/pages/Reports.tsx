@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FileText, Plus, Download, Clock, Trash2, Edit2, Eye, X } from 'lucide-react';
+import { logger } from '@/lib/logger';
 import api from '../../../lib/api';
 import MarkdownOutput from '../../../shared/components/MarkdownOutput';
 
@@ -44,7 +45,7 @@ interface DiagnosisItem {
   count: number;
 }
 
-interface ReportAnalytics {
+interface _ReportAnalytics {
   analysisStats?: { total?: number; completed?: number; failed?: number };
   remediationStats?: { total?: number; success_count?: number; failed_count?: number; rolled_back?: number };
   alertTrends?: AlertTrendItem[];
@@ -71,7 +72,7 @@ export default function Reports() {
   const { data: templates } = useQuery({
     queryKey: ['reportTemplates'],
     queryFn: async () => {
-      const res = await api.get('/api/reports/templates');
+      const res = await api.get('/reports/templates');
       return res.data.data || [];
     }
   });
@@ -79,7 +80,7 @@ export default function Reports() {
   const { data: reports } = useQuery({
     queryKey: ['reports'],
     queryFn: async () => {
-      const res = await api.get('/api/reports');
+      const res = await api.get('/reports');
       return res.data.data || [];
     }
   });
@@ -87,7 +88,7 @@ export default function Reports() {
   const { data: analytics } = useQuery({
     queryKey: ['reportAnalytics'],
     queryFn: async () => {
-      const res = await api.get('/api/reports/analytics');
+      const res = await api.get('/reports/analytics');
       return res.data.data;
     },
     staleTime: 120000,
@@ -96,14 +97,14 @@ export default function Reports() {
   const { data: scheduledReports } = useQuery({
     queryKey: ['scheduledReports'],
     queryFn: async () => {
-      const res = await api.get('/api/reports/scheduled/all');
+      const res = await api.get('/reports/scheduled/all');
       return res.data.data || [];
     }
   });
 
   const createTemplateMutation = useMutation({
     mutationFn: async (template: Omit<ReportTemplate, 'id'>) => {
-      const res = await api.post('/api/reports/templates', template);
+      const res = await api.post('/reports/templates', template);
       return res.data;
     },
     onSuccess: () => {
@@ -121,7 +122,7 @@ export default function Reports() {
 
   const generateReportMutation = useMutation({
     mutationFn: async ({ templateId, variables }: { templateId: string; variables: Record<string, string> }) => {
-      const res = await api.post('/api/reports/generate', { templateId, variables, format: 'markdown' });
+      const res = await api.post('/reports/generate', { templateId, variables, format: 'markdown' });
       return res.data;
     },
     onSuccess: () => {
@@ -133,7 +134,7 @@ export default function Reports() {
 
   const deleteTemplateMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/reports/templates/${id}`);
+      await api.delete(`/reports/templates/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reportTemplates'] });
@@ -167,7 +168,7 @@ export default function Reports() {
 
   const handleDownloadReport = async (reportId: string, format: 'markdown' | 'pdf' | 'word' = 'markdown') => {
     try {
-      const response = await api.get(`/api/reports/${reportId}/export?format=${format}`, { responseType: 'blob' });
+      const response = await api.get(`/reports/${reportId}/export?format=${format}`, { responseType: 'blob' });
       const blob = response.data;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -179,7 +180,7 @@ export default function Reports() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      console.error('Download failed:', error);
+      logger.error('Download failed:', error);
     }
   };
 

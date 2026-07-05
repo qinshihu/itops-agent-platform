@@ -34,7 +34,7 @@ export default function AIRootCause() {
 
   const analyzeMutation = useMutation({
     mutationFn: async (alertId: string) => {
-      await api.post(`/api/root-cause-analysis/auto-analyze/${alertId}`);
+      await api.post(`/root-cause-analysis/auto-analyze/${alertId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['root-cause-analysis'] });
@@ -43,7 +43,7 @@ export default function AIRootCause() {
 
   const handleNewAnalysis = () => {
     const alertId = prompt('请输入告警 ID 以触发根因分析：');
-    if (alertId && alertId.trim()) {
+    if (alertId?.trim()) {
       analyzeMutation.mutate(alertId.trim());
     }
   };
@@ -51,7 +51,7 @@ export default function AIRootCause() {
   const { data: rcaItems, isLoading } = useQuery({
     queryKey: ['root-cause-analysis'],
     queryFn: async () => {
-      const res = await api.get('/api/root-cause-analysis');
+      const res = await api.get('/root-cause-analysis');
       return res.data.data as RCAItem[];
     },
   });
@@ -59,7 +59,7 @@ export default function AIRootCause() {
   const { data: stats } = useQuery({
     queryKey: ['root-cause-analysis', 'stats'],
     queryFn: async () => {
-      const res = await api.get('/api/root-cause-analysis/stats');
+      const res = await api.get('/root-cause-analysis/stats');
       return res.data.data as RCAStats;
     },
   });

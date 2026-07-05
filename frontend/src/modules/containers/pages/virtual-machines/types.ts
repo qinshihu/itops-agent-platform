@@ -52,3 +52,29 @@ export interface AggregatedStats {
   summary: { total: number; poweredOn: number; poweredOff: number; suspended: number };
   sqliteFallback: boolean;
 }
+
+export interface PlatformForm {
+  name: string;
+  hypervisorType: 'vmware' | 'proxmox' | 'kvm';
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+}
+
+export interface VMForm {
+  name: string;
+  os: string;
+  cpu_cores: number;
+  memory_mb: number;
+  disk_gb: number;
+  ip_address: string;
+  notes: string;
+  tags: string;
+}
+
+export interface SnapshotForm {
+  name: string;
+  description: string;
+  memory: boolean;
+}

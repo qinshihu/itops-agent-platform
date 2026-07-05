@@ -6,6 +6,7 @@
  */
 
 import db from '../models/database';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { AgentExecution } from './types/ai';
 
 export type AgentExecutionStatus = 'success' | 'failure' | 'error' | 'running' | string;

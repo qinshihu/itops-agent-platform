@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import axios from 'axios';
 import FormData from 'form-data';
 import { logger } from '../../../../utils/logger';

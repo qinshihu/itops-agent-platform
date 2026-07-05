@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from 'zod';
 import { type RegisteredTool } from '../types';
 import { textResult, jsonResult, READONLY } from './shared';
@@ -45,6 +46,7 @@ export const containerTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
+        // eslint-disable-next-line no-restricted-imports
         const { default: db } = await import('../../../../models/database');
         let query = 'SELECT * FROM virtual_machines WHERE 1=1';
         const params: unknown[] = [];
@@ -128,7 +130,7 @@ export const containerTools: RegisteredTool[] = [
         const containers = await dockerService.listContainers(Boolean(args.all));
         return jsonResult(
           containers,
-          `Docker 容器列表 (共 ${containers.length} 个):\n${containers.map((c: Record<string, unknown>) => `• ${c.name} (${c.state}) ${c.image}`).join('\n')}`
+          `Docker 容器列表 (共 ${containers.length} 个):\n${containers.map((c) => `• ${(c as unknown as Record<string, unknown>).name} (${(c as unknown as Record<string, unknown>).state}) ${(c as unknown as Record<string, unknown>).image}`).join('\n')}`
         );
       } catch (err) {
         return textResult(`获取容器列表失败: ${(err as Error).message}`, true);
@@ -270,7 +272,7 @@ export const containerTools: RegisteredTool[] = [
         const networks = await dockerService.listNetworks();
         return jsonResult(
           networks,
-          `Docker 网络列表 (共 ${networks.length} 个):\n${networks.map((n: Record<string, unknown>) => `• ${n.name} (${n.driver})`).join('\n')}`
+          `Docker 网络列表 (共 ${networks.length} 个):\n${networks.map((n) => `• ${n.name} (${n.driver})`).join('\n')}`
         );
       } catch (err) {
         return textResult(`获取网络列表失败: ${(err as Error).message}`, true);

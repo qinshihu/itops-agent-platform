@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { VirtualMachine } from '../../../../../types/vmManagement';
 
 export function mapVM(vm: any, platformId: string): VirtualMachine {

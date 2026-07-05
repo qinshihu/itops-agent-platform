@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 declare module 'net-snmp' {
   // v1/v2c: community + options
   export function createSession(target: string, community: string, options: SessionOptions): Session;

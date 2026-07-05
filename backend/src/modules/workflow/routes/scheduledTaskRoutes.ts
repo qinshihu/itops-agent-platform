@@ -112,6 +112,7 @@ router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Respons
     // 更新调度器
     const updatedTask = workflowRepository.scheduledTasks.getById(id);
     if (updatedTask) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       schedulerService.updateTask(updatedTask as any);
     }
 
@@ -171,6 +172,7 @@ router.post('/:id/toggle', (req: Request, res: Response) => {
 
     const updatedTask = workflowRepository.scheduledTasks.getById(id);
     if (updatedTask) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       schedulerService.updateTask(updatedTask as any);
     }
 
@@ -197,6 +199,7 @@ router.post('/:id/run', (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Scheduled task not found' });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     schedulerService.executeWorkflow(task as any);
 
     createAuditLog({

@@ -23,7 +23,7 @@ const processQueue = (error: Error | null, result: TokenRefreshResult | null = n
 };
 
 const api = axios.create({
-  baseURL: '',
+  baseURL: '/api/v1',
   timeout: 120000,
   headers: {
     'Content-Type': 'application/json',
@@ -31,7 +31,7 @@ const api = axios.create({
 });
 
 const refreshApi = axios.create({
-  baseURL: '',
+  baseURL: '/api/v1',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -97,7 +97,7 @@ api.interceptors.response.use(
       }
 
       try {
-        const { data } = await refreshApi.post('/api/auth/refresh', { refreshToken });
+        const { data } = await refreshApi.post('/auth/refresh', { refreshToken });
 
         if (data.success) {
           const { token: newToken, refreshToken: newRefreshToken } = data.data;

@@ -4,9 +4,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bell, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '@/lib/errorHandler';
 
 export default function NotificationSettings() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
   const queryClient = useQueryClient();
 
   const [showWechatUrl, setShowWechatUrl] = useState(false);
@@ -57,7 +58,7 @@ export default function NotificationSettings() {
     setTestMessage(prev => ({ ...prev, [channel]: '' }));
 
     try {
-      let body: any = {};
+      let body: Record<string, unknown> = {};
 
       if (channel === 'email') {
         if (!notificationConfig.email_config.smtp_host || !notificationConfig.email_config.user) {
@@ -103,9 +104,9 @@ export default function NotificationSettings() {
         setTestStatus(prev => ({ ...prev, [channel]: 'error' }));
         setTestMessage(prev => ({ ...prev, [channel]: res.data.error || '测试发送失败' }));
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTestStatus(prev => ({ ...prev, [channel]: 'error' }));
-      setTestMessage(prev => ({ ...prev, [channel]: err.response?.data?.error || err.message || '测试发送失败' }));
+      setTestMessage(prev => ({ ...prev, [channel]: getAxiosErrorMessage(err, '测试发送失败') }));
     }
 
     setTimeout(() => setTestStatus(prev => ({ ...prev, [channel]: 'idle' })), 5000);
@@ -114,7 +115,7 @@ export default function NotificationSettings() {
   useQuery({
     queryKey: ['notificationConfig'],
     queryFn: async () => {
-      const res = await api.get('/api/notification-config');
+      const res = await api.get('/notification-config');
       if (res.data.data) {
         setNotificationConfig(res.data.data);
       }
@@ -123,8 +124,8 @@ export default function NotificationSettings() {
   });
 
   const notificationConfigMutation = useMutation({
-    mutationFn: async (config: any) => {
-      const res = await api.put('/api/notification-config', config);
+    mutationFn: async (config: Record<string, unknown>) => {
+      const res = await api.put('/notification-config', config);
       return res.data;
     },
     onMutate: () => {

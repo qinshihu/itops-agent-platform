@@ -13,6 +13,7 @@ router.get('/', (req: Request, res: Response) => {
     const tasks = workflowRepository.tasks.list({
       status: status as string | undefined,
       limit: limit ? parseInt(limit as string) : undefined,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     }) as any[];
     tasks.forEach((t) => {
       if (t.node_results) t.node_results = JSON.parse(t.node_results);
@@ -33,6 +34,7 @@ router.get('/:id', (req: Request, res: Response) => {
     if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const t = task as any;
     if (t.node_results) t.node_results = JSON.parse(t.node_results as string);
     if (t.logs) t.logs = JSON.parse(t.logs as string);

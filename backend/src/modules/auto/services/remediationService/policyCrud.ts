@@ -1,5 +1,4 @@
 import { v4 as uuidv4 } from 'uuid';
-import db from '../../../../models/database';
 import { remediationPolicyRepository } from '../../../../repositories';
 import { logger } from '../../../../utils/logger';
 import type { RemediationPolicy, RemediationServiceLike } from './types';
@@ -9,27 +8,8 @@ export function createPolicy(
   policy: Omit<RemediationPolicy, 'id' | 'created_at' | 'updated_at'>
 ): RemediationPolicy {
   const id = uuidv4();
-  const now = new Date().toISOString();
 
-  db.prepare(`
-    INSERT INTO remediation_policies (
-      id, name, description, alert_source, alert_severity,
-      alert_keywords, alert_tags, execution_mode, workflow_id,
-      workflow_params, max_executions_per_hour, cooldown_seconds,
-      require_confirmation, enable_verification, verification_workflow_id,
-      verification_params, verification_timeout_seconds, enable_rollback,
-      rollback_workflow_id, rollback_on_failure, enabled, created_by,
-      created_at, updated_at
-    ) VALUES (
-      @id, @name, @description, @alert_source, @alert_severity,
-      @alert_keywords, @alert_tags, @execution_mode, @workflow_id,
-      @workflow_params, @max_executions_per_hour, @cooldown_seconds,
-      @require_confirmation, @enable_verification, @verification_workflow_id,
-      @verification_params, @verification_timeout_seconds, @enable_rollback,
-      @rollback_workflow_id, @rollback_on_failure, @enabled, @created_by,
-      @created_at, @updated_at
-    )
-  `).run({
+  remediationPolicyRepository.create({
     id,
     name: policy.name,
     description: policy.description || null,
@@ -52,8 +32,6 @@ export function createPolicy(
     rollback_on_failure: policy.rollback_on_failure ? 1 : 0,
     enabled: policy.enabled ? 1 : 0,
     created_by: policy.created_by || null,
-    created_at: now,
-    updated_at: now
   });
 
   return service.getPolicy(id);
@@ -64,53 +42,43 @@ export function updatePolicy(
   id: string,
   updates: Partial<Pick<RemediationPolicy, 'name' | 'description' | 'alert_source' | 'alert_severity' | 'alert_keywords' | 'alert_tags' | 'execution_mode' | 'workflow_id' | 'workflow_params' | 'max_executions_per_hour' | 'cooldown_seconds' | 'require_confirmation' | 'enable_verification' | 'verification_workflow_id' | 'verification_params' | 'verification_timeout_seconds' | 'enable_rollback' | 'rollback_workflow_id' | 'rollback_on_failure' | 'enabled'>>
 ): RemediationPolicy {
-  const now = new Date().toISOString();
-  const fields: string[] = [];
-  const params: Record<string, unknown> = { id, updated_at: now };
+  const repoFields: Record<string, unknown> = {};
 
-  const fieldMap: Record<string, keyof typeof updates> = {
-    'name': 'name',
-    'description': 'description',
-    'alert_source': 'alert_source',
-    'alert_severity': 'alert_severity',
-    'alert_keywords': 'alert_keywords',
-    'alert_tags': 'alert_tags',
-    'execution_mode': 'execution_mode',
-    'workflow_id': 'workflow_id',
-    'workflow_params': 'workflow_params',
-    'max_executions_per_hour': 'max_executions_per_hour',
-    'cooldown_seconds': 'cooldown_seconds',
-    'require_confirmation': 'require_confirmation',
-    'enable_verification': 'enable_verification',
-    'verification_workflow_id': 'verification_workflow_id',
-    'verification_params': 'verification_params',
-    'verification_timeout_seconds': 'verification_timeout_seconds',
-    'enable_rollback': 'enable_rollback',
-    'rollback_workflow_id': 'rollback_workflow_id',
-    'rollback_on_failure': 'rollback_on_failure',
-    'enabled': 'enabled'
-  };
+  const fieldMap: Array<{ key: keyof typeof updates; repoKey: string }> = [
+    { key: 'name', repoKey: 'name' },
+    { key: 'description', repoKey: 'description' },
+    { key: 'alert_source', repoKey: 'alert_source' },
+    { key: 'alert_severity', repoKey: 'alert_severity' },
+    { key: 'alert_keywords', repoKey: 'alert_keywords' },
+    { key: 'alert_tags', repoKey: 'alert_tags' },
+    { key: 'execution_mode', repoKey: 'execution_mode' },
+    { key: 'workflow_id', repoKey: 'workflow_id' },
+    { key: 'workflow_params', repoKey: 'workflow_params' },
+    { key: 'max_executions_per_hour', repoKey: 'max_executions_per_hour' },
+    { key: 'cooldown_seconds', repoKey: 'cooldown_seconds' },
+    { key: 'require_confirmation', repoKey: 'require_confirmation' },
+    { key: 'enable_verification', repoKey: 'enable_verification' },
+    { key: 'verification_workflow_id', repoKey: 'verification_workflow_id' },
+    { key: 'verification_params', repoKey: 'verification_params' },
+    { key: 'verification_timeout_seconds', repoKey: 'verification_timeout_seconds' },
+    { key: 'enable_rollback', repoKey: 'enable_rollback' },
+    { key: 'rollback_workflow_id', repoKey: 'rollback_workflow_id' },
+    { key: 'rollback_on_failure', repoKey: 'rollback_on_failure' },
+    { key: 'enabled', repoKey: 'enabled' },
+  ];
 
-  for (const [dbField, key] of Object.entries(fieldMap)) {
+  for (const { key, repoKey } of fieldMap) {
     const value = updates[key];
     if (value !== undefined) {
-      fields.push(`${dbField} = @${key}`);
-      if (typeof value === 'boolean') {
-        params[key] = value ? 1 : 0;
-      } else {
-        params[key] = value;
-      }
+      repoFields[repoKey] = typeof value === 'boolean' ? (value ? 1 : 0) : value;
     }
   }
 
-  if (fields.length === 0) {
+  if (Object.keys(repoFields).length === 0) {
     throw new Error('No fields to update');
   }
 
-  fields.push('updated_at = @updated_at');
-  const sql = `UPDATE remediation_policies SET ${fields.join(', ')} WHERE id = @id`;
-
-  db.prepare(sql).run(params);
+  remediationPolicyRepository.update(id, repoFields);
   return service.getPolicy(id);
 }
 

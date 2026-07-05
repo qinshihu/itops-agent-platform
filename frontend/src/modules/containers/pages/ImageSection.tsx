@@ -27,7 +27,7 @@ export function ImageSection({ endpointId }: ImageSectionProps) {
   const { data: images = [], isLoading: imagesLoading, error: imagesError } = useQuery<ImageItem[]>({
     queryKey: imagesQueryKey,
     queryFn: async () => {
-      const res = await api.get('/api/containers/images/list', {
+      const res = await api.get('/containers/images/list', {
         params: { endpointId: endpointId !== 'local' ? endpointId : undefined },
       });
       return res.data.data || [];
@@ -38,7 +38,7 @@ export function ImageSection({ endpointId }: ImageSectionProps) {
 
   const pullImageMutation = useMutation({
     mutationFn: () =>
-      api.post('/api/containers/images/pull', { image: pullImageName }, {
+      api.post('/containers/images/pull', { image: pullImageName }, {
         params: { endpointId: endpointId !== 'local' ? endpointId : undefined },
       }),
     onSuccess: () => {
@@ -52,7 +52,7 @@ export function ImageSection({ endpointId }: ImageSectionProps) {
 
   const deleteImageMutation = useMutation({
     mutationFn: (id: string) =>
-      api.delete(`/api/containers/images/${id}`, {
+      api.delete(`/containers/images/${id}`, {
         params: { endpointId: endpointId !== 'local' ? endpointId : undefined },
       }),
     onSuccess: () => {

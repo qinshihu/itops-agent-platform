@@ -20,6 +20,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+// eslint-disable-next-line no-restricted-imports
 import db from '../../../models/database';
 import { logger } from '../../../utils/logger';
 import { env } from '../../../utils/env';
@@ -217,12 +218,7 @@ export class SelfMonitorService {
       try {
         for (const [key, check] of Object.entries(report.checks)) {
           if (check.status === 'fail') {
-            const existing = db.prepare(`
-              SELECT id FROM alerts
-              WHERE source = 'self_monitor'
-                AND title = ?
-                AND status IN ('new', 'acknowledged')
-            `).get(`自监控: ${key} 异常`);
+            const existing = alertRepository.findActiveBySourceAndTitle('self_monitor', `自监控: ${key} 异常`);
 
             if (!existing) {
               alertRepository.createSimple({
@@ -588,20 +584,8 @@ export class SelfMonitorService {
    */
   private checkQueue(): MonitorCheck {
     try {
-      // 检查数据库中的待处理任务
-      const pendingTasks = db.prepare(`
-        SELECT COUNT(*) as count FROM tasks WHERE status = 'pending'
-      `).get() as { count: number } | undefined;
-
-      // 检查卡住的任务（超过 1 小时仍 pending）
-      const stalledTasks = db.prepare(`
-        SELECT COUNT(*) as count FROM tasks 
-        WHERE status = 'running' 
-        AND julianday('now') - julianday(created_at) > 0.0417
-      `).get() as { count: number } | undefined;
-
-      const pendingCount = pendingTasks?.count ?? 0;
-      const stalledCount = stalledTasks?.count ?? 0;
+      const pendingCount = tasksRepo.countPending();
+      const stalledCount = tasksRepo.countStalled();
 
       if (stalledCount > 10) {
         return {

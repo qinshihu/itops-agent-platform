@@ -1,6 +1,7 @@
 // ── aarsLogs 子 repository ──
 
 import db from '../../models/database';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { AarsResponseLog } from '../types/alert';
 import type { AarsResponseLogInput, AarsResponseLogRecord } from './types';
 

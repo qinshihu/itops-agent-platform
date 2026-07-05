@@ -167,6 +167,7 @@ class NetworkDeviceService {
     }
 
     if (Object.keys(fields).length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       networkDeviceRepository.update(id, fields as any);
       logger.info(`Network device updated: ${id}`);
     }
@@ -267,10 +268,12 @@ class NetworkDeviceService {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getInspectionHistory(deviceId: string, limit = 20): Array<any> {
     return snmpInspectionRepo.listAllByDeviceId(deviceId, limit);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getInspectionDetail(inspectionId: string): any {
     return snmpInspectionRepo.getById(inspectionId);
   }
@@ -301,6 +304,7 @@ class NetworkDeviceService {
         reject(new Error('Command timeout'));
       }, timeoutMs);
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let stream: any = null;
       let buffer = '';
       let commandSent = false;
@@ -344,6 +348,7 @@ class NetworkDeviceService {
         }
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       conn.shell((err: Error | undefined, shellStream: any) => {
         if (err) {
           clearTimeout(hardTimeout);

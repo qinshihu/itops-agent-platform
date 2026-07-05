@@ -35,14 +35,14 @@ export default function Approvals() {
     queryKey: ['approvals', filter],
     queryFn: async () => {
       const params = filter !== 'all' ? `?status=${filter}` : '';
-      const res = await api.get(`/api/approvals${params}`);
+      const res = await api.get(`/approvals${params}`);
       return res.data.data as ApprovalRequest[];
     },
   });
 
   const approveMutation = useMutation({
     mutationFn: async (approvalId: string) => {
-      await api.post(`/api/approvals/${approvalId}/approve`, { comment: '审批通过' });
+      await api.post(`/approvals/${approvalId}/approve`, { comment: '审批通过' });
     },
     onSuccess: () => {
       toast.success('审批已通过');
@@ -55,7 +55,7 @@ export default function Approvals() {
 
   const rejectMutation = useMutation({
     mutationFn: async ({ approvalId, reason }: { approvalId: string; reason: string }) => {
-      await api.post(`/api/approvals/${approvalId}/reject`, { reason });
+      await api.post(`/approvals/${approvalId}/reject`, { reason });
     },
     onSuccess: () => {
       toast.success('审批已拒绝');

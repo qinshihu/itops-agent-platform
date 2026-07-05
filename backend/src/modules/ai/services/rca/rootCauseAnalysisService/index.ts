@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-restricted-imports
 import db from '../../../../../models/database';
 import { logger } from '../../../../../utils/logger';
 import { aiRemediationService } from '../../remediation/aiRemediationService';

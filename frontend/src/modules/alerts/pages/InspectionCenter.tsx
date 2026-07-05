@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Activity, Search, Loader2, Zap, Wifi, FileText, Server, Eye, Bell, Clock, CheckCircle2, AlertCircle, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Activity, Search, Loader2, Zap, Wifi, FileText, Server, Eye, _Bell, _Clock, CheckCircle2, AlertCircle, AlertTriangle, TrendingUp } from 'lucide-react';
 import TrendCharts from '../../../modules/monitor/components/TrendCharts';
 import clsx from 'clsx';
 import api from '../../../lib/api';
@@ -18,7 +18,13 @@ interface InspectionItem {
   summary: string;
   duration_ms: number;
   created_at: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   raw: any;
+}
+
+interface DashboardLinkage {
+  remediations?: { total?: number };
+  [key: string]: unknown;
 }
 
 export default function InspectionCenter() {
@@ -34,7 +40,7 @@ export default function InspectionCenter() {
     queryFn: async () => {
       const params: Record<string, string> = { limit: '200' };
       if (searchParams.get('deviceId')) params.deviceId = searchParams.get('deviceId')!;
-      const res = await api.get('/api/inspection-center', { params });
+      const res = await api.get('/inspection-center', { params });
       return (res.data.data || []) as InspectionItem[];
     },
     refetchInterval: 30000,
@@ -42,7 +48,7 @@ export default function InspectionCenter() {
 
   const { data: counts } = useQuery({
     queryKey: ['dashboard-linkage'],
-    queryFn: () => api.get('/api/dashboard/linkage').then(r => r.data.data || {}),
+    queryFn: () => api.get('/dashboard/linkage').then(r => r.data.data || {}),
     refetchInterval: 60000,
   });
 
@@ -129,7 +135,7 @@ export default function InspectionCenter() {
           <div className="bg-surface/60 border border-border rounded-lg p-4">
             <div className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-purple-400" />
-              <span className="text-2xl font-bold text-text-primary">{(counts as any)?.remediations?.total || 0}</span>
+              <span className="text-2xl font-bold text-text-primary">{(counts as DashboardLinkage)?.remediations?.total || 0}</span>
             </div>
             <p className="text-xs text-text-secondary mt-1">修复执行</p>
           </div>

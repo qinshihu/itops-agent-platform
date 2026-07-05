@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Eye, FileText, Activity, Terminal, X } from 'lucide-react';
+import { Eye, FileText as _FileText, Activity, Terminal, X } from 'lucide-react';
 import api from '../../../lib/api';
 import { formatBytes, statusBadge, withEndpointParams } from './types';
 
@@ -36,7 +36,7 @@ export function ContainerDetail({
   const { data: logsData, isLoading: logsLoading } = useQuery({
     queryKey: ['container-logs', selectedContainerId],
     queryFn: async () => {
-      const res = await api.get(`/api/containers/logs/${selectedContainerId}`, {
+      const res = await api.get(`/containers/logs/${selectedContainerId}`, {
         params: withEndpointParams(endpointId, { tail: 200 }),
       });
       return res.data.data as string;
@@ -47,7 +47,7 @@ export function ContainerDetail({
   const { data: statsData, isLoading: statsLoading } = useQuery({
     queryKey: ['container-stats', selectedContainerId],
     queryFn: async () => {
-      const res = await api.get(`/api/containers/stats/${selectedContainerId}`, {
+      const res = await api.get(`/containers/stats/${selectedContainerId}`, {
         params: withEndpointParams(endpointId),
       });
       return res.data.data as Record<string, unknown>;
@@ -58,7 +58,7 @@ export function ContainerDetail({
   const { data: detailData, isLoading: detailLoading } = useQuery({
     queryKey: ['container-detail', selectedContainerId],
     queryFn: async () => {
-      const res = await api.get(`/api/containers/${selectedContainerId}`, {
+      const res = await api.get(`/containers/${selectedContainerId}`, {
         params: withEndpointParams(endpointId),
       });
       return res.data.data as Record<string, unknown>;

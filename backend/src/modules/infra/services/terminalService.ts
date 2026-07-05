@@ -50,6 +50,7 @@ const cleanupTimer = setInterval(() => {
 }, CLEANUP_INTERVAL_MS);
 cleanupTimer.unref();
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface ServerInfo {
   id: string;
   name: string;

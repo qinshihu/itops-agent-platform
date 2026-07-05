@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * 服务容器 - 统一的服务生命周期管理
  * 

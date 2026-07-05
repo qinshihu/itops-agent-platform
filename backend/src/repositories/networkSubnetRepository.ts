@@ -14,6 +14,7 @@
 
 import { randomUUID } from 'crypto';
 import db from '../models/database';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { NetworkSubnet, NetworkIp } from './types/network';
 
 // ── network_subnets 类型 ──

@@ -3,7 +3,7 @@ import type { Server as SocketIOServer, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { env } from '../../utils/env';
 import { logger } from '../../utils/logger';
-import db from '../../models/database';
+import { userRepository } from '../../repositories/userRepository';
 import { terminalService } from '../../modules/infra/services/terminalService';
 import { containerMonitorService } from '../../modules/containers/services/containerMonitorService';
 import { containerLogService } from '../../modules/containers/services/containerLogService';
@@ -36,7 +36,7 @@ function authenticateSocket(socket: Socket, next: (err?: Error) => void) {
 
     const decoded = jwt.verify(token, env.JWT_SECRET) as { id: string };
     
-    const user = db.prepare('SELECT id, username, email, role, enabled FROM users WHERE id = ?').get(decoded.id) as User | undefined;
+    const user = userRepository.getForWebSocket(decoded.id) as User | undefined;
     
     if (!user?.enabled) {
       logger.error('❌ WebSocket 认证失败: 用户不存在或已禁用');

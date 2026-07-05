@@ -87,55 +87,55 @@ export const authApi = {
 
   /** 登录 */
   async login(input: LoginInput): Promise<LoginResult> {
-    const { data } = await api.post('/api/auth/login', input);
+    const { data } = await api.post('/auth/login', input);
     return data;
   },
 
   /** 登出 */
   async logout(): Promise<void> {
-    await api.post('/api/auth/logout');
+    await api.post('/auth/logout');
   },
 
   /** 刷新令牌 */
   async refresh(refreshToken: string): Promise<RefreshResult> {
-    const { data } = await api.post('/api/auth/refresh', { refreshToken });
+    const { data } = await api.post('/auth/refresh', { refreshToken });
     return data;
   },
 
   /** 获取当前登录用户 */
   async getCurrentUser(): Promise<AuthUser> {
-    const { data } = await api.get('/api/auth/me');
+    const { data } = await api.get('/auth/me');
     return data;
   },
 
   /** 修改密码 */
   async changePassword(input: ChangePasswordInput): Promise<void> {
-    await api.post('/api/auth/change-password', input);
+    await api.post('/auth/change-password', input);
   },
 
   // ── 用户管理 ──
 
   /** 获取用户列表 */
   async listUsers(): Promise<UserRecord[]> {
-    const { data } = await api.get('/api/users');
+    const { data } = await api.get('/users');
     return data;
   },
 
   /** 创建用户 */
   async createUser(input: CreateUserInput): Promise<UserRecord> {
-    const { data } = await api.post('/api/users', input);
+    const { data } = await api.post('/users', input);
     return data;
   },
 
   /** 更新用户 */
   async updateUser(id: string, input: UpdateUserInput): Promise<UserRecord> {
-    const { data } = await api.put(`/api/users/${id}`, input);
+    const { data } = await api.put(`/users/${id}`, input);
     return data;
   },
 
   /** 删除用户 */
   async deleteUser(id: string): Promise<void> {
-    await api.delete(`/api/users/${id}`);
+    await api.delete(`/users/${id}`);
   },
 };
 

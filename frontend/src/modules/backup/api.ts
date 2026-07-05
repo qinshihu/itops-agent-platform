@@ -34,32 +34,32 @@ export interface Backup {
 export const backupApi = {
   /** 创建备份 */
   async create(): Promise<Backup> {
-    const { data } = await api.post('/api/backups');
+    const { data } = await api.post('/backups');
     return data.data;
   },
 
   /** 获取备份列表 */
   async list(): Promise<Backup[]> {
-    const { data } = await api.get('/api/backups');
+    const { data } = await api.get('/backups');
     return data.data;
   },
 
   /** 恢复备份 */
   async restore(backupId: string): Promise<{ success: boolean; message?: string }> {
-    const { data } = await api.post(`/api/backups/${backupId}/restore`);
+    const { data } = await api.post(`/backups/${backupId}/restore`);
     return data;
   },
 
   /** 删除备份 */
   async delete(backupId: string): Promise<void> {
-    await api.delete(`/api/backups/${backupId}`);
+    await api.delete(`/backups/${backupId}`);
   },
 
   /** 上传备份文件 */
   async upload(file: File): Promise<Backup> {
     const formData = new FormData();
     formData.append('file', file);
-    const { data } = await api.post('/api/backups/upload', formData, {
+    const { data } = await api.post('/backups/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return data.data;

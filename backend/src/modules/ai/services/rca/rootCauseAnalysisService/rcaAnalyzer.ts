@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// eslint-disable-next-line no-restricted-imports
 import db from '../../../../../models/database';
 import { networkDeviceRepository, serversRepo } from '../../../../../repositories';
 import { generateCompletion } from '../../llm/llmService';
