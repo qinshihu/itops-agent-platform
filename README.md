@@ -51,9 +51,13 @@
   <img src="https://img.shields.io/badge/Node.js-22-339933?logo=nodedotjs" alt="Node.js">
   <img src="https://img.shields.io/badge/Docker-🐳-2496ED?logo=docker" alt="Docker">
   <br/>
-  <a href="https://www.star-history.com/?repos=qinshihu%2Fitops-agent-platform&type=date&legend=top-left">
-    <img src="https://api.star-history.com/svg?repos=qinshihu/itops-agent-platform&type=Date" alt="Star History Chart" width="480" />
-  </a>
+<a href="https://www.star-history.com/?repos=qinshihu%2Fitops-agent-platform&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=qinshihu/itops-agent-platform&type=date&theme=dark&legend=top-left&sealed_token=rQRuWRuFdnghn-fItLfTVzIeeiesXsTLZCgxyEHMLGH9rOu_cYVM3wNb9IDr8sccAXuQX04teT-Gc5htFu3P_BJYe5sKScWSyTsABQmGoKH0XrMcktAicA" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=qinshihu/itops-agent-platform&type=date&legend=top-left&sealed_token=rQRuWRuFdnghn-fItLfTVzIeeiesXsTLZCgxyEHMLGH9rOu_cYVM3wNb9IDr8sccAXuQX04teT-Gc5htFu3P_BJYe5sKScWSyTsABQmGoKH0XrMcktAicA" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=qinshihu/itops-agent-platform&type=date&legend=top-left&sealed_token=rQRuWRuFdnghn-fItLfTVzIeeiesXsTLZCgxyEHMLGH9rOu_cYVM3wNb9IDr8sccAXuQX04teT-Gc5htFu3P_BJYe5sKScWSyTsABQmGoKH0XrMcktAicA" />
+ </picture>
+</a>
 </p>
 
 🎮 [在线演示](https://agentdemo-0mwug01t6.maozi.io/) &emsp;|&emsp; 📝[项目愿景与社区共建](项目愿景与社区共建.md) &emsp;|&emsp; 📝[AI编程Skill](SKILL.md) &emsp;|&emsp; 📝[教学书籍](https://aiopsdoc-0mwug01t6.maozi.io/book/) &emsp;|&emsp; 📖[项目文档](https://aiopsdoc-0mwug01t6.maozi.io/) &emsp;|&emsp; ✍️[作者的话](https://mp.weixin.qq.com/s/NDqYrfqR0RZEvSESyVD2hg)
