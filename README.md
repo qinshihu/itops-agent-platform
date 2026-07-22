@@ -327,18 +327,124 @@ Prometheus / Zabbix 告警 → Webhook 接收
 
 ```mermaid
 graph TB
-    Browser["🌐 浏览器"] --> Nginx["Nginx 反向代理"]
-    Nginx --> React["React 前端<br/>63 个页面 | @xyflow/react 工作流编辑器"]
-    Nginx --> Express["Express 后端<br/>68 个路由 | 72 个服务 | JWT 认证"]
-    React <-->|"WebSocket 实时通信"| Express
-    Express --> SQLite[("SQLite 数据库<br/>WAL 模式 | AES-256 加密")]
-    Express --> LLM["🤖 LLM 模型池<br/>豆包 | DeepSeek | 通义千问<br/>OpenAI | 智谱 | 本地模型"]
-    Express --> SSH["🖥️ SSH 远程服务器"]
-    Express --> Docker["🐳 Docker Engine API"]
-    Express --> K8s["☸️ Kubernetes API"]
-    Express --> VMware["💻 VMware vSphere / KVM"]
-    Express --> Webhook["🚨 告警 Webhook<br/>Prometheus | Zabbix | Grafana"]
-    Express --> Notify["📬 通知渠道<br/>企业微信 | 钉钉 | 邮件"]
+    %% ===== 客户端层 =====
+    subgraph Client["🖥️ 客户端层"]
+        Browser["🌐 浏览器<br/>React 18 + Vite + Ant Design<br/>474 个 .tsx 组件 · 23 个 DDD 模块"]
+    end
+
+    %% ===== 边缘层 =====
+    subgraph Edge["🚪 边缘层"]
+        Nginx["Nginx 反向代理<br/>静态资源 · Gzip · HTTPS 终止"]
+    end
+
+    %% ===== 技术架构层 =====
+    subgraph Tech["4️⃣ 技术架构层（Technology · core/）"]
+        DI["DI 容器<br/>serviceContainer.ts<br/>拓扑排序初始化"]
+        MW["中间件<br/>auth(JWT+RBAC) · errorHandler<br/>rateLimiter · validation(Zod) · trace"]
+        WS["WebSocket 服务<br/>Socket.IO 4.7<br/>实时推送 · VNC 代理"]
+    end
+
+    %% ===== 应用架构层 =====
+    subgraph App["2️⃣ 应用架构层（Application · modules/）"]
+        direction TB
+
+        subgraph AIMcp["🤖 AI & 工具协议域"]
+            AiMod["ai/<br/>多 Agent · RCA · 知识库<br/>agentToolRegistry 24 工具"]
+            McpMod["mcp/<br/>MCP 协议 · 6 层 securityGate<br/>toolRegistry 13+ 平台 + 外部 Server"]
+            Bridge["agentMcpAdapter<br/>桥接器（mcp ↔ Agent）"]
+        end
+
+        subgraph AlertMon["🚨 告警与监控域"]
+            AlertsMod["alerts/<br/>接收→过滤→关联→降噪→通知<br/>AlertProcessor 状态机"]
+            MonMod["monitor/<br/>Dashboard · 大屏 · 报告 · 成本<br/>Prometheus · Zabbix"]
+            LinkMod["linkage/<br/>联动统计 · 巡检中心<br/>(仅后端)"]
+        end
+
+        subgraph InfraDom["🛠️ 基础设施域"]
+            ServersMod["servers/<br/>SSH · 远程桌面 · 终端"]
+            ContainersMod["containers/<br/>Docker 多主机 · VMware/Proxmox/KVM<br/>三适配器 + 快照/迁移"]
+            K8sMod["kubernetes/<br/>K8sContext · Pod · Node"]
+            NetworkMod["network/<br/>17 厂商适配器 · SNMP · 拓扑 · VNC"]
+            DcMod["dc/<br/>机房 · 机柜 · 设备 · 电力<br/>3D 可视化 · 5s 实时推送"]
+        end
+
+        subgraph AutoDom["⚙️ 运维自动化域"]
+            WfMod["workflow/<br/>WorkflowEngine 状态机 · 任务调度"]
+            AutoMod["auto/<br/>修复策略 · 自动伸缩<br/>container/vm/k8s_deployment"]
+            CfgMod["config-management/<br/>配置模板 · 配置修复 · Compose"]
+            ChgMod["change-management/<br/>变更审批 · ApprovalTicket"]
+            ScriptsMod["scripts/<br/>脚本 · 终端 · AI 命令"]
+        end
+
+        subgraph SysDom["🔐 系统支撑域"]
+            AuthMod["auth/<br/>JWT + RBAC + 登录限流"]
+            SettingsMod["settings/<br/>系统设置 · AI Provider 配置<br/>取代 .env"]
+            BackupMod["backup/<br/>自动备份 · 加密 · 手动恢复"]
+            AuditMod["audit/<br/>审计日志 · P1-6 新增"]
+            DBMod["database/<br/>数据库连接管理"]
+            NotifyMod["notification/<br/>6 通道 · 模板 · 发送"]
+            ImpMod["import-export/<br/>CSV/JSON 导入导出"]
+            TLMod["tool-links/<br/>工具箱 CRUD"]
+        end
+    end
+
+    %% ===== 业务架构层（横切规则） =====
+    subgraph Biz["1️⃣ 业务架构层（Business · 状态机/规则/权限）"]
+        BizRules["工作流状态机 · 告警处理规则<br/>审批权限规则 · 聚合根保护<br/>(不可在 routes/repository 中硬编码)"]
+    end
+
+    %% ===== 数据架构层 =====
+    subgraph Data["3️⃣ 数据架构层（Data · repositories/）"]
+        SQLite[("SQLite 数据库<br/>better-sqlite3 + WAL 模式<br/>AES-256 加密 · 60 个 migration<br/>31 顶层 repo + 90 子目录")]
+    end
+
+    %% ===== 外部集成层 =====
+    subgraph Ext["🌍 外部集成层"]
+        LLM["🤖 LLM 模型池<br/>豆包 · DeepSeek · 通义千问<br/>OpenAI · 智谱 · 本地模型<br/>(providerAdapters 函数式抽象)"]
+        SSH["🖥️ SSH 远程服务器<br/>ssh2 · shell-quote"]
+        Docker["🐳 Docker Engine API<br/>dockerode"]
+        VMware["💻 VMware vSphere / KVM"]
+        Prometheus["📊 Prometheus / Zabbix / Grafana<br/>告警 Webhook"]
+        K8sExt["☸️ Kubernetes API"]
+        SnmpExt["📡 SNMP / NetFlow 设备<br/>17 厂商适配器 · net-snmp"]
+        Notify["📬 通知渠道<br/>企业微信 · 飞书 · 钉钉<br/>Telegram · Email · Webhook"]
+        McpExt["🔌 外部 MCP Server<br/>SSE / stdio Transport"]
+    end
+
+    %% ===== 连线 =====
+    Browser --> Nginx
+    Nginx --> App
+    Browser <-->|"WebSocket 实时<br/>告警 · VNC · dc:status"| WS
+    WS -.注入 DI.-> DI
+
+    App --> Biz
+    App --> Data
+    App --> Tech
+
+    AIMcp --> LLM
+    AIMcp -.SSE/stdio.-> McpExt
+    AlertsMod --> Prometheus
+    MonMod --> Prometheus
+    NetworkMod --> Prometheus
+    DcMod --> Prometheus
+    NotifyMod --> Notify
+    ServersMod --> SSH
+    ContainersMod --> Docker
+    ContainersMod --> VMware
+    K8sMod --> K8sExt
+    NetworkMod --> SnmpExt
+    AiMod --> LLM
+    WfMod --> ScriptsMod
+    AutoMod --> ContainersMod
+    AutoMod --> K8sMod
+    ScriptsMod --> ServersMod
+
+    classDef biz fill:#fff4e1,stroke:#d2691e,stroke-width:2px;
+    classDef tech fill:#e1f0ff,stroke:#1e5aa8,stroke-width:2px;
+    classDef data fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    class BizRules biz
+    class DI,MW,WS tech
+    class SQLite data
 ```
 
 > 📐 [查看完整架构图 →](./docs/ARCHITECTURE_DIAGRAM.md)
