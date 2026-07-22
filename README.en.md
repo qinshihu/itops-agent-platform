@@ -68,13 +68,17 @@ This project will be permanently open source, belonging to the entire open-sourc
 </a>
 </p>
 
-🎮 [Live Demo](https://agentdemo-0mwug01t6.maozi.io/) &emsp;|&emsp; 📝[Vision & Community](项目愿景与社区共建.md) &emsp;|&emsp; 📘[AI Collaboration Hub](AGENTS.md) &emsp;|&emsp; �[AI Tool Configs](ai-tool-configs/) &emsp;|&emsp; �📝[Documentation Book](https://aiopsdoc-0mwug01t6.maozi.io/book/) &emsp;|&emsp; 📖[Project Docs](https://aiopsdoc-0mwug01t6.maozi.io/) &emsp;|&emsp; ✍️[Author's Note](https://mp.weixin.qq.com/s/NDqYrfqR0RZEvSESyVD2hg)
+🎮 [Live Demo](https://agentdemo-0mwug01t6.maozi.io/) &emsp;|&emsp; 📝[Vision & Community](项目愿景与社区共建.md) &emsp;|&emsp; 📘[AI Collaboration Hub](AGENTS.md) &emsp;|&emsp; 🛠[AI Tool Configs](ai-tool-configs/) &emsp;
+
+📝 [Documentation Book](https://aiopsdoc-0mwug01t6.maozi.io/book/) &emsp;|&emsp; 📖[Project Docs](https://aiopsdoc-0mwug01t6.maozi.io/) &emsp;|&emsp; ✍️[Author's Note](https://mp.weixin.qq.com/s/NDqYrfqR0RZEvSESyVD2hg) &emsp; 🌐 Official Website: <https://www.zjzwfw.cloud/ITOpsAgentinfo>
+
+📦 Repositories: [GitHub](https://github.com/qinshihu/itops-agent-platform) | [Gitee](https://gitee.com/IT_Oline/itops-agent-platform) | [GitCode](https://gitcode.com/gcw_IM7aAihp/itops-agent-platform)
 
 > 🛠 **[ai-tool-configs/](ai-tool-configs/)**: entry config **derived templates** for other AI tools (Cursor / Windsurf / Aider / Continue / Claude Code / GitHub Copilot) — **NOT the source of truth**. The source of truth is the root-level `AGENTS.md` + `.trae/`. Before using these tools, read `AGENTS.md` first, then copy and adjust the corresponding file for your local environment — do not `cp` the default templates directly.
 
-🌐 Official Website: <https://www.zjzwfw.cloud/ITOpsAgentinfo>
+---
 
-📦 Repositories: [GitHub](https://github.com/qinshihu/itops-agent-platform) | [Gitee](https://gitee.com/IT_Oline/itops-agent-platform) | [GitCode](https://gitcode.com/gcw_IM7aAihp/itops-agent-platform)
+> 🛠 **[ai-tool-configs/](ai-tool-configs/)**: entry config **derived templates** for other AI tools (Cursor / Windsurf / Aider / Continue / Claude Code / GitHub Copilot) — **NOT the source of truth**. The source of truth is the root-level `AGENTS.md` + `.trae/`. Before using these tools, read `AGENTS.md` first, then copy and adjust the corresponding file for your local environment — do not `cp` the default templates directly.
 
 ---
 
