@@ -38,10 +38,10 @@
   "author": "",
   "license": "MPL-2.0",
   "devDependencies": {
-    "concurrently": "^8.2.2",
-    "dependency-cruiser": "16.10.4",
+    "concurrently": "^10.0.3",
+    "dependency-cruiser": "18.1.0",
     "husky": "^9.1.7",
-    "lint-staged": "15.5.2",
+    "lint-staged": "17.1.1",
     "madge": "^8.0.0",
     "prettier": "3.9.5"
   },
