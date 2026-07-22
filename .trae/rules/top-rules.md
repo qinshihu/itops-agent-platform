@@ -9,7 +9,7 @@
 > - 项目代码发生变化时，必须同步更新本文件 + `AGENTS.md` + `.trae/` 相关文档，并同步各模块 `README.md`（包括 `backend/src/modules/*/README.md`、`frontend/src/modules/*/README.md`）
 > - 所有文档只保留最新的有效内容，过时的历史信息、变更记录、迁移说明这类「考古」内容全部删掉
 > - 每次最终推送仓库前：检查 `backend/` 和 `frontend/` 内部所有 README.md（包括子模块、子目录），看有没有需要更新的
-> - 改根 `README.md` 中文版后，必须同步更新 6 份多语言 README（en/ja/ko/fr/de/TW），与中文版保持结构与内容一致（详见 [AGENTS.md §8.4 L1 教训](../../AGENTS.md#L152)）
+> - 改根 `README.md` 中文版后，必须提醒用户同步更新 6 份多语言 README（en/ja/ko/fr/de/TW），与中文版保持结构与内容一致（详见 [AGENTS.md §8.4 L1 教训](../../AGENTS.md#L152)）
 
 ---
 
