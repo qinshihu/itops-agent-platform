@@ -66,7 +66,9 @@ curl -sL https://gitee.com/IT_Oline/itops-agent-platform/raw/main/deploy.sh -o d
 </a>
 </p>
 
-🎮 [在线演示](https://agentdemo-0mwug01t6.maozi.io/) &emsp;|&emsp; 📝[项目愿景与社区共建](项目愿景与社区共建.md) &emsp;|&emsp; 📘[AI 协作入口](AGENTS.md) &emsp;|&emsp; 📝[教学书籍](https://aiopsdoc-0mwug01t6.maozi.io/book/) &emsp;|&emsp; 📖[项目文档](https://aiopsdoc-0mwug01t6.maozi.io/) &emsp;|&emsp; ✍️[作者的话](https://mp.weixin.qq.com/s/NDqYrfqR0RZEvSESyVD2hg)
+🎮 [在线演示](https://agentdemo-0mwug01t6.maozi.io/) &emsp;|&emsp; 📝[项目愿景与社区共建](项目愿景与社区共建.md) &emsp;|&emsp; 📘[AI 协作入口](AGENTS.md) &emsp;|&emsp; �[AI 工具配置](ai-tool-configs/) &emsp;|&emsp; �📝[教学书籍](https://aiopsdoc-0mwug01t6.maozi.io/book/) &emsp;|&emsp; 📖[项目文档](https://aiopsdoc-0mwug01t6.maozi.io/) &emsp;|&emsp; ✍️[作者的话](https://mp.weixin.qq.com/s/NDqYrfqR0RZEvSESyVD2hg)
+
+> 🛠 **[ai-tool-configs/](ai-tool-configs/)**：其他 AI 工具（Cursor / Windsurf / Aider / Continue / Claude Code / GitHub Copilot）的入口配置**派生模板**，**非源真相**。源真相是根目录 `AGENTS.md` + `.trae/`——使用这些工具前先读 `AGENTS.md` 再按本机环境复制并调整对应文件，不要直接 `cp` 使用默认模板。
 
 🌐 项目官网：<https://www.zjzwfw.cloud/ITOpsAgentinfo>
 
