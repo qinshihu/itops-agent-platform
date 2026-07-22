@@ -10,7 +10,7 @@
  * 拆分原则遵循 architecture.md §3.3.1 + 第 3 条「向后兼容的 import 路径」
  */
 
-import { Client } from 'ssh2';
+import type { Client } from 'ssh2';
 import { logger } from '../../../../utils/logger';
 import { createVendorAdapter } from '../vendorAdapter';
 import { getParser } from '../networkResultParser';
