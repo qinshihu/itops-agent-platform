@@ -3,9 +3,9 @@ import { getIOInstance } from '../../../../shared/websocket/io';
 import { logger } from '../../../../utils/logger';
 import { knowledgeRepository, tasksRepo, reportsRepo, aiRemediationRepository } from '../../../../repositories';
 import { executeAgentNode } from '../../../ai/services/agents/agentExecutor';
-import { reportService } from '../../../infra/services/reportService';
+import { reportService } from '../../../monitor/services/reportService';
 import { notificationService } from '../../../notification/services/notificationService';
-import { createAuditLog } from '../../../infra/services/auditService';
+import { createAuditLog } from '../../../audit/services/auditService';
 import type {
   WorkflowNode,
   NodeResult,

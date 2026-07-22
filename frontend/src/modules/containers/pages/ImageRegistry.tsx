@@ -45,8 +45,8 @@ export default function ImageRegistry() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/registries');
-      setRegistries(res.data.data || []);
+      const { data } = await api.get('/registries');
+      setRegistries(data || []);
     } catch { message.error('加载失败'); }
     finally { setLoading(false); }
   };
@@ -88,8 +88,8 @@ export default function ImageRegistry() {
     setDetailVisible(true);
     setImagesLoading(true);
     try {
-      const res = await api.get(`/registries/${registry.id}/images`);
-      setImages(res.data.data || []);
+      const { data } = await api.get(`/registries/${registry.id}/images`);
+      setImages(data || []);
     } catch { message.error('获取镜像列表失败'); setImages([]); }
     finally { setImagesLoading(false); }
   };

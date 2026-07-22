@@ -6,20 +6,11 @@ import clsx from 'clsx';
 import api from '../../../lib/api';
 import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 import { useToast } from '../../../contexts/ToastContext';
-
-interface User {
-  id: string;
-  username: string;
-  email: string | null;
-  role: string;
-  enabled: number;
-  created_at: string;
-  updated_at: string;
-}
+import type { UserRecord } from '../api';
 
 export default function Users() {
   const [showModal, setShowModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -33,15 +24,15 @@ export default function Users() {
   const { data: usersData, isLoading: usersLoading } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
-      const res = await api.get('/users');
-      return res.data.data as User[];
+      const { data } = await api.get('/users');
+      return data as UserRecord[];
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
-      const res = await api.post('/users', data);
-      return res.data;
+      const { data: result } = await api.post('/users', data);
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -56,8 +47,8 @@ export default function Users() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
-      const res = await api.put(`/users/${id}`, data);
-      return res.data;
+      const { data: result } = await api.put(`/users/${id}`, data);
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -72,8 +63,8 @@ export default function Users() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.delete(`/users/${id}`);
-      return res.data;
+      const { data } = await api.delete(`/users/${id}`);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -98,7 +89,7 @@ export default function Users() {
     }
   };
 
-  const handleEdit = (user: User) => {
+  const handleEdit = (user: UserRecord) => {
     setEditingUser(user);
     setFormData({
       username: user.username,

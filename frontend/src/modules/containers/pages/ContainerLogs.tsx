@@ -4,7 +4,7 @@ import { Play, Square, Search, Download, Trash2, ArrowDown } from 'lucide-react'
 import api from '../../../lib/api';
 import type { Socket } from 'socket.io-client';
 import io from 'socket.io-client';
-import { useAuth } from '../../../../contexts/AuthContext';
+import { useAuth } from '../../../contexts/AuthContext';
 
 interface Container {
   id: string;
@@ -19,6 +19,7 @@ interface LogEntry {
 }
 
 export default function ContainerLogs() {
+  const { token } = useAuth();
   const [containers, setContainers] = useState<Container[]>([]);
   const [selectedContainer, setSelectedContainer] = useState<string>('');
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -54,8 +55,8 @@ export default function ContainerLogs() {
   const fetchContainers = useCallback(async () => {
     setLoadingContainers(true);
     try {
-      const res = await api.get('/containers');
-      setContainers(res.data.data || []);
+      const { data } = await api.get('/containers');
+      setContainers(data || []);
     } catch {
       message.error('加载容器列表失败');
     } finally {
@@ -141,7 +142,7 @@ export default function ContainerLogs() {
     const parts = text.split(regex);
     return parts.map((part, i) =>
       regex.test(part) ? (
-        <mark key={i} className="bg-yellow-400/60 text-white px-0.5 rounded">{part}</mark>
+        <mark key={i} className="bg-amber-300 text-gray-900 font-semibold px-1 rounded">{part}</mark>
       ) : (
         part
       )
@@ -157,13 +158,22 @@ export default function ContainerLogs() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">容器日志查看器</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">实时查看容器终端输出日志，支持搜索、过滤与导出</p>
+          <h1 className="text-2xl font-bold text-text-primary">容器日志查看器</h1>
+          <p className="text-sm text-text-secondary mt-1">实时查看容器终端输出日志，支持搜索、过滤与导出</p>
         </div>
+        {isStreaming && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-stat-green text-xs font-medium">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            实时采集中…
+          </div>
+        )}
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+      <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-surface rounded-lg border border-border">
         <Select
           showSearch
           placeholder="选择容器"
@@ -198,27 +208,27 @@ export default function ContainerLogs() {
 
         <Input
           placeholder="搜索日志..."
-          prefix={<Search className="w-3.5 h-3.5 text-gray-400" />}
+          prefix={<Search className="w-3.5 h-3.5 text-text-secondary" />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: 200 }}
+          style={{ width: 240 }}
           allowClear
         />
 
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-gray-500 dark:text-gray-400">时间戳</span>
+        <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-background border border-border text-text-secondary">
+          <span className="text-xs">时间戳</span>
           <Switch size="small" checked={showTimestamp} onChange={setShowTimestamp} />
         </div>
 
         <Tooltip title="自动滚动到底部">
-          <div className="flex items-center gap-1.5">
-            <ArrowDown className="w-3.5 h-3.5 text-gray-400" />
+          <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-background border border-border text-text-secondary">
+            <ArrowDown className="w-3.5 h-3.5" />
             <Switch size="small" checked={autoScroll} onChange={setAutoScroll} />
           </div>
         </Tooltip>
 
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-gray-500 dark:text-gray-400">行数</span>
+        <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-background border border-border text-text-secondary">
+          <span className="text-xs">行数</span>
           <InputNumber
             size="small"
             min={100}
@@ -230,33 +240,46 @@ export default function ContainerLogs() {
           />
         </div>
 
-        <span className="text-xs text-gray-400 ml-auto">
-          {filteredLogs.length} 行 {searchTerm ? `(筛选自 ${logs.length} 行)` : ''}
+        <span className="text-xs text-text-secondary ml-auto px-2 py-1 rounded-md bg-background border border-border">
+          <span className="font-semibold text-text-primary">{filteredLogs.length}</span>
+          {searchTerm ? ` / ${logs.length}` : ''} 行
         </span>
       </div>
 
       {/* Log Panel */}
       <div
         ref={logContainerRef}
-        className="flex-1 bg-gray-950 text-green-400 font-mono text-xs p-4 rounded-lg overflow-y-auto border border-gray-700 shadow-inner min-h-0"
-        style={{ fontFamily: 'Consolas, "Courier New", monospace', lineHeight: '1.6' }}
+        className="flex-1 bg-gray-950 text-emerald-300 font-mono text-xs rounded-lg overflow-y-auto border border-gray-700 shadow-inner min-h-0"
+        style={{ fontFamily: 'Consolas, "Courier New", monospace', lineHeight: '1.7' }}
       >
         {filteredLogs.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-500">
             <div className="text-center">
-              <p className="text-sm mb-1">{isStreaming ? '等待日志...' : '选择容器并点击"开始"查看日志'}</p>
+              <p className="text-sm mb-1">
+                {isStreaming ? '等待日志...' : '选择容器并点击"开始"查看日志'}
+              </p>
               <p className="text-xs text-gray-600">容器日志将实时显示在此处</p>
             </div>
           </div>
         ) : (
-          filteredLogs.map((entry, idx) => (
-            <div key={idx} className="hover:bg-gray-800/50 whitespace-pre-wrap break-all">
-              {showTimestamp && (
-                <span className="text-cyan-400 mr-2 select-none">[{entry.timestamp}]</span>
-              )}
-              <span>{highlightText(entry.data, searchTerm)}</span>
-            </div>
-          ))
+          <div className="p-3 space-y-0.5">
+            {filteredLogs.map((entry, idx) => (
+              <div
+                key={idx}
+                className="grid grid-cols-[auto_1fr] gap-3 hover:bg-white/5 rounded px-2 py-1 group"
+              >
+                <span className="text-gray-500 select-none text-right tabular-nums w-12 shrink-0">
+                  {idx + 1}
+                </span>
+                <span className="whitespace-pre-wrap break-all group-hover:text-emerald-200">
+                  {showTimestamp && (
+                    <span className="text-sky-400 mr-2 select-none">[{entry.timestamp}]</span>
+                  )}
+                  {highlightText(entry.data, searchTerm)}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>

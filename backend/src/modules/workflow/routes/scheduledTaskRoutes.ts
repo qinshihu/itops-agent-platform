@@ -1,216 +1,139 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { workflowRepository } from '../../../repositories';
-import { randomUUID } from 'crypto';
-import { createAuditLog } from '../../infra/services/auditService';
-import { schedulerService } from '../services/schedulerService';
+import { createAuditLog } from '../../audit/services/auditService';
 import { requireRole } from '../../../middleware/auth';
 import { validateBody, validateParams } from '../../../middleware/validation';
 import { scheduledTaskSchemas } from '../../../shared/schemas/apiValidation';
+import { scheduledTaskCrudService } from '../services/scheduledTaskCrudService';
 
 const router = Router();
 
+function errMsg(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 router.get('/', (_req: Request, res: Response) => {
   try {
-    const tasks = workflowRepository.scheduledTasks.list();
+    const tasks = scheduledTaskCrudService.listScheduledTasks();
     res.json({ success: true, data: tasks });
   } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+    res.status(500).json({ success: false, error: errMsg(error) });
   }
 });
 
 router.get('/:id', (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const task = workflowRepository.scheduledTasks.getByIdWithWorkflow(id);
-
+    const task = scheduledTaskCrudService.getScheduledTaskById(req.params.id);
     if (!task) {
       return res.status(404).json({ success: false, error: 'Scheduled task not found' });
     }
-
     res.json({ success: true, data: task });
   } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+    res.status(500).json({ success: false, error: errMsg(error) });
   }
 });
 
 router.post('/', requireRole('admin', 'operator'), validateBody(scheduledTaskSchemas.createTask), (req: Request, res: Response) => {
   try {
-    const { name, description, workflow_id, schedule, cron_expression, enabled = 1 } = req.body;
-
-    const taskSchedule = schedule || cron_expression;
-
-    if (workflow_id) {
-      if (!workflowRepository.workflows.existsById(workflow_id)) {
-        return res.status(404).json({ success: false, error: 'Workflow not found' });
-      }
+    const result = scheduledTaskCrudService.createScheduledTask(req.body);
+    if (!result.success) {
+      return res.status(404).json({ success: false, error: result.error });
     }
-
-    const id = randomUUID();
-
-    workflowRepository.scheduledTasks.create({
-      id,
-      name,
-      description: description || null,
-      workflow_id: workflow_id || null,
-      schedule: taskSchedule,
-      enabled: enabled ? 1 : 0
-    });
-
-    // 如果启用，则立即调度任务
-    if (enabled) {
-      schedulerService.scheduleTask({
-        id,
-        name,
-        description,
-        workflow_id,
-        schedule: taskSchedule,
-        enabled: 1
-      });
-    }
-
     createAuditLog({
       user_id: 'system',
       action: 'create_scheduled_task',
       resource_type: 'scheduled_task',
-      resource_id: id,
-      details: { name, workflow_id, schedule }
+      resource_id: result.data.id,
+      details: { name: result.data.name, workflow_id: result.data.workflow_id ?? '', schedule: result.data.schedule ?? '' },
     });
-
-    res.status(201).json({ success: true, data: { id, name, description, workflow_id, schedule, enabled } });
+    res.status(201).json({ success: true, data: result.data });
   } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+    res.status(500).json({ success: false, error: errMsg(error) });
   }
 });
 
 router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const { name, description, workflow_id, schedule, cron_expression, enabled } = req.body;
-
-    const task = workflowRepository.scheduledTasks.getById(id);
-    if (!task) {
-      return res.status(404).json({ success: false, error: 'Scheduled task not found' });
+    const result = scheduledTaskCrudService.updateScheduledTask(req.params.id, req.body);
+    if (!result.success) {
+      return res.status(404).json({ success: false, error: result.error });
     }
-
-    if (workflow_id) {
-      if (!workflowRepository.workflows.existsById(workflow_id)) {
-        return res.status(404).json({ success: false, error: 'Workflow not found' });
-      }
-    }
-
-    workflowRepository.scheduledTasks.update(id, {
-      name,
-      description: description !== undefined ? description : undefined,
-      workflow_id: workflow_id !== undefined ? workflow_id : undefined,
-      schedule: schedule || cron_expression,
-      enabled: enabled !== undefined ? (enabled ? 1 : 0) : undefined,
-    });
-
-    // 更新调度器
-    const updatedTask = workflowRepository.scheduledTasks.getById(id);
-    if (updatedTask) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      schedulerService.updateTask(updatedTask as any);
-    }
-
     createAuditLog({
       user_id: 'system',
       action: 'update_scheduled_task',
       resource_type: 'scheduled_task',
-      resource_id: id,
-      details: { name, workflow_id, schedule, enabled }
+      resource_id: req.params.id,
+      details: req.body,
     });
-
     res.json({ success: true, message: 'Scheduled task updated' });
   } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+    res.status(500).json({ success: false, error: errMsg(error) });
   }
 });
 
 router.delete('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-
-    const task = workflowRepository.scheduledTasks.getById(id);
-    if (!task) {
+    const simple = scheduledTaskCrudService.getScheduledTaskByIdSimple(req.params.id);
+    if (!simple) {
       return res.status(404).json({ success: false, error: 'Scheduled task not found' });
     }
-
-    // 从调度器中删除
-    schedulerService.deleteTask(id);
-
-    workflowRepository.scheduledTasks.delete(id);
-
+    const result = scheduledTaskCrudService.deleteScheduledTask(req.params.id);
+    if (!result.success) {
+      return res.status(404).json({ success: false, error: result.error });
+    }
     createAuditLog({
       user_id: 'system',
       action: 'delete_scheduled_task',
       resource_type: 'scheduled_task',
-      resource_id: id,
-      details: { name: task.name }
+      resource_id: req.params.id,
+      details: { name: (simple as { name: string }).name },
     });
-
     res.json({ success: true, message: 'Scheduled task deleted' });
   } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+    res.status(500).json({ success: false, error: errMsg(error) });
   }
 });
 
 router.post('/:id/toggle', validateParams(scheduledTaskSchemas.taskId), (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-
-    const task = workflowRepository.scheduledTasks.getById(id);
-    if (!task) {
-      return res.status(404).json({ success: false, error: 'Scheduled task not found' });
+    const result = scheduledTaskCrudService.toggleScheduledTask(req.params.id);
+    if (!result.success) {
+      return res.status(404).json({ success: false, error: result.error });
     }
-
-    const newEnabled = !task.enabled ? 1 : 0;
-    workflowRepository.scheduledTasks.setEnabled(id, newEnabled);
-
-    const updatedTask = workflowRepository.scheduledTasks.getById(id);
-    if (updatedTask) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      schedulerService.updateTask(updatedTask as any);
-    }
-
     createAuditLog({
       user_id: 'system',
       action: 'toggle_scheduled_task',
       resource_type: 'scheduled_task',
-      resource_id: id,
-      details: { enabled: String(!!newEnabled) }
+      resource_id: req.params.id,
+      details: { enabled: String(result.enabled) },
     });
-
-    res.json({ success: true, data: { enabled: !!newEnabled } });
+    res.json({ success: true, data: { enabled: result.enabled } });
   } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+    res.status(500).json({ success: false, error: errMsg(error) });
   }
 });
 
 router.post('/:id/run', validateParams(scheduledTaskSchemas.taskId), (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-
-    const task = workflowRepository.scheduledTasks.getByIdForManualRun(id);
+    const task = scheduledTaskCrudService.getScheduledTaskById(req.params.id);
     if (!task) {
       return res.status(404).json({ success: false, error: 'Scheduled task not found' });
     }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    schedulerService.executeWorkflow(task as any);
-
+    const result = scheduledTaskCrudService.runScheduledTaskManually(req.params.id);
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
     createAuditLog({
       user_id: 'system',
       action: 'manual_run_scheduled_task',
       resource_type: 'scheduled_task',
-      resource_id: id,
-      details: { name: task.name, manual_run: String(true) }
+      resource_id: req.params.id,
+      details: { name: (task as { name: string }).name, manual_run: 'true' },
     });
-
     res.json({ success: true, message: 'Task triggered manually' });
   } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+    res.status(500).json({ success: false, error: errMsg(error) });
   }
 });
 

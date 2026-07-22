@@ -1,9 +1,14 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Save, ArrowLeft, Trash2 } from 'lucide-react';
+
+interface WorkflowOption {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+}
 
 const EXECUTION_MODES = [
   { value: 'auto', label: '自动执行' },
@@ -50,16 +55,16 @@ export default function RemediationPolicyEditor() {
   const { data: workflows } = useQuery({
     queryKey: ['workflows'],
     queryFn: async () => {
-      const res = await api.get('/workflows');
-      return res.data.data;
+      const { data } = await api.get('/workflows');
+      return data;
     }
   });
 
   const { data: policy, isLoading: isLoadingPolicy } = useQuery({
     queryKey: ['remediation-policy', id],
     queryFn: async () => {
-      const res = await api.get(`/remediation-policies/${id}`);
-      return res.data.data;
+      const { data } = await api.get(`/remediation-policies/${id}`);
+      return data;
     },
     enabled: !isNew
   });
@@ -271,7 +276,7 @@ export default function RemediationPolicyEditor() {
                   className="w-full px-3 py-1.5 bg-slate-800/50 border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-blue-500"
                 >
                   <option value="">选择工作流</option>
-                  {workflows?.map((w: any) => (
+                  {workflows?.map((w: WorkflowOption) => (
                     <option key={w.id} value={w.id}>{w.name}</option>
                   ))}
                 </select>
@@ -338,7 +343,7 @@ export default function RemediationPolicyEditor() {
                     className="w-full px-3 py-1.5 bg-slate-800/50 border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-blue-500"
                   >
                     <option value="">选择工作流</option>
-                    {workflows?.map((w: any) => (
+                    {workflows?.map((w: WorkflowOption) => (
                       <option key={w.id} value={w.id}>{w.name}</option>
                     ))}
                   </select>
@@ -389,7 +394,7 @@ export default function RemediationPolicyEditor() {
                     className="w-full px-3 py-1.5 bg-slate-800/50 border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-blue-500"
                   >
                     <option value="">选择工作流</option>
-                    {workflows?.map((w: any) => (
+                    {workflows?.map((w: WorkflowOption) => (
                       <option key={w.id} value={w.id}>{w.name}</option>
                     ))}
                   </select>

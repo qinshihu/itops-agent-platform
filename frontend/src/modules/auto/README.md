@@ -20,3 +20,6 @@ auto/
 
 ## 对应后端
 `backend/src/modules/auto/`
+
+## 刷新记录
+- **2026-07-22**：核对结构与 api.ts 规模（403 行）

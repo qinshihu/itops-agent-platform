@@ -36,6 +36,14 @@ export interface Report {
   task_id?: string;
 }
 
+/** 失败重投接口返回结果（2026-07-21 拆分时提取） */
+export interface RetryTaskResult {
+  taskId: string;
+  parentTaskId: string;
+  status: string;
+  workflowId: string;
+}
+
 /**
  * 解析任务的 JSON 字段（execution_order、node_results、logs）
  * API 返回的字段可能是 JSON 字符串，需要解析为对象/数组

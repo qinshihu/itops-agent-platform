@@ -61,9 +61,10 @@ export async function callLLMAPIWithTools(
   previousMessages?: ChatMessage[]
 ): Promise<LLMResponse> {
   const startTime = Date.now();
-  const apiKey = getApiKey(config.apiKeySetting, config.apiKeyEnv);
-  const apiBase = getApiBase(config.apiBaseSetting, config.apiBaseEnv, config.defaultApiBase);
-  const model = getModelId(config.modelSetting, config.modelEnv, config.defaultModel);
+  // 优先使用 override 字段（AIModel 自带的配置），fallback 到 settings/env
+  const apiKey = config.overrideApiKey ?? getApiKey(config.apiKeySetting);
+  const apiBase = config.overrideApiBase ?? getApiBase(config.apiBaseSetting, config.defaultApiBase);
+  const model = config.overrideModel ?? getModelId(config.modelSetting, config.defaultModel);
 
   if (config.providerName !== 'LocalAI' && (!apiKey || apiKey === config.placeholderKey)) {
     const errorMsg = `${config.providerName}_API_KEY not configured`;

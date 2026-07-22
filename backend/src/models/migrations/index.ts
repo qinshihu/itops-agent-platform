@@ -3,8 +3,17 @@
 
 /**
  * 数据库迁移注册中心
- * 
- * 版本号已规范化为连续序列 v001-v040
+ *
+ * 版本号规范：v001-v060（部分有跳号，跳号原因见各迁移文件注释）
+ *
+ * ⚠️ 2026-07-21 P1-#18 跳号清单（为什么会缺号）：
+ *   - 跳过 v011：原计划是"任务调度表增强"，实际工作合并到 v012 timezone_migration
+ *   - 跳过 v021：原计划是"配置模板前缀"，实际直接创建 v022_config_templates（命名更明确）
+ *
+ * ⚠️ 2026-07-21 P1-#18 命名前缀错配修复：
+ *   - v022_config_templates.ts: 原 export default `v021_config_templates`（手抖）
+ *     → 现在改为 `v022_config_templates`
+ *
  * 迁移执行顺序与版本号一致
  */
 
@@ -101,6 +110,12 @@ import v056ConfigFileTemplates from './v056_config_file_templates';
 
 // === 配置修复记录 v057 ===
 import v057ConfigRepairRecords from './v057_config_repair_records';
+// === DC 表 CHECK/FK 约束 v058 ===
+import v058DcConstraints from './v058_dc_constraints';
+// === DC U 位多态外键 v059 ===
+import v059DcPolymorphicFk from './v059_dc_polymorphic_fk';
+// === agent_executions 归档 v060 ===
+import v060AgentExecutionsArchive from './v060_agent_executions_archive';
 
 // Helper: wrap sync up/down into async
 function wrapAsync(fn: (db: any) => void): (db: any) => Promise<void> {
@@ -349,6 +364,12 @@ export const ALL_MIGRATIONS: Migration[] = [
   v056ConfigFileTemplates,
   // v057: 配置修复记录
   v057ConfigRepairRecords,
+  // v058: DC 表 CHECK 约束 + 外键
+  v058DcConstraints,
+  // v059: DC U 位多态外键 + 设备存在性 trigger
+  v059DcPolymorphicFk,
+  // v060: agent_executions 归档表 + 复合索引
+  v060AgentExecutionsArchive,
 ];
 
 export function createMigrationManager(db: any): MigrationManager {

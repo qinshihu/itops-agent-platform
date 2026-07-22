@@ -393,12 +393,7 @@ export function listProbeStats(limit = 50): ProbeExecutionStats[] {
   return db.prepare('SELECT * FROM probe_execution_stats ORDER BY total_uses DESC LIMIT ?').all(limit) as ProbeExecutionStats[];
 }
 
-// ── 统计 ──
 
-/** 统计告警总数 */
-export function countAll(): number {
-  return (db.prepare('SELECT COUNT(*) as count FROM alerts').get() as { count: number }).count;
-}
 
 /**
  * 导出告警列表（限 10000 条，供 importExportService 使用）

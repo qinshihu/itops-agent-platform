@@ -6,6 +6,7 @@ import { requireRole } from '../../../middleware/auth';
 import Docker from 'dockerode';
 import { getErrorMessage, getErrorStatusCode } from '../../../utils/errorHelpers';
 import { logger } from '../../../utils/logger';
+import { dockerEndpointCrudService } from '../services/dockerEndpointCrudService';
 
 const router = Router();
 
@@ -47,6 +48,45 @@ function checkDockerAvailable(res: Response, req?: Request): boolean {
 // 端点管理（多主机 Docker 连接配置）
 // ═══════════════════════════════════════════════════
 
+/**
+ * GET /status — 聚合 Docker 可用性检查
+ * 返回：
+ *   {
+ *     local: { available: boolean, error?: string },
+ *     endpoints: [{ id, name, status, lastConnected }],
+ *     hasUsableDocker: boolean  // 至少一个端点可连通 OR 本地 socket 可用
+ *   }
+ * 前端布局根据 hasUsableDocker 决定是否弹"未配置 Docker 端点"提示
+ */
+router.get('/status', (_req: Request, res: Response) => {
+  try {
+    // 本地
+    const localAvailable = dockerService.isAvailable();
+    const local: { available: boolean; error?: string } = { available: localAvailable };
+    if (!localAvailable) local.error = '本地 Docker socket 不可用';
+
+    // 多主机端点
+    const endpoints = multiHostDockerService.listEndpoints();
+    const usableEndpoints = endpoints.filter((e: { status: string }) => e.status === 'active');
+
+    const hasUsableDocker = localAvailable || usableEndpoints.length > 0;
+
+    res.json({
+      success: true,
+      data: {
+        local,
+        endpoints: endpoints.map((e: { id: string; name: string; status: string; last_connected?: string }) => ({
+          id: e.id, name: e.name, status: e.status,
+          lastConnected: e.last_connected,
+        })),
+        hasUsableDocker,
+      },
+    });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
+  }
+});
+
 // GET /endpoints — 列出所有 Docker 端点
 router.get('/endpoints', requireRole('admin', 'operator'), (_req: Request, res: Response) => {
   try {
@@ -81,10 +121,11 @@ router.post('/endpoints', requireRole('admin', 'operator'), async (req: Request,
       tls_ca: tlsCa, tls_cert: tlsCert, tls_key: tlsKey,
     }).then(result => {
       const status = result.success ? 'active' : 'error';
-      // eslint-disable-next-line @typescript-eslint/no-require-imports, no-restricted-imports -- admin endpoint: async connection test requires direct DB write for status
-      const db = require('../../../models/database').db;
-      db.prepare('UPDATE docker_endpoints SET status=?, error_message=? WHERE id=?')
-        .run(status, result.message || null, endpoint.id);
+      dockerEndpointCrudService.updateStatusAndError(
+        endpoint.id,
+        status,
+        result.message || null,
+      );
     }).catch((err) => { logger.warn('Docker endpoint connection test failed:', err); });
     res.json({ success: true, data: endpoint });
   } catch (err: unknown) {

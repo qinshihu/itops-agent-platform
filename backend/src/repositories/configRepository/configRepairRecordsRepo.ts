@@ -5,7 +5,7 @@
  *   - getById / list / create / updateStatus
  */
 
-import db from '../../../models/database';
+import db from '../../models/database';
 
 // ── 类型定义 ──
 

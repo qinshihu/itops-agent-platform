@@ -161,7 +161,29 @@ class CopilotService {
 
   getConversation(id: string): Conversation | null {
     this.ensureInitialized();
-    return this.conversations.get(id) || null;
+    // v4 修复：内存 map 优先，未命中则从 DB 兜底
+    // 解决多实例部署 / 进程重启后内存丢失的场景
+    const cached = this.conversations.get(id);
+    if (cached) return cached;
+
+    try {
+      const row = copilotConversationRepository.getById(id);
+      if (row) {
+        const conv: Conversation = {
+          id: row.id,
+          user_id: row.user_id,
+          messages: JSON.parse(row.messages || '[]'),
+          created_at: new Date(row.created_at),
+          updated_at: new Date(row.updated_at),
+        };
+        // 回填内存缓存
+        this.conversations.set(conv.id, conv);
+        return conv;
+      }
+    } catch (error) {
+      logger.warn(`Failed to load conversation ${id} from DB:`, error);
+    }
+    return null;
   }
 
   getUserConversations(userId = 'default'): Conversation[] {

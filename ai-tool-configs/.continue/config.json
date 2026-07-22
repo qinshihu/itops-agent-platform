@@ -1,0 +1,58 @@
+{
+  "$schema": "https://continue.dev/schema.json",
+  "_comment": "ITops Agent — Continue.dev 配置文件",
+  "_created": "2026-07-21",
+  "_source": "v2 report §9.2 P1-#22 (mirrors .cursorrules)",
+  "name": "ITops Agent",
+  "version": "1.0.0",
+  "models": [],
+  "customCommands": [
+    {
+      "name": "iron-rule-check",
+      "description": "Verify new code doesn't violate the 5 iron rules",
+      "prompt": "你要检查的代码必须符合 5 条铁律：(1) 分层单向依赖 core/ → modules/ → routes/，禁止反向；(2) routes 只做参数校验+鉴权+调 service+返回，禁止业务逻辑和直访 repository；(3) 新文件 ≤ 500 行（不含注释/空行）；(4) 不主动写测试；(5) 报告→docs/，ADR→.trae/adr/。被检查的代码如下：\\n\\n${input}\\n\\n逐条指出违规并给出修改建议。"
+    },
+    {
+      "name": "module-decompose",
+      "description": "Find files exceeding 500 lines and suggest split plan",
+      "prompt": "找出仓库中超 500 行的 .ts/.tsx 文件（不含注释/空行），按大小排序，列出拆分建议（功能模块分目录/分组件）。优先拆最大的 3 个。"
+    },
+    {
+      "name": "dependency-rule",
+      "description": "Verify no module violates the dependency direction rules",
+      "prompt": "检查 backend/src 下模块的 import 关系。如果发现 repositories/ → modules/、core/ → modules/、routes 直访 repository 等违反单向依赖的情况，列出违规文件和具体 import 行。"
+    }
+  ],
+  "contextProviders": [
+    {
+      "name": "AGENTS.md",
+      "description": "Project entry — read first",
+      "params": { "filePath": "AGENTS.md" }
+    },
+    {
+      "name": "architecture",
+      "description": "Architecture rules + module list",
+      "params": { "filePath": ".trae/rules/architecture.md" }
+    },
+    {
+      "name": "lessons-learned",
+      "description": "L1/L2/L3 error patterns to avoid",
+      "params": { "filePath": ".trae/rules/lessons-learned.md" }
+    },
+    {
+      "name": "code-style",
+      "description": "TypeScript + ESLint coding conventions",
+      "params": { "filePath": ".trae/rules/code-style.md" }
+    },
+    {
+      "name": "rules-1",
+      "description": "Top-level rules: must-report",
+      "params": { "filePath": ".trae/rules/top-rules.md" }
+    }
+  ],
+  "tabAutocompleteOptions": {
+    "debounceDelay": 300,
+    "maxPromptTokens": 4096
+  },
+  "_summary": "Continue.dev 用 JSON 配置。本文件让 Continue 知道：(1) 项目是 ITops Agent；(2) 调用方应先读 AGENTS.md；(3) 提供 3 个 custom commands 验证铁律/拆分/依赖方向。"
+}

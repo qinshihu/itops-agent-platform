@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { Socket } from 'socket.io-client';
 import { io } from 'socket.io-client';
+import { logger } from './logger';
 
 let globalSocket: Socket | null = null;
 let dcSubscribeCount = 0;

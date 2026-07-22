@@ -62,10 +62,10 @@ export function ContainerDetail({
   const { data: logsData, isLoading: logsLoading } = useQuery({
     queryKey: ['container-logs', selectedContainerId],
     queryFn: async () => {
-      const res = await api.get(`/containers/logs/${selectedContainerId}`, {
+      const { data } = await api.get(`/containers/logs/${selectedContainerId}`, {
         params: withEndpointParams(endpointId, { tail: 200 }),
       });
-      return res.data.data as string;
+      return data as string;
     },
     enabled: showLogsDrawer && !!selectedContainerId,
   });
@@ -73,10 +73,10 @@ export function ContainerDetail({
   const { data: statsData, isLoading: statsLoading } = useQuery({
     queryKey: ['container-stats', selectedContainerId],
     queryFn: async () => {
-      const res = await api.get(`/containers/stats/${selectedContainerId}`, {
+      const { data } = await api.get(`/containers/stats/${selectedContainerId}`, {
         params: withEndpointParams(endpointId),
       });
-      return res.data.data as DockerStats;
+      return data as DockerStats;
     },
     enabled: showStatsDrawer && !!selectedContainerId,
   });
@@ -84,10 +84,10 @@ export function ContainerDetail({
   const { data: detailData, isLoading: detailLoading } = useQuery({
     queryKey: ['container-detail', selectedContainerId],
     queryFn: async () => {
-      const res = await api.get(`/containers/${selectedContainerId}`, {
+      const { data } = await api.get(`/containers/${selectedContainerId}`, {
         params: withEndpointParams(endpointId),
       });
-      return res.data.data as DockerContainerDetail;
+      return data as DockerContainerDetail;
     },
     enabled: showDetailDrawer && !!selectedContainerId,
   });
@@ -150,7 +150,7 @@ export function ContainerDetail({
                       const usage = cpuUsage?.total_usage ?? 0;
                       const preUsage = preCpuUsage?.total_usage ?? 0;
                       const percpu = cpuUsage?.percpu_usage ?? [];
-                      const online = cpu?.online_cpus ?? percpu.length || 1;
+                      const online = cpu?.online_cpus ?? (percpu.length || 1);
                       const delta = usage - preUsage;
                       const sysDelta = sys - preSys || delta;
                       const pct = sysDelta > 0 ? (delta / sysDelta * online * 100).toFixed(1) : '0.0';

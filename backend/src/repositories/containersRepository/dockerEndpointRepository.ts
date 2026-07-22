@@ -123,4 +123,13 @@ export const dockerEndpointRepository = {
 
     db.prepare(`UPDATE docker_endpoints SET ${setClauses.join(', ')} WHERE id = ?`).run(...values);
   },
+
+  /**
+   * 仅更新端点状态与错误信息（用于连接测试等异步回调）
+   */
+  updateStatusAndError(id: string, status: string, errorMessage: string | null): void {
+    db.prepare(
+      `UPDATE docker_endpoints SET status = ?, error_message = ?, updated_at = datetime('now','localtime') WHERE id = ?`
+    ).run(status, errorMessage, id);
+  },
 };

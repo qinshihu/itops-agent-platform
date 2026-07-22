@@ -115,6 +115,101 @@ export const aiRemediationRepository = {
     })) as AiRemediationRecord[];
   },
 
+  /**
+   * 真实统计：MTTR + 成功率 + 状态分布 + 趋势
+   * - MTTR：status='completed' 的 (julianday(updated_at) - julianday(created_at)) * 86400 秒 平均
+   * - 成功率：completed / (completed + failed)
+   * - 趋势：本周 vs 上周的 completed 数对比
+   */
+  getStats(): {
+    total: number;
+    byStatus: Record<string, number>;
+    mttrSeconds: number | null;
+    mttrCount: number;
+    successRate: number;
+    completedThisWeek: number;
+    completedLastWeek: number;
+    weekOverWeekDelta: number;
+  } {
+    const totalRow = db.prepare('SELECT COUNT(*) as cnt FROM ai_remediations').get() as { cnt: number };
+
+    // 状态分布
+    const statusRows = db.prepare(`
+      SELECT status, COUNT(*) as cnt FROM ai_remediations GROUP BY status
+    `).all() as Array<{ status: string; cnt: number }>;
+    const byStatus: Record<string, number> = {};
+    for (const r of statusRows) byStatus[r.status] = r.cnt;
+
+    // MTTR（仅 status='completed' 且 updated_at > created_at）
+    const mttrRow = db.prepare(`
+      SELECT
+        AVG((julianday(updated_at) - julianday(created_at)) * 86400) as avg_seconds,
+        COUNT(*) as cnt
+      FROM ai_remediations
+      WHERE status = 'completed'
+        AND updated_at > created_at
+        AND (julianday(updated_at) - julianday(created_at)) * 86400 < 86400  -- 排除异常（>1天）
+    `).get() as { avg_seconds: number | null; cnt: number };
+
+    // 成功率
+    const completed = byStatus['completed'] || 0;
+    const failed = byStatus['failed'] || 0;
+    const successRate = (completed + failed) > 0 ? completed / (completed + failed) : 0;
+
+    // 本周 vs 上周
+    const thisWeekRow = db.prepare(`
+      SELECT COUNT(*) as cnt FROM ai_remediations
+      WHERE status = 'completed' AND created_at >= datetime('now', '-7 days')
+    `).get() as { cnt: number };
+    const lastWeekRow = db.prepare(`
+      SELECT COUNT(*) as cnt FROM ai_remediations
+      WHERE status = 'completed'
+        AND created_at >= datetime('now', '-14 days')
+        AND created_at < datetime('now', '-7 days')
+    `).get() as { cnt: number };
+    const completedThisWeek = thisWeekRow.cnt;
+    const completedLastWeek = lastWeekRow.cnt;
+    const weekOverWeekDelta = completedLastWeek > 0
+      ? (completedThisWeek - completedLastWeek) / completedLastWeek
+      : (completedThisWeek > 0 ? 1 : 0);
+
+    return {
+      total: totalRow.cnt,
+      byStatus,
+      mttrSeconds: mttrRow.avg_seconds,
+      mttrCount: mttrRow.cnt,
+      successRate,
+      completedThisWeek,
+      completedLastWeek,
+      weekOverWeekDelta,
+    };
+  },
+
+  /**
+   * 告警降噪率：从 ai_remediations 自动处理的告警 / 总告警
+   * （用 alert_id 关联）
+   */
+  getNoiseFilterRate(): {
+    autoHandled: number;
+    total: number;
+    rate: number;
+  } {
+    const autoRow = db.prepare(`
+      SELECT COUNT(DISTINCT alert_id) as cnt FROM ai_remediations
+      WHERE alert_id IS NOT NULL AND alert_id != ''
+    `).get() as { cnt: number };
+    // 总告警：尝试读 alerts 表，缺则返回 -1（前端走 N/A）
+    let total = -1;
+    try {
+      const r = db.prepare('SELECT COUNT(*) as cnt FROM alerts').get() as { cnt: number };
+      total = r.cnt;
+    } catch {
+      total = -1;
+    }
+    const rate = (autoRow.cnt > 0 && total > 0) ? autoRow.cnt / total : 0;
+    return { autoHandled: autoRow.cnt, total, rate };
+  },
+
   /** 更新状态字段（用于 finalizeWorkflow 回滚等场景） */
   updateStatusFields(id: string, status: string, executionResult?: string, errorMessage?: string): void {
     db.prepare(`

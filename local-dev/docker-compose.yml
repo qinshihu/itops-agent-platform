@@ -1,13 +1,17 @@
 # ============================================================
 # ITOps Agent Platform - Local Development Environment
 # ============================================================
-# 用于本地开发测试的Docker Compose配置
+# 用途：本地开发测试用的 Docker Compose 配置
+#
 # 特点：
-#   - 从源码构建镜像
-#   - 启用开发模式和详细日志
-#   - 暴露调试端口
-#   - 数据持久化到本地目录
-#   - 热重载支持（通过挂载源码）
+#   - 从源码构建镜像（local-dev/Dockerfile.*.dev）
+#   - 挂载源码到容器，支持热重载（后端 tsx watch + 前端 Vite HMR）
+#   - 数据持久化到命名 volume
+#   - 暴露 Node.js 调试端口
+#   - 暴露 Docker socket（容器编排功能需要）
+#
+# 启动：./start-dev.sh  或  start-dev.bat
+# 停止：./stop-dev.sh  或  stop-dev.bat
 # ============================================================
 
 services:
@@ -15,33 +19,79 @@ services:
     build:
       context: ..
       dockerfile: local-dev/Dockerfile.backend.dev
-    container_name: itops-dev-backend
+    image: itops-dev-backend:latest
+    # container_name 故意删除：全局唯一会导致宿主机已有同名容器时启动失败
+    # 默认 Docker Compose 会生成 local-dev-backend-1 这种带项目前缀的名字，安全且无冲突
+    restart: unless-stopped
     networks:
       - itops-dev-network
     ports:
-      - "3001:3001"          # API端口
-      - "9229:9229"          # Node.js 调试端口
+      # 都绑定到 127.0.0.1，防止公网访问：
+      #   - 3001 后端 API
+      #   - 9229 Node.js 调试器（如暴露到公网，远程可挂载 Node REPL）
+      - "127.0.0.1:3001:3001"
+      - "127.0.0.1:9229:9229"
+    # ⚠️ 显式禁用 .env 加载：避免父目录 .env 污染（AI Key / DB 密码泄漏）
+    env_file: []
+    # 所有变量已在下面 environment: 中提供默认值，无需额外 .env 文件
     environment:
+      # ── 基础 ──
       - NODE_ENV=development
       - PORT=3001
-      - HOST=0.0.0.0
       - DATABASE_PATH=/app/data/app.db
-      - JWT_SECRET=dev-jwt-secret-not-for-production-use
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+
+      # ── 鉴权 / 跨域 ──
+      - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-not-for-production-change-me}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-24h}
+      - ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:8080
+      - FRONTEND_URL=http://localhost:5173
+
+      # ── AI 模型（按需配置） ──
       - DOUBAO_API_KEY=${DOUBAO_API_KEY:-}
       - DOUBAO_API_BASE=${DOUBAO_API_BASE:-https://ark.cn-beijing.volces.com/api/v3}
       - DOUBAO_MODEL=${DOUBAO_MODEL:-doubao-4o}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.openai.com/v1}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
-      - ALLOWED_ORIGINS=http://localhost:5173,http://localhost:80,http://localhost:3000
-      - LOG_LEVEL=debug
+      - LOCAL_AI_API_KEY=${LOCAL_AI_API_KEY:-}
+      - LOCAL_AI_API_BASE=${LOCAL_AI_API_BASE:-}
+      - LOCAL_AI_MODEL=${LOCAL_AI_MODEL:-}
+
+      # ── Webhook ──
+      - WEBHOOK_VERIFY_ENABLED=${WEBHOOK_VERIFY_ENABLED:-warn}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-dev-webhook-secret-change-me}
+      - WEBHOOK_IP_WHITELIST=${WEBHOOK_IP_WHITELIST:-}
+
+      # ── 邮件 / IM（按需） ──
+      - ALERT_EMAIL_HOST=${ALERT_EMAIL_HOST:-}
+      - ALERT_EMAIL_PORT=${ALERT_EMAIL_PORT:-587}
+      - ALERT_EMAIL_USER=${ALERT_EMAIL_USER:-}
+      - ALERT_EMAIL_PASS=${ALERT_EMAIL_PASS:-}
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+
+      # ── 上传 / 备份 ──
+      - UPLOAD_DIR=/app/data/uploads
+
+      # ── 调试器（启用 inspect） ──
+      - NODE_OPTIONS=--inspect=0.0.0.0:9229
     volumes:
-      - dev-data:/app/data                          # 数据库持久化
-      - dev-backups:/app/backups                    # 备份文件持久化
-      - /var/run/docker.sock:/var/run/docker.sock   # Docker 引擎通信
-      - ../backend/src:/app/src                     # 挂载源码用于热重载
+      # 命名 volume：数据库 + 上传 + 备份
+      - dev-data:/app/data
+      - dev-backups:/app/backups
+      # Docker socket：容器内 dockerode 可调用宿主机 Docker
+      - /var/run/docker.sock:/var/run/docker.sock
+      # 源码热重载：只挂载 src 和配置，不挂载 node_modules（容器内已装好）
+      - ../backend/src:/app/src
       - ../backend/package.json:/app/package.json
       - ../backend/tsconfig.json:/app/tsconfig.json
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/health/live', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -50,44 +100,52 @@ services:
         reservations:
           cpus: '1.0'
           memory: 1G
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})\""]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
     logging:
       driver: json-file
       options:
-        max-size: "50m"        # 开发环境允许更大的日志
+        max-size: "50m"
         max-file: "10"
 
   frontend:
     build:
       context: ..
       dockerfile: local-dev/Dockerfile.frontend.dev
-    container_name: itops-dev-frontend
+    image: itops-dev-frontend:latest
+    # container_name 故意删除：与 backend 策略一致，避免宿主机已有同名容器时启动失败
+    # 默认 Docker Compose 会生成 local-dev-frontend-1 这种带项目前缀的名字，安全且无冲突
+    restart: unless-stopped
+    tty: true
+    stdin_open: false
     networks:
       - itops-dev-network
     ports:
-      - "5173:3000"            # Vite dev server (内部端口3000 -> 外部5173)
+      - "127.0.0.1:5173:3000"   # 宿主 5173 → 容器 3000（Vite dev server），绑定 127.0.0.1 防止公网访问
+    # ⚠️ 显式禁用 .env 加载：避免父目录 .env 污染（与 backend 策略一致）
+    env_file: []
     environment:
       - DOCKER_MODE=true
-      - VITE_API_BASE_URL=http://backend:3001
+      - HOST=0.0.0.0
+      # 注意：Vite 客户端读不到容器名，但通过 /api 相对路径由 Vite proxy 转发到 backend
     volumes:
+      # 前端源码热重载
       - ../frontend/src:/app/src
       - ../frontend/public:/app/public
       - ../frontend/index.html:/app/index.html
       - ../frontend/package.json:/app/package.json
       - ../frontend/vite.config.ts:/app/vite.config.ts
-      - ../frontend/tailwind.config.js:/app/tailwind.config.js
-      - ../frontend/postcss.config.js:/app/postcss.config.js
       - ../frontend/tsconfig.json:/app/tsconfig.json
       - ../frontend/tsconfig.node.json:/app/tsconfig.node.json
+      - ../frontend/postcss.config.js:/app/postcss.config.js
+      - ../frontend/tailwind.config.js:/app/tailwind.config.js
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     deploy:
       resources:
         limits:
@@ -96,7 +154,6 @@ services:
         reservations:
           cpus: '0.5'
           memory: 512M
-    restart: unless-stopped
     logging:
       driver: json-file
       options:

@@ -11,7 +11,7 @@ import InspectionHistory from '../../../modules/alerts/components/InspectionHist
 import { useNetworkDevices } from './network-devices/useNetworkDevices';
 import { InspectionModal } from './network-devices/InspectionModal';
 import { BatchInspectModal } from './network-devices/BatchInspectModal';
-import { VENDORS, VENDOR_LABELS, type NetworkDevice } from './network-devices/types';
+import { VENDORS, type NetworkDevice } from './network-devices/types';
 
 export default function NetworkDevices() {
   const state = useNetworkDevices();
@@ -55,18 +55,18 @@ export default function NetworkDevices() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-4">
               <h2 className="text-base font-medium text-text-primary">设备列表</h2>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {VENDORS.map(vendor => (
                   <button
-                    key={vendor}
-                    onClick={() => state.setSelectedVendor(vendor)}
-                    className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                      state.selectedVendor === vendor
+                    key={vendor.value}
+                    onClick={() => state.setSelectedVendor(vendor.value)}
+                    className={`shrink-0 whitespace-nowrap px-3 py-1 text-xs rounded-md transition-colors ${
+                      state.selectedVendor === vendor.value
                         ? 'bg-primary/10 border border-primary/30 text-primary font-medium'
                         : 'bg-background border border-border text-text-secondary hover:bg-surface hover:text-text-primary'
                     }`}
                   >
-                    {VENDOR_LABELS[vendor]}
+                    {vendor.label}
                   </button>
                 ))}
               </div>

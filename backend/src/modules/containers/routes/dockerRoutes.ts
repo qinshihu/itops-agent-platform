@@ -6,18 +6,27 @@ import { requireRole } from '../../../middleware/auth';
 
 const router = Router();
 
+/**
+ * 中间件：标记本路由下的接口已弃用，请使用 /api/v1/containers/*
+ */
+router.use((_req: Request, res: Response, next) => {
+  res.setHeader('Deprecation', 'true');
+  res.setHeader('X-Deprecated-Notice', '此 /api/v1/docker/* 路径已弃用，请改用 /api/v1/containers/*');
+  next();
+});
+
 // 检查 Docker 服务是否可用
 router.get('/status', async (_req: Request, res: Response) => {
   try {
     const available = dockerService.isAvailable();
     if (!available) {
       const initialized = await dockerService.init();
-      return res.json({ 
-        success: true, 
-        data: { 
+      return res.json({
+        success: true,
+        data: {
           available: initialized,
-          message: initialized ? 'Docker service is available' : 'Docker socket not accessible' 
-        } 
+          message: initialized ? 'Docker service is available' : 'Docker socket not accessible'
+        }
       });
     }
     res.json({ success: true, data: { available: true, message: 'Docker service is available' } });

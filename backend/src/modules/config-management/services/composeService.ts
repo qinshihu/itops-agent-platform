@@ -48,10 +48,10 @@ class ComposeService {
   listProjects(): ComposeProject[] {
     const rows = composeProjectsRepo.listAll();
     return rows.map(r => ({
-      id: r.id, name: r.name, description: r.description,
+      id: r.id, name: r.name, description: r.description ?? undefined,
       composeContent: r.compose_content,
-      status: r.status, serviceCount: r.service_count,
-      runningCount: r.running_count, workingDir: r.working_dir,
+      status: r.status as ComposeProject['status'], serviceCount: r.service_count,
+      runningCount: r.running_count, workingDir: r.working_dir ?? undefined,
       tags: r.tags ? JSON.parse(r.tags) : [],
       createdAt: r.created_at, updatedAt: r.updated_at,
     }));
@@ -64,10 +64,10 @@ class ComposeService {
     const row = composeProjectsRepo.getById(projectId);
     if (!row) return null;
     return {
-      id: row.id, name: row.name, description: row.description,
+      id: row.id, name: row.name, description: row.description ?? undefined,
       composeContent: row.compose_content,
-      status: row.status, serviceCount: row.service_count,
-      runningCount: row.running_count, workingDir: row.working_dir,
+      status: row.status as ComposeProject['status'], serviceCount: row.service_count,
+      runningCount: row.running_count, workingDir: row.working_dir ?? undefined,
       tags: row.tags ? JSON.parse(row.tags) : [],
       createdAt: row.created_at, updatedAt: row.updated_at,
     };
@@ -112,7 +112,7 @@ class ComposeService {
     const now = new Date().toISOString();
     composeProjectsRepo.updateNamesAndContent(projectId, {
       name: updates.name || existing.name,
-      description: updates.description !== undefined ? updates.description : existing.description,
+      description: updates.description !== undefined ? (updates.description ?? null) : (existing.description ?? null),
       compose_content: updates.composeContent || existing.composeContent,
       tags: updates.tags ? JSON.stringify(updates.tags) : JSON.stringify(existing.tags || []),
       updated_at: now,

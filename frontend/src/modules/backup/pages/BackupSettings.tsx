@@ -4,7 +4,7 @@ import { Database, Loader2, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '../../../lib/api';
 import { getAxiosErrorMessage } from '../../../lib/errorHandler';
-import { useAuth } from '../../../../contexts/AuthContext';
+import { useAuth } from '../../../contexts/AuthContext';
 
 interface Backup {
   id: string;
@@ -22,12 +22,14 @@ function formatFileSize(bytes: number): string {
 export default function BackupSettings() {
   const { t: _t } = useTranslation();
   const queryClient = useQueryClient();
+  const { token: authToken } = useAuth();
+  const token = authToken ?? localStorage.getItem('token') ?? '';
 
   // 创建备份 mutation
   const createBackupMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/backups/create');
-      return res.data;
+      const { data } = await api.post('/backups/create');
+      return data;
     },
     onSuccess: () => {
       alert('备份创建成功！');
@@ -42,8 +44,8 @@ export default function BackupSettings() {
   const { data: backupHistoryData } = useQuery({
     queryKey: ['backupHistory'],
     queryFn: async () => {
-      const res = await api.get('/backups/history');
-      return res.data.data;
+      const { data } = await api.get('/backups/history');
+      return data;
     }
   });
   const backupHistory = (backupHistoryData || []) as Backup[];
@@ -51,8 +53,8 @@ export default function BackupSettings() {
   // 恢复备份 mutation
   const restoreBackupMutation = useMutation({
     mutationFn: async (backupId: string) => {
-      const res = await api.post(`/backups/restore/${backupId}`);
-      return res.data;
+      const { data } = await api.post(`/backups/restore/${backupId}`);
+      return data;
     },
     onSuccess: () => {
       alert('备份恢复成功！系统将自动重启...');
@@ -65,8 +67,8 @@ export default function BackupSettings() {
   // 删除备份 mutation
   const deleteBackupMutation = useMutation({
     mutationFn: async (backupId: string) => {
-      const res = await api.delete(`/backups/${backupId}`);
-      return res.data;
+      const { data } = await api.delete(`/backups/${backupId}`);
+      return data;
     },
     onSuccess: () => {
       alert('备份删除成功！');
@@ -82,10 +84,10 @@ export default function BackupSettings() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append('backup', file);
-      const res = await api.post('/backups/upload', formData, {
+      const { data } = await api.post('/backups/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      return res.data;
+      return data;
     },
     onSuccess: () => {
       alert('备份上传成功！');

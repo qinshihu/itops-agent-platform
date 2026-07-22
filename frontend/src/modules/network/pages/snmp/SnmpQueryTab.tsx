@@ -3,7 +3,7 @@ import {
   Loader2, AlertCircle, Monitor, Wifi, Search, List,
 } from 'lucide-react';
 import clsx from 'clsx';
-import api from '../../../lib/api';
+import api from '../../../../lib/api';
 import type { ApiError, SnmpQueryResult, SnmpInterface } from './types';
 import { VERSIONS } from './types';
 
@@ -18,10 +18,10 @@ export function SnmpQueryTab() {
     setQueryLoading(true);
     setQueryResult(null);
     try {
-      const res = await api.post('/snmp/system-info', {
+      const { data } = await api.post('/snmp/system-info', {
         host: queryHost, community: queryCommunity, version: queryVersion,
       });
-      setQueryResult({ type: 'system-info', data: res.data.data });
+      setQueryResult({ type: 'system-info', data: data });
     } catch (err: unknown) {
       const e = err as ApiError;
       setQueryResult({ type: 'error', data: e.response?.data?.message || e.message || '请求失败' });
@@ -33,10 +33,10 @@ export function SnmpQueryTab() {
     setQueryLoading(true);
     setQueryResult(null);
     try {
-      const res = await api.post('/snmp/interfaces', {
+      const { data } = await api.post('/snmp/interfaces', {
         host: queryHost, community: queryCommunity, version: queryVersion,
       });
-      setQueryResult({ type: 'interfaces', data: res.data.data });
+      setQueryResult({ type: 'interfaces', data: data });
     } catch (err: unknown) {
       const e = err as ApiError;
       setQueryResult({ type: 'error', data: e.response?.data?.message || e.message || '请求失败' });

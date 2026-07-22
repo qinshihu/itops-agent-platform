@@ -147,9 +147,115 @@ export function getSlaStats(): SlaStats {
   };
 }
 
-/** 服务器指标（最新值 + 30 分钟历史） */
-export function getServerMetricsDashboard(): ServerMetricsDashboard {
-  const enabledServers = db.prepare('SELECT id, name, hostname FROM servers WHERE enabled = 1 ORDER BY name LIMIT 10').all() as Array<{ id: string; name: string; hostname: string }>;
+/** 获取本机 hostname，用于 big-screen 默认展示"自身" */
+import * as os from 'os';
+function getLocalHostname(): string {
+  try {
+    return os.hostname();
+  } catch {
+    return '';
+  }
+}
+
+/** 服务器指标（最新值 + 30 分钟历史）
+ * @param serverId 可选 - 传入则只返回该服务器数据；不传则返回所有启用服务器（聚合）
+ * @param options.autoSelectLocal 可选 - 为 true 且 serverId 未指定时，自动选中本机服务器
+ */
+export function getServerMetricsDashboard(
+  serverId?: string,
+  options?: { autoSelectLocal?: boolean }
+): ServerMetricsDashboard & { selected_server_id?: string; available_servers: Array<{ id: string; name: string; hostname: string; is_local: boolean }> } {
+  const localHostname = getLocalHostname();
+
+  // 加载所有启用服务器（含 hostname），用于下拉选择器
+  const allEnabledServers = db.prepare('SELECT id, name, hostname FROM servers WHERE enabled = 1 ORDER BY name LIMIT 10').all() as Array<{ id: string; name: string; hostname: string }>;
+  const availableServers = allEnabledServers.map((s) => ({
+    id: s.id,
+    name: s.name,
+    hostname: s.hostname,
+    is_local: !!localHostname && s.hostname === localHostname,
+  }));
+
+  // 解析最终要查询的 serverId
+  let targetServerId = serverId;
+  if (!targetServerId && options?.autoSelectLocal) {
+    const localServer = availableServers.find((s) => s.is_local);
+    if (localServer) targetServerId = localServer.id;
+  }
+
+  // 单服务器模式
+  if (targetServerId) {
+    const targetServer = allEnabledServers.find((s) => s.id === targetServerId);
+    if (!targetServer) {
+      return {
+        servers: [],
+        has_real_data: false,
+        cpu_history: [],
+        memory_history: [],
+        network_history: [],
+        disk_history: [],
+        available_servers: availableServers,
+      };
+    }
+
+    const latestMetric = db.prepare(`
+      SELECT cpu_usage, memory_usage, disk_usage,
+             network_in_mbps, network_out_mbps, load_1min, collected_at
+      FROM server_metrics
+      WHERE server_id = ?
+      ORDER BY collected_at DESC LIMIT 1
+    `).get(targetServerId) as {
+      cpu_usage: number | null;
+      memory_usage: number | null;
+      disk_usage: number | null;
+      network_in_mbps: number | null;
+      network_out_mbps: number | null;
+      load_1min: number | null;
+      collected_at: string | null;
+    } | undefined;
+
+    const historyRows = db.prepare(`
+      SELECT cpu_usage, memory_usage, disk_usage,
+             COALESCE(network_in_mbps, 0) + COALESCE(network_out_mbps, 0) as network_value,
+             collected_at as timestamp
+      FROM server_metrics
+      WHERE server_id = ?
+        AND collected_at >= datetime('now', '-30 minutes')
+      ORDER BY collected_at ASC
+    `).all(targetServerId) as Array<{
+      cpu_usage: number | null;
+      memory_usage: number | null;
+      disk_usage: number | null;
+      network_value: number;
+      timestamp: string;
+    }>;
+
+    const latest: ServerMetricLatest = {
+      server_id: targetServer.id,
+      server_name: targetServer.name,
+      cpu_usage: latestMetric?.cpu_usage ?? null,
+      memory_usage: latestMetric?.memory_usage ?? null,
+      disk_usage: latestMetric?.disk_usage ?? null,
+      network_in_mbps: latestMetric?.network_in_mbps ?? null,
+      network_out_mbps: latestMetric?.network_out_mbps ?? null,
+      load_1min: latestMetric?.load_1min ?? null,
+      collected_at: latestMetric?.collected_at ?? null,
+    };
+
+    return {
+      servers: [latest],
+      has_real_data: latestMetric?.cpu_usage !== null && latestMetric?.cpu_usage !== undefined,
+      cpu_history: historyRows.filter((h) => h.cpu_usage !== null).map((h) => ({ server_id: targetServer.id, value: h.cpu_usage as number, timestamp: h.timestamp })),
+      memory_history: historyRows.filter((h) => h.memory_usage !== null).map((h) => ({ server_id: targetServer.id, value: h.memory_usage as number, timestamp: h.timestamp })),
+      network_history: historyRows.map((h) => ({ server_id: targetServer.id, value: h.network_value, timestamp: h.timestamp })),
+      disk_history: historyRows.map((h) => ({ server_id: targetServer.id, value: h.disk_usage ?? 0, timestamp: h.timestamp })),
+      available_servers: availableServers,
+      selected_server_id: targetServer.id,
+    };
+  }
+
+  // 聚合模式：所有服务器（原行为，向后兼容）
+  const enabledServers = allEnabledServers;
 
   if (enabledServers.length === 0) {
     return {
@@ -159,6 +265,7 @@ export function getServerMetricsDashboard(): ServerMetricsDashboard {
       memory_history: [],
       network_history: [],
       disk_history: [],
+      available_servers: availableServers,
     };
   }
 
@@ -241,6 +348,7 @@ export function getServerMetricsDashboard(): ServerMetricsDashboard {
     memory_history: memoryHistory,
     network_history: networkHistory,
     disk_history: diskHistory,
+    available_servers: availableServers,
   };
 }
 

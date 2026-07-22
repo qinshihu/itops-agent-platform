@@ -2,94 +2,132 @@
 # ============================================================
 # ITOps Agent Platform - 本地开发环境启动脚本 (Linux/Mac)
 # ============================================================
-# 使用说明:
-#   ./start-dev.sh          - 启动开发环境
-#   ./start-dev.sh --build  - 强制重新构建镜像
-#   ./start-dev.sh --help   - 显示帮助信息
+# 用法:
+#   ./start-dev.sh            - 启动开发环境
+#   ./start-dev.sh --build    - 强制重新构建镜像
+#   ./start-dev.sh --no-cache - 强制重建且不用缓存
+#   ./start-dev.sh --logs     - 启动后自动跟踪日志
+#   ./start-dev.sh --help     - 显示帮助
 # ============================================================
 
 set -e
 
-# 获取脚本所在目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# 帮助信息
-show_help() {
-    echo ""
-    echo "ITOps Agent Platform - Local Development Environment"
-    echo ""
-    echo "Usage: ./start-dev.sh [OPTIONS]"
-    echo ""
-    echo "Options:"
-    echo "  --build    Force rebuild of Docker images"
-    echo "  --help, -h Show this help message"
-    echo ""
-    echo "Without options, starts the environment using existing images if available."
-    echo ""
-    exit 0
-}
+BUILD_FLAG=""
+LOGS_FLAG=""
 
-# 检查参数
-if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
-    show_help
-fi
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --build)
+      BUILD_FLAG="--build"
+      shift
+      ;;
+    --no-cache)
+      BUILD_FLAG="--build --no-cache"
+      shift
+      ;;
+    --logs)
+      LOGS_FLAG="1"
+      shift
+      ;;
+    --help|-h)
+      echo ""
+      echo "ITOps Agent Platform - Local Development Environment"
+      echo ""
+      echo "Usage: ./start-dev.sh [OPTIONS]"
+      echo ""
+      echo "Options:"
+      echo "  --build       强制重新构建镜像（更新了 package.json 后用）"
+      echo "  --no-cache    强制重建且不用缓存"
+      echo "  --logs        启动后自动跟踪日志"
+      echo "  --help, -h    显示帮助"
+      echo ""
+      exit 0
+      ;;
+    *)
+      echo "[WARN] 未知参数: $1"
+      shift
+      ;;
+  esac
+done
 
 echo ""
-echo "========================================="
+echo "==========================================================="
 echo "  ITOps Agent Platform - 本地开发环境"
-echo "========================================="
+echo "==========================================================="
 echo ""
 
-# 检查 .env 文件是否存在
-if [ ! -f ".env" ]; then
-    echo "[INFO] .env file not found, creating from .env.example..."
-    cp .env.example .env
-    echo "[INFO] Created .env file"
-    echo "[WARN] Please check and modify .env if needed"
-    echo ""
-fi
-
-# 检查 Docker 是否运行
+# ── 检查 Docker ──
 if ! docker info > /dev/null 2>&1; then
-    echo "[ERROR] Docker is not running. Please start Docker Desktop and try again."
-    exit 1
+  echo "[ERROR] Docker 未运行，请启动 Docker Desktop 后重试"
+  exit 1
 fi
 
-echo "[INFO] Starting development environment..."
-echo ""
-
-if [ "$1" = "--build" ]; then
-    echo "[INFO] Building images..."
-    docker-compose build --no-cache
+# ── 选择 docker compose 命令 ──
+if docker compose version > /dev/null 2>&1; then
+  COMPOSE_CMD="docker compose"
+elif docker-compose --version > /dev/null 2>&1; then
+  COMPOSE_CMD="docker-compose"
 else
-    echo "[INFO] Building images if needed..."
-    docker-compose build
+  echo "[ERROR] 未检测到 docker compose，请安装 Docker Desktop"
+  exit 1
 fi
 
-echo ""
-echo "[INFO] Starting services..."
-docker-compose up -d
-
-echo ""
-echo "========================================="
-echo "  Development environment is starting..."
-echo "========================================="
-echo ""
-echo "  Backend:  http://localhost:3001"
-echo "  Frontend: http://localhost:5173"
-echo "  Debug:    http://localhost:9229 (Node.js debugger)"
-echo ""
-echo "  Useful commands:"
-echo "    docker-compose logs -f          - View logs"
-echo "    docker-compose logs -f backend  - View backend logs only"
-echo "    docker-compose logs -f frontend - View frontend logs only"
-echo "    docker-compose down             - Stop environment"
-echo "    docker-compose restart          - Restart services"
-echo ""
-echo "  To stop: run ./stop-dev.sh"
-echo "========================================="
+echo "[INFO] 使用: $COMPOSE_CMD"
 echo ""
 
-# 显示服务状态
-docker-compose ps
+# ── 停止旧容器（如果存在） ──
+echo "[INFO] 停止旧容器（如有）..."
+$COMPOSE_CMD down 2> /dev/null || true
+echo ""
+
+# ── 构建 ──
+if [ -n "$BUILD_FLAG" ]; then
+  echo "[INFO] 重新构建镜像: $BUILD_FLAG"
+  $COMPOSE_CMD $BUILD_FLAG
+else
+  echo "[INFO] 如需要将构建镜像..."
+  $COMPOSE_CMD build
+fi
+echo ""
+
+# ── 启动 ──
+echo "[INFO] 启动服务..."
+$COMPOSE_CMD up -d
+echo ""
+
+echo "==========================================================="
+echo "  开发环境已启动！"
+echo "==========================================================="
+echo ""
+echo "  前端:           http://localhost:5173"
+echo "  后端 API:       http://localhost:3001"
+echo "  健康检查:       http://localhost:3001/health/live"
+echo "  Swagger 文档:   http://localhost:3001/api-docs"
+echo "  Node.js 调试:   localhost:9229 （chrome://inspect）"
+echo ""
+echo "  默认账号: admin / admin（首次登录会强制改密码）"
+echo ""
+echo "  常用命令:"
+echo "    $COMPOSE_CMD logs -f             - 实时跟踪所有日志"
+echo "    $COMPOSE_CMD logs -f backend     - 实时跟踪后端日志"
+echo "    $COMPOSE_CMD logs -f frontend    - 实时跟踪前端日志"
+echo "    $COMPOSE_CMD ps                  - 查看服务状态"
+echo "    $COMPOSE_CMD restart backend     - 重启后端（依赖变更后用）"
+echo "    $COMPOSE_CMD exec backend sh     - 进入后端容器调试"
+echo ""
+echo "  停止: ./stop-dev.sh   清理: ./stop-dev.sh --clean"
+echo "==========================================================="
+echo ""
+
+# ── 显示服务状态 ──
+$COMPOSE_CMD ps
+
+# ── 可选：自动跟踪日志 ──
+if [ -n "$LOGS_FLAG" ]; then
+  echo ""
+  echo "[INFO] 跟踪日志（Ctrl+C 退出跟踪不影响服务）..."
+  $COMPOSE_CMD logs -f
+fi

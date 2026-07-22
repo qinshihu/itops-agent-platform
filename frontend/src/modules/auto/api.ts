@@ -3,7 +3,7 @@
  * 封装自动伸缩、修复策略、修复执行、修复审计、仪表盘统计相关端点
  */
 
-import api from '@/lib/api';
+import api from "@/lib/api";
 
 // ============================================================
 // 通用类型
@@ -19,10 +19,10 @@ export interface PaginatedResult<T> {
 export interface ScaleRule {
   id: string;
   name: string;
-  targetType: 'container' | 'vm';
+  targetType: "container" | "vm" | "k8s_deployment";
   targetId: string;
   targetName: string;
-  metricType: 'cpu' | 'memory' | 'pod_count';
+  metricType: "cpu" | "memory" | "pod_count" | "request_count";
   threshold: number;
   targetValue: number;
   minInstances: number;
@@ -35,10 +35,10 @@ export interface ScaleRule {
 
 export interface ScaleRuleInput {
   name?: string;
-  targetType?: 'container' | 'vm';
+  targetType?: "container" | "vm" | "k8s_deployment";
   targetId?: string;
   targetName?: string;
-  metricType?: 'cpu' | 'memory' | 'pod_count';
+  metricType?: "cpu" | "memory" | "pod_count" | "request_count";
   threshold?: number;
   targetValue?: number;
   minInstances?: number;
@@ -53,11 +53,11 @@ export interface ScaleHistory {
   time: string;
   ruleName: string;
   target: string;
-  action: 'scale_up' | 'scale_down';
+  action: "scale_up" | "scale_down";
   beforeCount: number;
   afterCount: number;
   metricValue: number;
-  result: 'success' | 'failed';
+  result: "success" | "failed";
   reason: string;
 }
 
@@ -85,7 +85,7 @@ export interface RemediationPolicy {
   alert_severity: string;
   alert_keywords?: string | null;
   alert_tags?: string | null;
-  execution_mode: 'auto' | 'approval' | 'suggestion';
+  execution_mode: "auto" | "approval" | "suggestion";
   workflow_id: string;
   workflow_params?: string;
   max_executions_per_hour: number;
@@ -109,7 +109,7 @@ export interface RemediationPolicyInput {
   alert_severity?: string;
   alert_keywords?: string | null;
   alert_tags?: string | null;
-  execution_mode: 'auto' | 'approval' | 'suggestion';
+  execution_mode: "auto" | "approval" | "suggestion";
   workflow_id: string;
   workflow_params?: string;
   max_executions_per_hour?: number;
@@ -160,7 +160,7 @@ export interface RemediationExecutionListParams {
 }
 
 export interface ApproveExecutionInput {
-  action: 'approve' | 'reject';
+  action: "approve" | "reject";
 }
 
 // ── 修复审计 ──
@@ -250,13 +250,13 @@ export const autoApi = {
 
   /** 获取伸缩规则列表 */
   async listScaleRules(): Promise<ScaleRule[]> {
-    const { data } = await api.get('/auto-scale/rules');
+    const { data } = await api.get("/auto-scale/rules");
     return data.data || [];
   },
 
   /** 创建伸缩规则 */
   async createScaleRule(input: ScaleRuleInput): Promise<void> {
-    await api.post('/auto-scale/rules', input);
+    await api.post("/auto-scale/rules", input);
   },
 
   /** 更新伸缩规则 */
@@ -270,22 +270,33 @@ export const autoApi = {
   },
 
   /** 获取伸缩历史 */
-  async listScaleHistory(params?: ScaleHistoryListParams): Promise<PaginatedResult<ScaleHistory>> {
-    const { data } = await api.get('/auto-scale/history', { params });
+  async listScaleHistory(
+    params?: ScaleHistoryListParams,
+  ): Promise<PaginatedResult<ScaleHistory>> {
+    const { data } = await api.get("/auto-scale/history", { params });
     return data;
   },
 
   /** 获取伸缩统计摘要 */
   async getScaleSummary(): Promise<ScaleSummary> {
-    const { data } = await api.get('/auto-scale/summary');
-    return data.data || { activeRules: 0, todayScaleUp: 0, todayScaleDown: 0, totalManagedInstances: 0 };
+    const { data } = await api.get("/auto-scale/summary");
+    return (
+      data.data || {
+        activeRules: 0,
+        todayScaleUp: 0,
+        todayScaleDown: 0,
+        totalManagedInstances: 0,
+      }
+    );
   },
 
   // ── 修复策略 ──
 
   /** 获取修复策略列表 */
-  async listRemediationPolicies(params?: RemediationPolicyListParams): Promise<RemediationPolicyListResult> {
-    const { data } = await api.get('/remediation-policies', { params });
+  async listRemediationPolicies(
+    params?: RemediationPolicyListParams,
+  ): Promise<RemediationPolicyListResult> {
+    const { data } = await api.get("/remediation-policies", { params });
     return data.data;
   },
 
@@ -297,11 +308,14 @@ export const autoApi = {
 
   /** 创建修复策略 */
   async createRemediationPolicy(input: RemediationPolicyInput): Promise<void> {
-    await api.post('/remediation-policies', input);
+    await api.post("/remediation-policies", input);
   },
 
   /** 更新修复策略 */
-  async updateRemediationPolicy(id: string, input: RemediationPolicyInput): Promise<void> {
+  async updateRemediationPolicy(
+    id: string,
+    input: RemediationPolicyInput,
+  ): Promise<void> {
     await api.put(`/remediation-policies/${id}`, input);
   },
 
@@ -316,16 +330,23 @@ export const autoApi = {
   },
 
   /** 获取修复策略统计 */
-  async getRemediationPolicyStats(id: string, params?: { days?: number }): Promise<RemediationPolicyStats> {
-    const { data } = await api.get(`/remediation-policies/${id}/stats`, { params });
+  async getRemediationPolicyStats(
+    id: string,
+    params?: { days?: number },
+  ): Promise<RemediationPolicyStats> {
+    const { data } = await api.get(`/remediation-policies/${id}/stats`, {
+      params,
+    });
     return data.data;
   },
 
   // ── 修复执行 ──
 
   /** 获取修复执行列表 */
-  async listRemediationExecutions(params?: RemediationExecutionListParams): Promise<RemediationExecution[]> {
-    const { data } = await api.get('/remediation-executions', { params });
+  async listRemediationExecutions(
+    params?: RemediationExecutionListParams,
+  ): Promise<RemediationExecution[]> {
+    const { data } = await api.get("/remediation-executions", { params });
     return data.data;
   },
 
@@ -336,7 +357,10 @@ export const autoApi = {
   },
 
   /** 审批修复执行 */
-  async approveRemediationExecution(id: string, input: ApproveExecutionInput): Promise<void> {
+  async approveRemediationExecution(
+    id: string,
+    input: ApproveExecutionInput,
+  ): Promise<void> {
     await api.post(`/remediation-executions/${id}/approve`, input);
   },
 
@@ -348,8 +372,10 @@ export const autoApi = {
   // ── 修复审计 ──
 
   /** 获取修复审计列表 */
-  async listRemediationAudits(params?: RemediationAuditListParams): Promise<RemediationAudit[]> {
-    const { data } = await api.get('/remediation-audits', { params });
+  async listRemediationAudits(
+    params?: RemediationAuditListParams,
+  ): Promise<RemediationAudit[]> {
+    const { data } = await api.get("/remediation-audits", { params });
     return data.data;
   },
 
@@ -360,7 +386,10 @@ export const autoApi = {
   },
 
   /** 审批修复审计 */
-  async approveRemediationAudit(id: string, input?: RejectAuditInput): Promise<void> {
+  async approveRemediationAudit(
+    id: string,
+    input?: RejectAuditInput,
+  ): Promise<void> {
     await api.post(`/remediation-audits/${id}/approve`, input);
   },
 
@@ -383,19 +412,21 @@ export const autoApi = {
 
   /** 获取修复统计 */
   async getRemediationStats(): Promise<RemediationStats> {
-    const { data } = await api.get('/dashboard/remediation-stats');
+    const { data } = await api.get("/dashboard/remediation-stats");
     return data.data;
   },
 
   /** 获取告警源统计 */
   async getAlertSourceStats(): Promise<AlertSourceStats[]> {
-    const { data } = await api.get('/dashboard/alert-source-stats');
+    const { data } = await api.get("/dashboard/alert-source-stats");
     return data.data.source_stats;
   },
 
   /** 获取任务趋势 */
   async getTaskTrends(hours: number): Promise<ExecutionTrend[]> {
-    const { data } = await api.get('/dashboard/task-trends', { params: { hours } });
+    const { data } = await api.get("/dashboard/task-trends", {
+      params: { hours },
+    });
     return data.data;
   },
 };

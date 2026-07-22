@@ -52,7 +52,7 @@ export default function DataRoom() {
   }
 
   return (
-    <div className="relative w-full h-full overflow-hidden">
+    <div className="big-screen-scope relative w-full h-full overflow-hidden">
       <DataRoom3D />
     </div>
   );

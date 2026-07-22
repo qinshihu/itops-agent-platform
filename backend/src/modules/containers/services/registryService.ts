@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
-import { imageRegistryRepository } from '../../../../repositories';
+import { imageRegistryRepository } from '../../../repositories';
 import { credentialService } from '../../auth/services/credentialService';
 import { getErrorMessage } from '../../../utils/errorHelpers';
 
@@ -143,7 +143,16 @@ class RegistryService {
     if (config.type !== undefined) fields.type = config.type;
     if (config.url !== undefined) fields.url = config.url;
     if (config.username !== undefined) fields.username = config.username;
-    if (config.password !== undefined) fields.encrypted_password = config.password;
+    if (config.password !== undefined) {
+      // 注意：必须加密后再写入数据库（addRegistry 路径已经做了）
+      if (config.password === '') {
+        // 传入空串 → 视为"不修改密码"
+      } else {
+        const { encrypted, iv } = credentialService.encryptCredential(config.password);
+        fields.encrypted_password = encrypted;
+        fields.encrypted_password_iv = iv;
+      }
+    }
 
     if (Object.keys(fields).length > 0) {
       imageRegistryRepository.update(registryId, fields);

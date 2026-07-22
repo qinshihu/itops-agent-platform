@@ -25,6 +25,7 @@
 - [ ] 已在本地环境测试通过
 - [ ] 已运行 `npm run check:arch` 检查架构约束
 - [ ] 已运行 `npm run lint` 检查代码风格
+- [ ] 已运行 `npm run format` 检查代码格式
 - [ ] 已运行后端测试 `cd backend && npm test`
 - [ ] 已更新相关文档（如适用）
 
@@ -37,6 +38,21 @@
 - [ ] 新增了模块 — 确认包含 `index.ts` 和 `routes.ts`
 - [ ] 新增了前端跨模块引用 — 确认使用 `shared/` 组件
 - [ ] 无以上情况
+
+## 单文件行数检查（必填）
+
+<!-- 参见 [rules/top-rules.md §二/§四](../../.trae/rules/top-rules.md) 与 [architecture.md §3.3](../../.trae/rules/architecture.md) -->
+
+- [ ] 本次新增/重写的所有 .ts/.tsx 文件 ≤500 行（不含注释/空行）
+- [ ] 超 500 行的既有文件本次**未修改**，或已提供拆分 PR（参见 [ADR-031 大文件拆分方法论](../../.trae/adr/031-v2-large-file-splitting-methodology.md) + [ADR-034 v001 migration 拆分](../../.trae/adr/034-v001-migration-splitting.md) 拆分范例）
+
+## ADR 关联（架构变更时必填）
+
+<!-- 本次变更是否影响架构、模块边界、依赖方向？ -->
+
+- [ ] 本次变更**未影响**架构
+- [ ] 本次变更影响架构，已新增/更新 ADR：`.trae/adr/NNN-<slug>.md`（编号接续现有 034，或参考 `adr/README.md` 取下一个可用编号）
+- [ ] 不适用
 
 ## 截图（前端变更适用）
 

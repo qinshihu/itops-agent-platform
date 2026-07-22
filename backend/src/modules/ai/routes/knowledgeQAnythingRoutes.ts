@@ -3,9 +3,9 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import multer from 'multer';
 import { qanythingService } from '../services/knowledge/qanythingService';
+import { qanythingConfigService } from '../services/qanythingConfigService';
 import { authenticateToken } from '../../../middleware/auth';
 import { logger } from '../../../utils/logger';
-import { settingsRepository } from '../../../repositories';
 
 const router = Router();
 
@@ -78,7 +78,7 @@ router.use(authenticateToken);
  */
 router.get('/config', (req: Request, res: Response) => {
   try {
-    const settingValue = settingsRepository.getValue('qanything_config');
+    const settingValue = qanythingConfigService.getConfig();
 
     if (!settingValue) {
       return res.json({
@@ -121,7 +121,7 @@ router.post('/config', (req: Request, res: Response) => {
     const { enabled, apiBase, apiKey, kbId, mode, topK } = req.body;
 
     // 获取已有配置中的原始 API Key
-    const existingSettingValue = settingsRepository.getValue('qanything_config');
+    const existingSettingValue = qanythingConfigService.getConfig();
 
     let originalApiKey = '';
     if (existingSettingValue) {
@@ -151,7 +151,7 @@ router.post('/config', (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: validationError });
     }
 
-    settingsRepository.upsert('qanything_config', JSON.stringify(config));
+    qanythingConfigService.saveConfig(config);
 
     qanythingService.clearConfigCache();
 

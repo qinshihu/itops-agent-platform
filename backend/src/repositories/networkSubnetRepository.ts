@@ -54,13 +54,13 @@ export interface NetworkSubnetCreateInput {
 }
 
 export interface NetworkSubnetUpdateInput {
-  name?: string;
+  name?: string | null;
   gateway?: string | null;
   vlan_id?: number | null;
-  network_type?: string;
+  network_type?: string | null;
   location?: string | null;
   description?: string | null;
-  status?: string;
+  status?: string | null;
 }
 
 // ── network_ips 类型 ──
@@ -79,7 +79,7 @@ export interface NetworkIpRecord {
 }
 
 export interface NetworkIpUpdateInput {
-  status?: string;
+  status?: string | null;
   device_name?: string | null;
   mac_address?: string | null;
   description?: string | null;

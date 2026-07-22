@@ -18,6 +18,7 @@ vi.mock('../../../../models/database', () => ({
     })),
     exec: vi.fn(),
   },
+  performMaintenance: vi.fn(),
 }));
 
 vi.mock('../../../../utils/logger', () => ({

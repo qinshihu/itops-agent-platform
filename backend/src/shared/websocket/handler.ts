@@ -4,7 +4,8 @@ import jwt from 'jsonwebtoken';
 import { env } from '../../utils/env';
 import { logger } from '../../utils/logger';
 import { userRepository } from '../../repositories/userRepository';
-import { terminalService } from '../../modules/infra/services/terminalService';
+import { terminalService } from '../../modules/scripts/services/terminalService';
+import { terminalAiService } from '../../modules/scripts/services/terminalAiService';
 import { containerMonitorService } from '../../modules/containers/services/containerMonitorService';
 import { containerLogService } from '../../modules/containers/services/containerLogService';
 import type { User } from '../../types';
@@ -158,8 +159,7 @@ export function setupWebSocket(io: SocketIOServer) {
     });
 
     socket.on('terminal:data', (data: { sessionId: string; data: string }) => {
-      const role = (socket as SocketWithUser).user?.role;
-      terminalService.sendData(data.sessionId, data.data, role);
+      terminalService.sendData(data.sessionId, data.data);
     });
 
     socket.on('terminal:resize', (data: { sessionId: string; cols: number; rows: number }) => {
@@ -172,6 +172,35 @@ export function setupWebSocket(io: SocketIOServer) {
       socket.leave(`terminal:${data.sessionId}`);
       socket.emit(`terminal:close-session:${data.sessionId}`);
       terminalService.closeTerminalSession(data.sessionId);
+    });
+
+    // AI 终端助手：分析终端内容
+    socket.on('terminal:ai-analyze', async (data: {
+      sessionId: string;
+      rounds: Array<{ input: string; output: string }>;
+      triggeredBy: 'auto' | 'manual';
+      errorDetected: boolean;
+    }, callback: (result: {
+      suggestion: string;
+      severity: 'info' | 'warning' | 'error';
+      relatedCommands: string[];
+    }) => void) => {
+      try {
+        const result = await terminalAiService.analyze({
+          sessionId: data.sessionId,
+          rounds: data.rounds,
+          triggeredBy: data.triggeredBy,
+          errorDetected: data.errorDetected,
+        });
+        callback(result);
+      } catch (err) {
+        logger.error('[TerminalAI] Analysis error:', err);
+        callback({
+          suggestion: 'AI 分析暂时不可用，请稍后重试。',
+          severity: 'warning',
+          relatedCommands: [],
+        });
+      }
     });
 
     // 数据中心 3D 监控订阅

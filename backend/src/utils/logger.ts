@@ -38,6 +38,7 @@ interface LogStats {
   byLevel: Record<LogLevel, number>;
   errors: number;
   warnings: number;
+  last5Min: number;
   lastHour: number;
   lastDay: number;
 }
@@ -58,9 +59,11 @@ class Logger {
     byLevel: { debug: 0, info: 0, warn: 0, error: 0 },
     errors: 0,
     warnings: 0,
+    last5Min: 0,
     lastHour: 0,
     lastDay: 0
   };
+  private last5MinTimestamps: number[] = [];
   private lastHourTimestamps: number[] = [];
   private lastDayTimestamps: number[] = [];
   private errorListeners: Array<(entry: LogEntry) => void> = [];
@@ -95,11 +98,13 @@ class Logger {
 
   private startTimestampCleanup(): void {
     setInterval(() => {
+      const fiveMinAgo = Date.now() - 5 * 60 * 1000;
       const oneHourAgo = Date.now() - 3600000;
       const oneDayAgo = Date.now() - 86400000;
+      this.last5MinTimestamps = this.last5MinTimestamps.filter(t => t > fiveMinAgo);
       this.lastHourTimestamps = this.lastHourTimestamps.filter(t => t > oneHourAgo);
       this.lastDayTimestamps = this.lastDayTimestamps.filter(t => t > oneDayAgo);
-    }, 60 * 60 * 1000).unref();
+    }, 60 * 1000).unref();
   }
 
   private setupLogFiles(): void {
@@ -194,15 +199,18 @@ class Logger {
   }
 
   getStats(): LogStats {
+    const fiveMinAgo = Date.now() - 5 * 60 * 1000;
     const oneHourAgo = Date.now() - 3600000;
     const oneDayAgo = Date.now() - 86400000;
-    
+
+    this.last5MinTimestamps = this.last5MinTimestamps.filter(t => t > fiveMinAgo);
     this.lastHourTimestamps = this.lastHourTimestamps.filter(t => t > oneHourAgo);
     this.lastDayTimestamps = this.lastDayTimestamps.filter(t => t > oneDayAgo);
-    
+
+    this.stats.last5Min = this.last5MinTimestamps.length;
     this.stats.lastHour = this.lastHourTimestamps.length;
     this.stats.lastDay = this.lastDayTimestamps.length;
-    
+
     return { ...this.stats };
   }
 
@@ -311,6 +319,7 @@ class Logger {
     
     this.stats.total++;
     this.stats.byLevel[level]++;
+    this.last5MinTimestamps.push(Date.now());
     this.lastHourTimestamps.push(Date.now());
     this.lastDayTimestamps.push(Date.now());
     

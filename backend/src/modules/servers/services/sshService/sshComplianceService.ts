@@ -2,8 +2,8 @@ import { randomUUID } from 'crypto';
 import { serversRepo } from '../../../../repositories/serverRepository';
 import { generateCompletion } from '../../../ai/services/llm/llmService';
 import { logger } from '../../../../utils/logger';
-import type { OSType } from '../../../infra/services/commandDispatcher';
-import { getCommandTemplates } from '../../../infra/services/commandDispatcher';
+import type { OSType } from '../../../scripts/services/commandDispatcher';
+import { getCommandTemplates } from '../../../scripts/services/commandDispatcher';
 import { executeCommand } from './sshCommandExecutor';
 import type { CommandResult } from './sshTypes';
 

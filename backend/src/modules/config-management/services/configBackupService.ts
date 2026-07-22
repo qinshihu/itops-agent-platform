@@ -308,15 +308,61 @@ class ConfigBackupService {
 
   /**
    * 恢复备份（供 configRepairRoutes 调用）
+   *
+   * 实现：
+   * 1. 通过 networkDeviceRepository.getByIpWithSshCreds() 获取设备 SSH 凭证
+   * 2. 通过 SSH 连接设备，写回备份内容到目标配置路径
+   * 3. 失败时返回详细错误信息（不再静默返回 success: true）
    */
   async restoreBackup(backupId: string): Promise<{ success: boolean; message: string }> {
     const backup = this.getBackup(backupId);
     if (!backup) {
       return { success: false, message: 'Backup not found' };
     }
-    // TODO: 实际恢复逻辑需要通过 SSH 写回设备
-    logger.info(`Restoring backup ${backupId} for device ${backup.device_name}`);
-    return { success: true, message: 'Backup restored successfully' };
+    // 备份本身必须包含 config_text 才有可恢复的内容
+    const content = await this.getConfigText(backupId);
+    if (!content) {
+      return { success: false, message: 'Backup content not found' };
+    }
+    // 通过 networkDeviceRepository 拿到设备的 SSH 连接信息
+    const device = networkDeviceRepository.getByIdWithCredential(backup.device_id);
+    if (!device) {
+      return { success: false, message: `Device ${backup.device_name} (${backup.device_id}) not found` };
+    }
+    if (!device.ip_address || !device.ssh_port || !device.username) {
+      return { success: false, message: `Device ${device.name} missing SSH connection info` };
+    }
+    const password = device.password ? decrypt(device.password) : '';
+    // 写回目标配置路径（cat <<'EOF' > <path> 形式原子写入）
+    const targetPath = (backup as { config_path?: string }).config_path || '/etc/network/config';
+    const safeContent = content.replace(/'/g, "'\\''");
+    const writeCmd = `cat > '${targetPath}' << 'IT_OPS_EOF'\n${content}\nIT_OPS_EOF\n`;
+    try {
+      const stdout = await this.executeSSHCommand(
+        device.ip_address,
+        device.ssh_port,
+        device.username,
+        password,
+        writeCmd,
+        30000,
+      );
+      logger.info(`Restored backup ${backupId} to device ${device.name} (${device.ip_address}), output: ${stdout.slice(0, 200)}`);
+      return { success: true, message: `Backup restored to ${device.name} successfully` };
+    } catch (err) {
+      const msg = getErrorMessage(err);
+      logger.error(`Failed to restore backup ${backupId} to device ${device.name}: ${msg}`);
+      return { success: false, message: `SSH restore failed: ${msg}` };
+    }
+  }
+
+  /**
+   * 取备份的原始配置内容（兼容不同 repo 字段命名）
+   */
+  private async getConfigText(backupId: string): Promise<string | null> {
+    const direct = this.getBackupContent(backupId);
+    if (direct) return direct;
+    const rec = networkConfigBackupsRepo.getContent?.(backupId) ?? null;
+    return rec;
   }
 
   private cleanupOldBackups(deviceId: string, keep: number): void {

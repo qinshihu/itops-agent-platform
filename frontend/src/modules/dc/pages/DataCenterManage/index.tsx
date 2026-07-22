@@ -5,6 +5,7 @@ import {
   Search, Upload, Database, Clock, Cpu, ToggleLeft, ArrowUpDown,
 } from 'lucide-react';
 import useDataCenter from './useDataCenter';
+import { useNetboxResources } from './useNetboxResources';
 import OverviewTab from './OverviewTab';
 import DevicesTab from './DevicesTab';
 import SlotsPanel from './SlotsPanel';
@@ -18,6 +19,7 @@ import { ManufacturersTab, DeviceTypesTab, PowerPanelsTab, PowerFeedsTab, Cables
 
 export default function DataCenterManage() {
   const dc = useDataCenter();
+  const nb = useNetboxResources(dc.rooms, dc.racks);
   const navigate = useNavigate();
 
   const handleAddRoom = () => {
@@ -116,27 +118,27 @@ export default function DataCenterManage() {
     {
       key: 'manufacturers',
       label: <span><Database size={14} className="inline mr-1" />制造商</span>,
-      children: <ManufacturersTab dc={dc} />,
+      children: <ManufacturersTab dc={nb} />,
     },
     {
       key: 'deviceTypes',
       label: <span><Cpu size={14} className="inline mr-1" />设备型号</span>,
-      children: <DeviceTypesTab dc={dc} />,
+      children: <DeviceTypesTab dc={nb} />,
     },
     {
       key: 'powerPanels',
       label: <span><ToggleLeft size={14} className="inline mr-1" />配电柜</span>,
-      children: <PowerPanelsTab dc={dc} />,
+      children: <PowerPanelsTab dc={nb} />,
     },
     {
       key: 'powerFeeds',
       label: <span><Wifi size={14} className="inline mr-1" />供电线路</span>,
-      children: <PowerFeedsTab dc={dc} />,
+      children: <PowerFeedsTab dc={nb} />,
     },
     {
       key: 'cables',
       label: <span><ArrowUpDown size={14} className="inline mr-1" />线缆管理</span>,
-      children: <CablesTab dc={dc} />,
+      children: <CablesTab dc={nb} />,
     },
   ];
 
@@ -167,31 +169,31 @@ export default function DataCenterManage() {
     ),
     manufacturers: (
       <Button type="primary" size="small" icon={<Plus size={14} />}
-        onClick={() => { dc.setEditingMf(null); dc.mfForm.resetFields(); dc.setMfModalOpen(true); }}>
+        onClick={() => { nb.setEditingMfg(null); nb.mfgForm.resetFields(); nb.setMfgModalOpen(true); }}>
         添加制造商
       </Button>
     ),
     deviceTypes: (
       <Button type="primary" size="small" icon={<Plus size={14} />}
-        onClick={() => { dc.setEditingDt(null); dc.dtForm.resetFields(); dc.setDtModalOpen(true); }}>
+        onClick={() => { nb.setEditingDt(null); nb.dtForm.resetFields(); nb.setDtModalOpen(true); }}>
         添加型号
       </Button>
     ),
     powerPanels: (
       <Button type="primary" size="small" icon={<Plus size={14} />}
-        onClick={() => { dc.setEditingPp(null); dc.ppForm.resetFields(); dc.setPpModalOpen(true); }}>
+        onClick={() => { nb.setEditingPp(null); nb.ppForm.resetFields(); nb.setPpModalOpen(true); }}>
         添加配电柜
       </Button>
     ),
     powerFeeds: (
       <Button type="primary" size="small" icon={<Plus size={14} />}
-        onClick={() => { dc.setEditingPf(null); dc.pfForm.resetFields(); dc.setPfModalOpen(true); }}>
+        onClick={() => { nb.setEditingPf(null); nb.pfForm.resetFields(); nb.setPfModalOpen(true); }}>
         添加供电线路
       </Button>
     ),
     cables: (
       <Button type="primary" size="small" icon={<Plus size={14} />}
-        onClick={() => { dc.setEditingCable(null); dc.cableForm.resetFields(); dc.setCableModalOpen(true); }}>
+        onClick={() => { nb.setEditingCable(null); nb.cableForm.resetFields(); nb.setCableModalOpen(true); }}>
         添加线缆
       </Button>
     ),

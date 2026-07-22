@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Server, Wifi, Search, Loader2, AlertCircle, CheckCircle2, Clock, _ExternalLink, ChevronDown, ChevronRight, Terminal, _Cpu, _HardDrive, _Radio, Zap } from 'lucide-react';
+import { Activity, Server, Wifi, Search, Loader2, AlertCircle, CheckCircle2, Clock, ChevronDown, ChevronRight, Terminal, Zap } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../../lib/api';
 import { safeFormatDistance } from '../../../lib/date';

@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Card, Table, Tabs, Row, Col, Tag, Button, Spin, Empty, Statistic } from 'antd';
+import { Card, Table, Tabs, Row, Col, Tag, Button, Spin, Empty, Statistic, message } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { AlertCircle, Zap, DollarSign, TrendingDown, TrendingUp, Package, Cpu } from 'lucide-react';
 import api from '../../../lib/api';
+import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 
 // ==================== 类型定义 ====================
 interface ContainerCost {
@@ -76,35 +77,40 @@ export default function CostAnalysis() {
   const fetchContainers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get('/cost-analysis/containers');
-      setContainers(res.data.data || []);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+      const { data } = await api.get('/cost-analysis/containers');
+      setContainers(data || []);
+    } catch (err: unknown) {
+      message.error(`加载容器成本失败：${getAxiosErrorMessage(err, '未知错误')}`);
+    } finally { setLoading(false); }
   }, []);
 
   const fetchVMs = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get('/cost-analysis/vms');
-      setVms(res.data.data || []);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+      const { data } = await api.get('/cost-analysis/vms');
+      setVms(data || []);
+    } catch (err: unknown) {
+      message.error(`加载 VM 成本失败：${getAxiosErrorMessage(err, '未知错误')}`);
+    } finally { setLoading(false); }
   }, []);
 
   const fetchRecommendations = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get('/cost-analysis/recommendations');
-      setRecommendations(res.data.data || []);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+      const { data } = await api.get('/cost-analysis/recommendations');
+      setRecommendations(data || []);
+    } catch (err: unknown) {
+      message.error(`加载优化建议失败：${getAxiosErrorMessage(err, '未知错误')}`);
+    } finally { setLoading(false); }
   }, []);
 
   const fetchSummary = useCallback(async () => {
     try {
-      const res = await api.get('/cost-analysis/summary');
-      setSummary(res.data.data || { containerMonthly: 0, vmMonthly: 0, totalMonthly: 0, idleWaste: 0 });
-    } catch { /* ignore */ }
+      const { data } = await api.get('/cost-analysis/summary');
+      setSummary(data || { containerMonthly: 0, vmMonthly: 0, totalMonthly: 0, idleWaste: 0 });
+    } catch (err: unknown) {
+      message.error(`加载成本汇总失败：${getAxiosErrorMessage(err, '未知错误')}`);
+    }
   }, []);
 
   useEffect(() => { fetchSummary(); }, []);

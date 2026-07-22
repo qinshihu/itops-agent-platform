@@ -6,6 +6,85 @@ import { logger } from '../../../../utils/logger';
 import type { ExternalServerConfig } from './types';
 
 // ============================================================
+// 2026-07-21 P0-2 安全加固：stdio 命令白名单 + 参数长度限制（P0-2 ADR-024）
+// ============================================================
+
+/**
+ * stdio 命令白名单：只允许这些程序被 spawn
+ *
+ * 黑名单思路太脆弱（要枚举所有危险命令），白名单思路更安全。
+ * 新增 MCP server 时需要在此处显式登记。
+ */
+const STDIO_ALLOWED_COMMANDS = new Set([
+  'npx',
+  'node',
+  'npm',
+  'python3',
+  'python',
+  'uvx',
+  'pipx',
+  'deno',
+  'bun',
+]);
+
+/** 单个参数最大长度（防御 argv 溢出攻击） */
+const MAX_STDIO_ARG_LENGTH = 1024;
+
+/** 最大参数个数（防御 argv 数量爆炸） */
+const MAX_STDIO_ARG_COUNT = 32;
+
+/** 黑名单参数：禁止传 file:// URL 或 shell 注入字符 */
+const FORBIDDEN_ARG_PATTERNS = [
+  /file:\/\//i,           // file:// URL (在字符类外 / 才不需要 escape)
+  /--?\w*[;&|`$()<>]/,    // shell metacharacter in flag value
+  /[\r\n\0]/,             // newline/null injection
+];
+
+function validateStdioCommand(command: string, args: string[]): void {
+  // 1. 命令名白名单
+  if (!STDIO_ALLOWED_COMMANDS.has(command)) {
+    throw new Error(
+      `[MCP Stdio 安全] 命令 "${command}" 不在白名单内（仅允许：${Array.from(STDIO_ALLOWED_COMMANDS).join(', ')}）`
+    );
+  }
+
+  // 2. 路径白名单字符校验（拒绝包含 shell metacharacter）
+  // 注：在字符类 [...] 中，`-` 放最末不需要 escape，`/` 不需要 escape
+    if (!/^[a-zA-Z0-9._/-]+$/.test(command)) {
+    throw new Error(
+      `[MCP Stdio 安全] 命令名 "${command}" 含非法字符（只允许字母/数字/_/-/.//）`
+    );
+  }
+
+  // 3. 参数个数限制
+  if (args.length > MAX_STDIO_ARG_COUNT) {
+    throw new Error(
+      `[MCP Stdio 安全] 参数个数 ${args.length} 超过上限 ${MAX_STDIO_ARG_COUNT}`
+    );
+  }
+
+  // 4. 每个参数做长度 + 危险内容检查
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (typeof arg !== 'string') {
+      throw new Error(`[MCP Stdio 安全] args[${i}] 不是 string 类型`);
+    }
+    if (arg.length > MAX_STDIO_ARG_LENGTH) {
+      throw new Error(
+        `[MCP Stdio 安全] args[${i}] 长度 ${arg.length} 超过上限 ${MAX_STDIO_ARG_LENGTH}`
+      );
+    }
+    for (const pattern of FORBIDDEN_ARG_PATTERNS) {
+      if (pattern.test(arg)) {
+        throw new Error(
+          `[MCP Stdio 安全] args[${i}] 命中危险模式：${pattern.source} → ${arg.slice(0, 80)}`
+        );
+      }
+    }
+  }
+}
+
+// ============================================================
 // stdio 传输实现
 // ============================================================
 
@@ -28,6 +107,9 @@ export class StdioTransport extends EventEmitter {
 
     return new Promise((resolve, reject) => {
       const { command, args = [], env = {}, cwd } = config.stdio!;
+      // 2026-07-21 P0-2：spawn 前调白名单 + 参数校验，捕获即拒绝
+      validateStdioCommand(command, args);
+
       logger.info(
         `[MCP Client:${this.serverId}] Spawning: ${command} ${args.join(' ')}`
       );

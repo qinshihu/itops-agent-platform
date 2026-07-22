@@ -28,3 +28,6 @@ kubernetes/
 
 ## 对应后端
 `backend/src/modules/kubernetes/`
+
+## 刷新记录
+- **2026-07-22**：核对 1458 行 Kubernetes.tsx 主页面 + 5 子模块

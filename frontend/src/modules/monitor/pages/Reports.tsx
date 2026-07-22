@@ -1,163 +1,160 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileText, Plus, Download, Clock, Trash2, Edit2, Eye, X } from 'lucide-react';
+import { FileText, Plus, Download, Clock, Trash2, Edit2, Eye } from 'lucide-react';
+import { message } from 'antd';
 import { logger } from '@/lib/logger';
-import api from '../../../lib/api';
-import MarkdownOutput from '../../../shared/components/MarkdownOutput';
+import api from '@/lib/api';
+import { getAxiosErrorMessage } from '../../../lib/errorHandler';
+import {
+  monitorApi,
+  type GeneratedReport,
+  type ReportTemplate,
+  type ScheduledReport,
+} from '../api';
+import { CreateTemplateModal, type CreateTemplateFormState } from './reports/CreateTemplateModal';
+import { GenerateReportModal } from './reports/GenerateReportModal';
+import { ViewReportModal } from './reports/ViewReportModal';
+import { AnalyticsTab } from './reports/AnalyticsTab';
 
-interface ReportTemplate {
-  id: string;
-  name: string;
-  description: string;
-  type: string;
-  content: string;
-  variables: string[];
-  is_preset?: boolean;
-}
+const TYPE_LABELS: Record<string, string> = {
+  incident: '故障报告',
+  inspection: '巡检报告',
+  change: '变更记录',
+};
 
-interface GeneratedReport {
-  id: string;
-  name: string;
-  type: string;
-  format: string;
-  created_at: string;
-  content: string;
-}
+const TYPE_COLORS: Record<string, string> = {
+  incident: 'text-red-400 bg-red-900/30',
+  inspection: 'text-blue-400 bg-blue-900/30',
+  change: 'text-green-400 bg-green-900/30',
+};
 
-interface ScheduledReport {
-  id: string;
-  name: string;
-  format: string;
-  enabled: boolean;
-  cron_expression: string;
-  last_generated?: string;
-  recipients?: string[];
-}
+const TABS = [
+  { key: 'templates', label: '报告模板' },
+  { key: 'reports', label: '已生成报告' },
+  { key: 'scheduled', label: '定时报告' },
+  { key: 'analytics', label: '数据分析' },
+] as const;
 
-interface AlertTrendItem {
-  date: string;
-  severity: string;
-  count: number;
-}
+type TabKey = (typeof TABS)[number]['key'];
 
-interface DiagnosisItem {
-  summary: string;
-  count: number;
-}
-
-interface _ReportAnalytics {
-  analysisStats?: { total?: number; completed?: number; failed?: number };
-  remediationStats?: { total?: number; success_count?: number; failed_count?: number; rolled_back?: number };
-  alertTrends?: AlertTrendItem[];
-  topDiagnoses?: DiagnosisItem[];
-}
+const EMPTY_TEMPLATE_FORM: CreateTemplateFormState = {
+  name: '',
+  description: '',
+  type: 'incident',
+  content: '',
+  variables: [],
+};
 
 export default function Reports() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'templates' | 'reports' | 'scheduled' | 'analytics'>('reports');
+  const [activeTab, setActiveTab] = useState<TabKey>('reports');
   const [showCreateTemplateModal, setShowCreateTemplateModal] = useState(false);
   const [showGenerateReportModal, setShowGenerateReportModal] = useState(false);
   const [showViewReportModal, setShowViewReportModal] = useState(false);
   const [selectedReport, setSelectedReport] = useState<GeneratedReport | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [formData, setFormData] = useState<Record<string, string>>({});
-  const [templateForm, setTemplateForm] = useState({
-    name: '',
-    description: '',
-    type: 'incident' as 'incident' | 'inspection' | 'change',
-    content: '',
-    variables: [] as string[]
-  });
+  const [templateForm, setTemplateForm] = useState<CreateTemplateFormState>(EMPTY_TEMPLATE_FORM);
 
   const { data: templates } = useQuery({
     queryKey: ['reportTemplates'],
     queryFn: async () => {
-      const res = await api.get('/reports/templates');
-      return res.data.data || [];
-    }
+      try {
+        return await monitorApi.listReportTemplates();
+      } catch (err: unknown) {
+        message.error(`加载报告模板失败：${getAxiosErrorMessage(err, '未知错误')}`);
+        return [];
+      }
+    },
   });
 
   const { data: reports } = useQuery({
     queryKey: ['reports'],
     queryFn: async () => {
-      const res = await api.get('/reports');
-      return res.data.data || [];
-    }
+      try {
+        return await monitorApi.listReports();
+      } catch (err: unknown) {
+        message.error(`加载报告列表失败：${getAxiosErrorMessage(err, '未知错误')}`);
+        return [];
+      }
+    },
   });
 
-  const { data: analytics } = useQuery({
+  const { data: analytics } = useQuery<unknown>({
     queryKey: ['reportAnalytics'],
-    queryFn: async () => {
-      const res = await api.get('/reports/analytics');
-      return res.data.data;
-    },
+    queryFn: async () => monitorApi.getReportAnalytics(),
     staleTime: 120000,
   });
 
   const { data: scheduledReports } = useQuery({
     queryKey: ['scheduledReports'],
     queryFn: async () => {
-      const res = await api.get('/reports/scheduled/all');
-      return res.data.data || [];
-    }
+      try {
+        return await monitorApi.listScheduledReports();
+      } catch (err: unknown) {
+        message.error(`加载定时报告失败：${getAxiosErrorMessage(err, '未知错误')}`);
+        return [];
+      }
+    },
   });
 
   const createTemplateMutation = useMutation({
-    mutationFn: async (template: Omit<ReportTemplate, 'id'>) => {
-      const res = await api.post('/reports/templates', template);
-      return res.data;
-    },
+    mutationFn: async (template: CreateTemplateFormState) =>
+      monitorApi.createReportTemplate(template),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reportTemplates'] });
       setShowCreateTemplateModal(false);
-      setTemplateForm({
-        name: '',
-        description: '',
-        type: 'incident',
-        content: '',
-        variables: []
-      });
-    }
+      setTemplateForm(EMPTY_TEMPLATE_FORM);
+    },
+    onError: (err: unknown) => {
+      message.error(`创建模板失败：${getAxiosErrorMessage(err, '未知错误')}`);
+    },
   });
 
   const generateReportMutation = useMutation({
-    mutationFn: async ({ templateId, variables }: { templateId: string; variables: Record<string, string> }) => {
-      const res = await api.post('/reports/generate', { templateId, variables, format: 'markdown' });
-      return res.data;
-    },
+    mutationFn: async ({
+      templateId,
+      variables,
+    }: {
+      templateId: string;
+      variables: Record<string, string>;
+    }) => monitorApi.generateReport({ templateId, variables }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reports'] });
       setShowGenerateReportModal(false);
       setFormData({});
-    }
+    },
+    onError: (err: unknown) => {
+      message.error(`生成报告失败：${getAxiosErrorMessage(err, '未知错误')}`);
+    },
   });
 
   const deleteTemplateMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await api.delete(`/reports/templates/${id}`);
-    },
+    mutationFn: async (id: string) => monitorApi.deleteReportTemplate(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reportTemplates'] });
-    }
+    },
+    onError: (err: unknown) => {
+      message.error(`删除模板失败：${getAxiosErrorMessage(err, '未知错误')}`);
+    },
   });
 
   const handleGenerateReport = (templateId: string) => {
-    const template = (templates as ReportTemplate[])?.find((t) => t.id === templateId);
-    if (template) {
-      const initialData: Record<string, string> = {};
-      template.variables?.forEach((v: string) => {
-        initialData[v] = '';
-      });
-      setFormData(initialData);
-      setSelectedTemplateId(templateId);
-      setShowGenerateReportModal(true);
-    }
+    const template = (templates as ReportTemplate[] | undefined)?.find((t) => t.id === templateId);
+    if (!template) return;
+    const initialData: Record<string, string> = {};
+    template.variables?.forEach((v: string) => {
+      initialData[v] = '';
+    });
+    setFormData(initialData);
+    setSelectedTemplateId(templateId);
+    setShowGenerateReportModal(true);
   };
 
   const handleSubmitGenerate = () => {
     generateReportMutation.mutate({
       templateId: selectedTemplateId,
-      variables: formData
+      variables: formData,
     });
   };
 
@@ -166,9 +163,14 @@ export default function Reports() {
     setShowViewReportModal(true);
   };
 
-  const handleDownloadReport = async (reportId: string, format: 'markdown' | 'pdf' | 'word' = 'markdown') => {
+  const handleDownloadReport = async (
+    reportId: string,
+    format: 'markdown' | 'pdf' | 'word' = 'markdown',
+  ) => {
     try {
-      const response = await api.get(`/reports/${reportId}/export?format=${format}`, { responseType: 'blob' });
+      const response = await api.get(`/reports/${reportId}/export?format=${format}`, {
+        responseType: 'blob',
+      });
       const blob = response.data;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -180,20 +182,10 @@ export default function Reports() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
+      const errMsg = getAxiosErrorMessage(error, '下载失败');
       logger.error('Download failed:', error);
+      message.error(errMsg);
     }
-  };
-
-  const typeLabels: Record<string, string> = {
-    incident: '故障报告',
-    inspection: '巡检报告',
-    change: '变更记录'
-  };
-
-  const typeColors: Record<string, string> = {
-    incident: 'text-red-400 bg-red-900/30',
-    inspection: 'text-blue-400 bg-blue-900/30',
-    change: 'text-green-400 bg-green-900/30'
   };
 
   return (
@@ -219,30 +211,32 @@ export default function Reports() {
         </div>
 
         <div className="flex gap-2 border-b border-border">
-          {(['templates', 'reports', 'scheduled', 'analytics'] as const).map(tab => (
+          {TABS.map((tab) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
               className={`px-4 py-2 border-b-2 transition-colors ${
-                activeTab === tab
+                activeTab === tab.key
                   ? 'border-primary text-primary'
                   : 'border-transparent text-text-secondary hover:text-text-primary'
               }`}
             >
-              {tab === 'templates' ? '报告模板' : tab === 'reports' ? '已生成报告' : tab === 'scheduled' ? '定时报告' : '数据分析'}
+              {tab.label}
             </button>
           ))}
         </div>
 
         {activeTab === 'templates' && (
           <div className="grid gap-4">
-            {(templates as ReportTemplate[])?.map((template) => (
+            {(templates as ReportTemplate[] | undefined)?.map((template) => (
               <div key={template.id} className="bg-surface border border-border rounded-lg p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className={`px-2 py-1 text-xs rounded ${typeColors[template.type] || 'text-text-secondary bg-background'}`}>
-                        {typeLabels[template.type] || template.type}
+                      <span
+                        className={`px-2 py-1 text-xs rounded ${TYPE_COLORS[template.type] || 'text-text-secondary bg-background'}`}
+                      >
+                        {TYPE_LABELS[template.type] || template.type}
                       </span>
                       {template.is_preset && (
                         <span className="px-2 py-1 text-xs bg-purple-900/30 text-purple-400 rounded">
@@ -250,11 +244,16 @@ export default function Reports() {
                         </span>
                       )}
                     </div>
-                    <h3 className="text-lg font-semibold text-text-primary mb-1">{template.name}</h3>
+                    <h3 className="text-lg font-semibold text-text-primary mb-1">
+                      {template.name}
+                    </h3>
                     <p className="text-text-secondary text-sm mb-2">{template.description}</p>
                     <div className="flex flex-wrap gap-2">
                       {template.variables?.map((v: string, i: number) => (
-                        <span key={i} className="px-2 py-1 text-xs bg-background text-text-secondary rounded">
+                        <span
+                          key={i}
+                          className="px-2 py-1 text-xs bg-background text-text-secondary rounded"
+                        >
                           {v}
                         </span>
                       ))}
@@ -270,7 +269,10 @@ export default function Reports() {
                     </button>
                     {!template.is_preset && (
                       <>
-                        <button className="text-text-secondary hover:text-text-primary p-2" title="编辑">
+                        <button
+                          className="text-text-secondary hover:text-text-primary p-2"
+                          title="编辑"
+                        >
                           <Edit2 className="w-5 h-5" />
                         </button>
                         <button
@@ -291,13 +293,15 @@ export default function Reports() {
 
         {activeTab === 'reports' && (
           <div className="grid gap-4">
-            {(reports as GeneratedReport[])?.map((report) => (
+            {(reports as GeneratedReport[] | undefined)?.map((report) => (
               <div key={report.id} className="bg-surface border border-border rounded-lg p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className={`px-2 py-1 text-xs rounded ${typeColors[report.type] || 'text-text-secondary bg-background'}`}>
-                        {typeLabels[report.type] || report.type}
+                      <span
+                        className={`px-2 py-1 text-xs rounded ${TYPE_COLORS[report.type] || 'text-text-secondary bg-background'}`}
+                      >
+                        {TYPE_LABELS[report.type] || report.type}
                       </span>
                       <span className="px-2 py-1 text-xs bg-background text-text-secondary rounded">
                         {report.format}
@@ -339,14 +343,14 @@ export default function Reports() {
 
         {activeTab === 'scheduled' && (
           <div className="grid gap-4">
-            {(scheduledReports as ScheduledReport[])?.map((report) => (
+            {(scheduledReports as ScheduledReport[] | undefined)?.map((report) => (
               <div key={report.id} className="bg-surface border border-border rounded-lg p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className={`px-2 py-1 text-xs rounded ${
-                        report.enabled ? 'text-green-400 bg-green-900/30' : 'text-text-secondary bg-background'
-                      }`}>
+                      <span
+                        className={`px-2 py-1 text-xs rounded ${report.enabled ? 'text-green-400 bg-green-900/30' : 'text-text-secondary bg-background'}`}
+                      >
                         {report.enabled ? '已启用' : '已禁用'}
                       </span>
                       <span className="px-2 py-1 text-xs bg-background text-text-secondary rounded">
@@ -360,13 +364,9 @@ export default function Reports() {
                         {report.cron_expression}
                       </span>
                       {report.last_generated && (
-                        <span>
-                          最后生成: {new Date(report.last_generated).toLocaleString()}
-                        </span>
+                        <span>最后生成: {new Date(report.last_generated).toLocaleString()}</span>
                       )}
-                      <span>
-                        接收人: {report.recipients?.join(', ') || '无'}
-                      </span>
+                      <span>接收人: {report.recipients?.join(', ') || '无'}</span>
                     </div>
                   </div>
                   <button className="text-primary hover:text-primary/80 p-2" title="编辑">
@@ -378,248 +378,36 @@ export default function Reports() {
           </div>
         )}
 
-        {activeTab === 'analytics' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-surface border border-border rounded-lg p-4">
-                <h3 className="text-sm font-medium text-text-secondary mb-1">AI 分析统计</h3>
-                <p className="text-2xl font-bold text-text-primary">{analytics?.analysisStats?.total ?? '-'}</p>
-                <div className="flex gap-3 mt-2 text-xs">
-                  <span className="text-green-400">成功 {analytics?.analysisStats?.completed ?? 0}</span>
-                  <span className="text-red-400">失败 {analytics?.analysisStats?.failed ?? 0}</span>
-                </div>
-              </div>
-              <div className="bg-surface border border-border rounded-lg p-4">
-                <h3 className="text-sm font-medium text-text-secondary mb-1">最近30天修复执行</h3>
-                <p className="text-2xl font-bold text-text-primary">{analytics?.remediationStats?.total ?? '-'}</p>
-                <div className="flex gap-3 mt-2 text-xs">
-                  <span className="text-green-400">成功 {analytics?.remediationStats?.success_count ?? 0}</span>
-                  <span className="text-red-400">失败 {analytics?.remediationStats?.failed_count ?? 0}</span>
-                  <span className="text-yellow-400">回滚 {analytics?.remediationStats?.rolled_back ?? 0}</span>
-                </div>
-              </div>
-              <div className="bg-surface border border-border rounded-lg p-4">
-                <h3 className="text-sm font-medium text-text-secondary mb-1">告警趋势（7天）</h3>
-                <p className="text-2xl font-bold text-text-primary">
-                  {analytics?.alertTrends?.reduce?.((s: number, r: AlertTrendItem) => s + r.count, 0) ?? '-'}
-                </p>
-                <div className="text-xs text-text-secondary mt-2">总告警数</div>
-              </div>
-            </div>
+        {activeTab === 'analytics' && <AnalyticsTab analytics={analytics as never} />}
 
-            <div className="bg-surface border border-border rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-text-primary mb-4">告警趋势</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-2 text-text-secondary">日期</th>
-                      <th className="text-left py-2 text-text-secondary">严重级别</th>
-                      <th className="text-right py-2 text-text-secondary">数量</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {analytics?.alertTrends?.map((row: AlertTrendItem, i: number) => (
-                      <tr key={i} className="border-b border-border/50">
-                        <td className="py-2 text-text-primary">{row.date}</td>
-                        <td className="py-2">
-                          <span className={`px-2 py-0.5 text-xs rounded ${
-                            row.severity === 'critical' ? 'bg-red-900/30 text-red-400' :
-                            row.severity === 'high' ? 'bg-orange-900/30 text-orange-400' :
-                            'bg-blue-900/30 text-blue-400'
-                          }`}>{row.severity}</span>
-                        </td>
-                        <td className="py-2 text-right text-text-primary">{row.count}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+        <CreateTemplateModal
+          open={showCreateTemplateModal}
+          form={templateForm}
+          onChange={setTemplateForm}
+          onClose={() => setShowCreateTemplateModal(false)}
+          onSubmit={() => createTemplateMutation.mutate(templateForm)}
+          submitting={createTemplateMutation.isPending}
+        />
 
-            <div className="bg-surface border border-border rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-text-primary mb-4">热点分析摘要</h3>
-              <div className="flex flex-wrap gap-2">
-                {analytics?.topDiagnoses?.length ? (
-                  analytics.topDiagnoses.map((d: DiagnosisItem, i: number) => (
-                    <span key={i} className="px-3 py-1 bg-background border border-border rounded-full text-sm text-text-primary">
-                      {d.summary} ({d.count}次)
-                    </span>
-                  ))
-                ) : (
-                  <p className="text-text-secondary">暂无分析记录</p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        <GenerateReportModal
+          open={showGenerateReportModal}
+          variables={formData}
+          onChange={setFormData}
+          onClose={() => setShowGenerateReportModal(false)}
+          onSubmit={handleSubmitGenerate}
+          submitting={generateReportMutation.isPending}
+        />
 
-        {showCreateTemplateModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-surface border border-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <h2 className="text-xl font-bold text-text-primary mb-4">创建报告模板</h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm text-text-primary mb-1">模板名称</label>
-                    <input
-                      type="text"
-                      value={templateForm.name}
-                      onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
-                      className="w-full bg-background border border-border rounded-lg p-2 text-text-primary"
-                      placeholder="输入模板名称"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-text-primary mb-1">描述</label>
-                    <input
-                      type="text"
-                      value={templateForm.description}
-                      onChange={(e) => setTemplateForm({ ...templateForm, description: e.target.value })}
-                      className="w-full bg-background border border-border rounded-lg p-2 text-text-primary"
-                      placeholder="输入模板描述"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-text-primary mb-1">报告类型</label>
-                    <select
-                      value={templateForm.type}
-                      onChange={(e) => setTemplateForm({ ...templateForm, type: e.target.value as 'incident' | 'inspection' | 'change' })}
-                      className="w-full bg-background border border-border rounded-lg p-2 text-text-primary"
-                    >
-                      <option value="incident">故障报告</option>
-                      <option value="inspection">巡检报告</option>
-                      <option value="change">变更记录</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-text-primary mb-1">
-                      模板内容 (使用 {'{{variable}}'} 定义变量)
-                    </label>
-                    <textarea
-                      value={templateForm.content}
-                      onChange={(e) => setTemplateForm({ ...templateForm, content: e.target.value })}
-                      className="w-full bg-background border border-border rounded-lg p-2 text-text-primary font-mono text-sm"
-                      rows={10}
-                      placeholder="输入模板内容..."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-text-primary mb-1">
-                      变量列表 (每行一个)
-                    </label>
-                    <textarea
-                      value={templateForm.variables?.join('\n') || ''}
-                      onChange={(e) => setTemplateForm({
-                        ...templateForm,
-                        variables: e.target.value.split('\n').filter(v => v.trim())
-                      })}
-                      className="w-full bg-background border border-border rounded-lg p-2 text-text-primary font-mono text-sm"
-                      rows={4}
-                      placeholder="variable1&#10;variable2&#10;..."
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-3 mt-6">
-                  <button
-                    onClick={() => setShowCreateTemplateModal(false)}
-                    className="flex-1 bg-background hover:bg-surface text-text-primary py-2 rounded-lg"
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={() => createTemplateMutation.mutate(templateForm)}
-                    className="flex-1 bg-primary hover:bg-primary/90 text-white py-2 rounded-lg"
-                  >
-                    创建
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showGenerateReportModal && selectedTemplateId && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-surface border border-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <h2 className="text-xl font-bold text-text-primary mb-4">生成报告</h2>
-                <div className="space-y-4">
-                  {Object.keys(formData).map(key => (
-                    <div key={key}>
-                      <label className="block text-sm text-text-primary mb-1">{key}</label>
-                      <input
-                        type="text"
-                        value={formData[key]}
-                        onChange={(e) => setFormData({ ...formData, [key]: e.target.value })}
-                        className="w-full bg-background border border-border rounded-lg p-2 text-text-primary"
-                        placeholder={`请输入 ${key}`}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-3 mt-6">
-                  <button
-                    onClick={() => setShowGenerateReportModal(false)}
-                    className="flex-1 bg-background hover:bg-surface text-text-primary py-2 rounded-lg"
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={handleSubmitGenerate}
-                    disabled={generateReportMutation.isPending}
-                    className="flex-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white py-2 rounded-lg"
-                  >
-                    {generateReportMutation.isPending ? '生成中...' : '生成'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showViewReportModal && selectedReport && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-surface border border-border rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between p-4 border-b border-border">
-                <h2 className="text-xl font-bold text-text-primary">{selectedReport.name}</h2>
-                <button
-                  onClick={() => setShowViewReportModal(false)}
-                  className="p-2 hover:bg-background rounded-lg text-text-secondary hover:text-text-primary"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-6">
-                <div className="mb-4 flex items-center gap-2">
-                  <span className={`px-2 py-1 text-xs rounded ${typeColors[selectedReport.type] || 'text-text-secondary bg-background'}`}>
-                    {typeLabels[selectedReport.type] || selectedReport.type}
-                  </span>
-                  <span className="text-text-secondary text-sm">
-                    创建时间: {new Date(selectedReport.created_at).toLocaleString()}
-                  </span>
-                </div>
-                <div className="prose prose-invert max-w-none">
-                  <MarkdownOutput content={selectedReport.content || '无内容'} />
-                </div>
-              </div>
-              <div className="p-4 border-t border-border flex justify-end gap-3">
-                <button
-                  onClick={() => setShowViewReportModal(false)}
-                  className="px-4 py-2 bg-background hover:bg-surface text-text-primary rounded-lg"
-                >
-                  关闭
-                </button>
-                <button
-                  onClick={() => handleDownloadReport(selectedReport.id, 'markdown')}
-                  className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg"
-                >
-                  下载
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <ViewReportModal
+          report={showViewReportModal ? selectedReport : null}
+          typeLabels={TYPE_LABELS}
+          typeColors={TYPE_COLORS}
+          onClose={() => {
+            setShowViewReportModal(false);
+            setSelectedReport(null);
+          }}
+          onDownload={handleDownloadReport}
+        />
       </div>
     </div>
   );

@@ -387,6 +387,113 @@ class KubernetesService {
     });
     logger.info(`Scaled deployment ${namespace}/${name} to ${replicas}`);
   }
+
+  /**
+   * 获取 deployment 的副本数（spec.replicas）
+   */
+  async getDeploymentReplicas(namespace: string, name: string, contextId?: string): Promise<number> {
+    const { appsApi } = this.getClient(contextId || this.contexts.keys().next().value || '');
+    const res = await (appsApi as Record<string, (...args: unknown[]) => unknown>).readNamespacedDeploymentScale(name, namespace) as { body: K8sResource };
+    return Number((res.body.spec as K8sResource)?.replicas || 0);
+  }
+
+  /**
+   * 获取 deployment 的实时指标（来自 metrics-server）
+   *
+   * 注意：需要集群已安装 metrics-server
+   *   kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+   *
+   * 返回 { cpu, memory } 单位：
+   *   - cpu:    millicores (1 core = 1000 millicores)
+   *   - memory: MiB
+   *
+   * 当 metrics-server 不可用时返回 null
+   */
+  async getDeploymentMetrics(
+    namespace: string,
+    name: string,
+    contextId?: string
+  ): Promise<{ cpu: number; memory: number } | null> {
+    try {
+      const client = this.getClient(contextId || this.contexts.keys().next().value || '');
+      // metrics.k8s.io/v1beta1 → CustomObjects API
+      // Path: /apis/metrics.k8s.io/v1beta1/namespaces/{namespace}/pods?labelSelector=...
+      // 简化做法：列出该 namespace 下属于该 deployment 的所有 Pod，再汇总它们的指标
+      const labelSelector = `app=${name}`; // 常见默认标签
+      const customObjectsApi = (client as unknown as { customObjectsApi: Record<string, (...args: unknown[]) => unknown> }).customObjectsApi;
+
+      // 获取 deployment 的 selector 匹配标签（更精确）
+      let podSelector = labelSelector;
+      try {
+        const { appsApi } = client;
+        const deployRes = await (appsApi as Record<string, (...args: unknown[]) => unknown>).readNamespacedDeployment(name, namespace) as { body: K8sResource };
+        const selector = (deployRes.body.spec as K8sResource)?.selector as K8sResource | undefined;
+        const matchLabels = selector?.matchLabels as K8sResource | undefined;
+        if (matchLabels) {
+          podSelector = Object.entries(matchLabels)
+            .map(([k, v]) => `${k}=${v}`)
+            .join(',');
+        }
+      } catch {
+        // 退回到默认 labelSelector
+      }
+
+      const metricsRes = await customObjectsApi.listNamespacedCustomObject(
+        'metrics.k8s.io',
+        'v1beta1',
+        namespace,
+        'pods',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { labelSelector: podSelector }
+      ) as { body: { items: K8sResource[] } };
+
+      let totalCpuMilli = 0;
+      let totalMemoryMi = 0;
+      for (const pod of metricsRes.body?.items || []) {
+        const containers = ((pod.containers as K8sResource[]) || []);
+        for (const c of containers) {
+          const usage = (c.usage as K8sResource) || {};
+          const cpuStr = (usage.cpu as string) || '0'; // "120m" / "1" / "0.5"
+          const memStr = (usage.memory as string) || '0'; // "128Mi" / "1Gi"
+
+          // 解析 cpu（millicores）
+          if (cpuStr.endsWith('n')) {
+            totalCpuMilli += parseInt(cpuStr) / 1_000_000; // nanocores → millicores
+          } else if (cpuStr.endsWith('m')) {
+            totalCpuMilli += parseInt(cpuStr);
+          } else {
+            totalCpuMilli += parseFloat(cpuStr) * 1000;
+          }
+
+          // 解析 memory（→ MiB）
+          if (memStr.endsWith('Ki')) {
+            totalMemoryMi += parseInt(memStr) / 1024;
+          } else if (memStr.endsWith('Mi')) {
+            totalMemoryMi += parseInt(memStr);
+          } else if (memStr.endsWith('Gi')) {
+            totalMemoryMi += parseInt(memStr) * 1024;
+          } else if (memStr.endsWith('Ti')) {
+            totalMemoryMi += parseInt(memStr) * 1024 * 1024;
+          } else {
+            // 假设是 bytes
+            totalMemoryMi += parseInt(memStr) / (1024 * 1024);
+          }
+        }
+      }
+
+      return { cpu: Math.round(totalCpuMilli), memory: Math.round(totalMemoryMi) };
+    } catch (err) {
+      // metrics-server 未安装/不可用时静默返回 null
+      logger.debug(`getDeploymentMetrics(${namespace}/${name}) failed:`, err instanceof Error ? err.message : err);
+      return null;
+    }
+  }
 }
 
 export const kubernetesService = new KubernetesService();

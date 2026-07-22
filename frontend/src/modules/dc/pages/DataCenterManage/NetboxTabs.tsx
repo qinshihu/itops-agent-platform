@@ -1,13 +1,9 @@
 import { Button, Modal, Form, Input, Select, Tag, Space, Popconfirm, Table, InputNumber } from 'antd';
-import { Edit, Trash2, Database as _Database, Cpu as _Cpu, ToggleLeft as _ToggleLeft, Wifi as _Wifi, ArrowUpDown as _ArrowUpDown } from 'lucide-react';
-import type useDataCenter from './useDataCenter';
+import { Edit, Trash2 } from 'lucide-react';
+import type { useNetboxResources } from './useNetboxResources';
 import type { Manufacturer, DeviceTypeInfo, PowerPanel, PowerFeed, Cable } from './types';
 
-type DC = ReturnType<typeof useDataCenter>;
-
-interface _Props {
-  dc: DC;
-}
+type DC = ReturnType<typeof useNetboxResources>;
 
 export function ManufacturersTab({ dc }: { dc: DC }) {
   return (
@@ -21,8 +17,8 @@ export function ManufacturersTab({ dc }: { dc: DC }) {
             title: '操作', key: 'action', render: (_: unknown, rec: Manufacturer) => (
               <Space>
                 <Button type="link" size="small" icon={<Edit size={14} />}
-                  onClick={() => { dc.setEditingMf(rec); dc.mfForm.setFieldsValue(rec); dc.setMfModalOpen(true); }}>编辑</Button>
-                <Popconfirm title="确定删除?" onConfirm={() => dc.deleteManufacturer(rec.id)}>
+                  onClick={() => { dc.setEditingMfg(rec); dc.mfgForm.setFieldsValue(rec); dc.setMfgModalOpen(true); }}>编辑</Button>
+                <Popconfirm title="确定删除?" onConfirm={() => dc.deleteMfg(rec.id)}>
                   <Button type="link" size="small" danger icon={<Trash2 size={14} />}>删除</Button>
                 </Popconfirm>
               </Space>
@@ -30,18 +26,18 @@ export function ManufacturersTab({ dc }: { dc: DC }) {
           },
         ]}
         dataSource={dc.manufacturers.map((m: Manufacturer) => ({ ...m, key: m.id }))}
-        loading={dc.mfLoading}
+        loading={dc.loading}
         pagination={false}
       />
 
       <Modal
-        title={dc.editingMf ? '编辑制造商' : '添加制造商'}
-        open={dc.mfModalOpen}
-        onOk={dc.saveManufacturer}
-        onCancel={() => { dc.setMfModalOpen(false); dc.setEditingMf(null); dc.mfForm.resetFields(); }}
+        title={dc.editingMfg ? '编辑制造商' : '添加制造商'}
+        open={dc.mfgModalOpen}
+        onOk={dc.saveMfg}
+        onCancel={() => { dc.setMfgModalOpen(false); dc.setEditingMfg(null); dc.mfgForm.resetFields(); }}
         okText="保存" cancelText="取消"
       >
-        <Form form={dc.mfForm} layout="vertical" size="small">
+        <Form form={dc.mfgForm} layout="vertical" size="small">
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入制造商名称' }]}>
             <Input placeholder="如：华为、思科、戴尔" />
           </Form.Item>
@@ -68,8 +64,8 @@ export function DeviceTypesTab({ dc }: { dc: DC }) {
             title: '操作', key: 'action', render: (_: unknown, rec: DeviceTypeInfo) => (
               <Space>
                 <Button type="link" size="small" icon={<Edit size={14} />}
-                  onClick={() => { dc.setEditingDt(rec); dc.dtForm.setFieldsValue(rec); dc.setDtModalOpen(true); }}>编辑</Button>
-                <Popconfirm title="确定删除?" onConfirm={() => dc.deleteDeviceType(rec.id)}>
+                  onClick={() => { dc.setEditingDt(rec); dc.dtForm.setFieldsValue(rec as unknown as Parameters<typeof dc.dtForm.setFieldsValue>[0]); dc.setDtModalOpen(true); }}>编辑</Button>
+                <Popconfirm title="确定删除?" onConfirm={() => dc.deleteDt(rec.id)}>
                   <Button type="link" size="small" danger icon={<Trash2 size={14} />}>删除</Button>
                 </Popconfirm>
               </Space>
@@ -77,14 +73,14 @@ export function DeviceTypesTab({ dc }: { dc: DC }) {
           },
         ]}
         dataSource={dc.deviceTypes.map((t: DeviceTypeInfo) => ({ ...t, key: t.id }))}
-        loading={dc.dtLoading}
+        loading={dc.loading}
         pagination={false}
       />
 
       <Modal
         title={dc.editingDt ? '编辑设备型号' : '添加设备型号'}
         open={dc.dtModalOpen}
-        onOk={dc.saveDeviceType}
+        onOk={dc.saveDt}
         onCancel={() => { dc.setDtModalOpen(false); dc.setEditingDt(null); dc.dtForm.resetFields(); }}
         okText="保存" cancelText="取消"
       >
@@ -134,7 +130,7 @@ export function PowerPanelsTab({ dc }: { dc: DC }) {
               <Space>
                 <Button type="link" size="small" icon={<Edit size={14} />}
                   onClick={() => { dc.setEditingPp(rec); dc.ppForm.setFieldsValue(rec); dc.setPpModalOpen(true); }}>编辑</Button>
-                <Popconfirm title="确定删除?" onConfirm={() => dc.deletePowerPanel(rec.id)}>
+                <Popconfirm title="确定删除?" onConfirm={() => dc.deletePp(rec.id)}>
                   <Button type="link" size="small" danger icon={<Trash2 size={14} />}>删除</Button>
                 </Popconfirm>
               </Space>
@@ -142,14 +138,14 @@ export function PowerPanelsTab({ dc }: { dc: DC }) {
           },
         ]}
         dataSource={dc.powerPanels.map((p: PowerPanel) => ({ ...p, key: p.id }))}
-        loading={dc.ppLoading}
+        loading={dc.loading}
         pagination={false}
       />
 
       <Modal
         title={dc.editingPp ? '编辑配电柜' : '添加配电柜'}
         open={dc.ppModalOpen}
-        onOk={dc.savePowerPanel}
+        onOk={dc.savePp}
         onCancel={() => { dc.setPpModalOpen(false); dc.setEditingPp(null); dc.ppForm.resetFields(); }}
         okText="保存" cancelText="取消"
       >
@@ -196,7 +192,7 @@ export function PowerFeedsTab({ dc }: { dc: DC }) {
               <Space>
                 <Button type="link" size="small" icon={<Edit size={14} />}
                   onClick={() => { dc.setEditingPf(rec); dc.pfForm.setFieldsValue(rec); dc.setPfModalOpen(true); }}>编辑</Button>
-                <Popconfirm title="确定删除?" onConfirm={() => dc.deletePowerFeed(rec.id)}>
+                <Popconfirm title="确定删除?" onConfirm={() => dc.deletePf(rec.id)}>
                   <Button type="link" size="small" danger icon={<Trash2 size={14} />}>删除</Button>
                 </Popconfirm>
               </Space>
@@ -204,14 +200,14 @@ export function PowerFeedsTab({ dc }: { dc: DC }) {
           },
         ]}
         dataSource={dc.powerFeeds.map((f: PowerFeed) => ({ ...f, key: f.id }))}
-        loading={dc.pfLoading}
+        loading={dc.loading}
         pagination={false}
       />
 
       <Modal
         title={dc.editingPf ? '编辑供电线路' : '添加供电线路'}
         open={dc.pfModalOpen}
-        onOk={dc.savePowerFeed}
+        onOk={dc.savePf}
         onCancel={() => { dc.setPfModalOpen(false); dc.setEditingPf(null); dc.pfForm.resetFields(); }}
         okText="保存" cancelText="取消"
       >
@@ -232,11 +228,25 @@ export function PowerFeedsTab({ dc }: { dc: DC }) {
             </Select>
           </Form.Item>
           <Space className="w-full" style={{ display: 'flex' }}>
-            <Form.Item name="phase" label="相位"><Select><Select.Option value="single">单相</Select.Option><Select.Option value="three">三相</Select.Option></Select></Form.Item>
+            <Form.Item name="feed_type" label="类型">
+              <Select>
+                <Select.Option value="primary">主路</Select.Option>
+                <Select.Option value="redundant">冗余</Select.Option>
+                <Select.Option value="single">单路</Select.Option>
+              </Select>
+            </Form.Item>
+            <Form.Item name="supply" label="供电类别">
+              <Select>
+                <Select.Option value="ac">AC</Select.Option>
+                <Select.Option value="dc">DC</Select.Option>
+              </Select>
+            </Form.Item>
+          </Space>
+          <Space className="w-full" style={{ display: 'flex' }}>
             <Form.Item name="voltage" label="电压(V)"><InputNumber min={0} step={10} className="w-full" /></Form.Item>
             <Form.Item name="amperage" label="电流(A)"><InputNumber min={0} step={1} className="w-full" /></Form.Item>
+            <Form.Item name="max_utilization_pct" label="最大利用率(%)"><InputNumber min={0} max={100} step={5} className="w-full" /></Form.Item>
           </Space>
-          <Form.Item name="max_power" label="最大功率(W)"><InputNumber min={0} step={100} className="w-full" /></Form.Item>
         </Form>
       </Modal>
     </>
@@ -261,7 +271,7 @@ export function CablesTab({ dc }: { dc: DC }) {
             title: '操作', key: 'action', render: (_: unknown, rec: Cable) => (
               <Space>
                 <Button type="link" size="small" icon={<Edit size={14} />}
-                  onClick={() => { dc.setEditingCable(rec); dc.cableForm.setFieldsValue(rec); dc.setCableModalOpen(true); }}>编辑</Button>
+                  onClick={() => { dc.setEditingCable(rec); dc.cableForm.setFieldsValue(rec as unknown as Parameters<typeof dc.cableForm.setFieldsValue>[0]); dc.setCableModalOpen(true); }}>编辑</Button>
                 <Popconfirm title="确定删除?" onConfirm={() => dc.deleteCable(rec.id)}>
                   <Button type="link" size="small" danger icon={<Trash2 size={14} />}>删除</Button>
                 </Popconfirm>
@@ -270,7 +280,7 @@ export function CablesTab({ dc }: { dc: DC }) {
           },
         ]}
         dataSource={dc.cables.map((c: Cable) => ({ ...c, key: c.id }))}
-        loading={dc.cableLoading}
+        loading={dc.loading}
         pagination={false}
       />
 

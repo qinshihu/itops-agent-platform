@@ -5,7 +5,7 @@ import {
   Search, Eye, EyeOff, Key, Radio,
 } from 'lucide-react';
 import clsx from 'clsx';
-import api from '../../../lib/api';
+import api from '../../../../lib/api';
 import type { SnmpCredential, ApiError } from './types';
 import { VERSIONS, AUTH_PROTOCOLS, PRIV_PROTOCOLS, INITIAL_FORM, type SnmpCredentialForm } from './types';
 
@@ -42,10 +42,10 @@ export function SnmpCredentialsTab({ searchQuery, setSearchQuery }: SnmpCredenti
     }),
     onMutate: () => setTestResult({ host: form.host, status: 'testing' }),
     onSuccess: (res) => {
-      if (res.data.code === 0) {
+      if (res.data?.code === 0) {
         setTestResult({ host: form.host, status: 'success' });
       } else {
-        setTestResult({ host: form.host, status: 'fail', msg: res.data.message || '连接失败' });
+        setTestResult({ host: form.host, status: 'fail', msg: res.data?.message || '连接失败' });
       }
     },
     onError: (err: ApiError) => {

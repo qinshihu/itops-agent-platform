@@ -7,6 +7,11 @@
 # Default behavior: Pulls LATEST images from Aliyun Registry
 #   registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:IT_Onlin-ITOps-{backend|frontend}-latest
 #
+# Design principle: Minimal environment variables, configure via Web UI
+#   - JWT_SECRET is auto-generated and injected (required for first boot)
+#   - All other settings (AI models, notifications, etc.) are configured in the Web UI
+#   - No .env file is created by default
+#
 # Examples:
 #   # Deploy latest version (DEFAULT)
 #   .\deploy.ps1
@@ -51,6 +56,11 @@ Options:
   -FrontendPort Frontend web port (default: 8080)
   -JwtSecret    JWT secret key (auto-generated if not provided)
   -Help         Show this help message
+  -Update       Update mode: restart with new images, clean up old ones
+
+Design Principle:
+  Minimal environment variables. All configuration (AI models,
+  notifications, etc.) is done through the Web UI after deployment.
 
 Examples:
   # Deploy with default settings
@@ -78,72 +88,6 @@ function Write-Info { param($Message) Write-Host "[INFO] $Message" -ForegroundCo
 function Write-Success { param($Message) Write-Host "[SUCCESS] $Message" -ForegroundColor $Green }
 function Write-Warn { param($Message) Write-Host "[WARN] $Message" -ForegroundColor $Yellow }
 function Write-Error-Msg { param($Message) Write-Host "[ERROR] $Message" -ForegroundColor $Red; exit 1 }
-
-# Generate .env file with smart incremental update logic
-function Update-EnvFile {
-    param(
-        [string]$JwtSecret,
-        [string]$FrontendPort
-    )
-    
-    $ExpectedConfig = @{
-        "JWT_SECRET" = $JwtSecret
-        "ADMIN_INITIAL_PASSWORD" = ""
-        "PORT" = "3001"
-        "NODE_ENV" = "production"
-        "ALLOWED_ORIGINS" = "http://localhost:$FrontendPort"
-        "DOUBAO_API_KEY" = ""
-        "DOUBAO_API_BASE" = "https://ark.cn-beijing.volces.com/api/v3"
-        "DOUBAO_MODEL" = "doubao-4o"
-        "OPENAI_API_KEY" = ""
-        "OPENAI_API_BASE" = "https://api.openai.com/v1"
-        "OPENAI_MODEL" = "gpt-4o"
-    }
-    
-    if (Test-Path ".env") {
-        Write-Info "Found existing .env file, performing smart incremental update..."
-        
-        $Content = Get-Content ".env" -Raw
-        foreach ($Key in $ExpectedConfig.Keys) {
-            if ($Content -notmatch "(?m)^$Key=") {
-                Add-Content -Path ".env" -Value "$Key=$($ExpectedConfig[$Key])"
-                Write-Info "Added missing key: $Key"
-            }
-        }
-        Write-Success ".env file updated (preserved your custom configurations)"
-    } else {
-        Write-Info "Creating new .env file..."
-        $EnvContent = @"
-# ITOps Agent Platform - Environment Configuration
-# Generated on $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-
-# JWT Configuration
-JWT_SECRET=$JwtSecret
-
-# Administrator Initial Password (optional - defaults to 'admin')
-# Leave empty to use default 'admin' password
-ADMIN_INITIAL_PASSWORD=
-
-# Server Configuration
-PORT=3001
-NODE_ENV=production
-ALLOWED_ORIGINS=http://localhost:$FrontendPort
-
-# LLM API Configuration (configure at least one)
-# Doubao (豆包)
-# DOUBAO_API_KEY=
-DOUBAO_API_BASE=https://ark.cn-beijing.volces.com/api/v3
-DOUBAO_MODEL=doubao-4o
-
-# OpenAI
-# OPENAI_API_KEY=
-OPENAI_API_BASE=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4o
-"@
-        $EnvContent | Out-File -FilePath ".env" -Encoding utf8 -Force
-        Write-Success ".env file created"
-    }
-}
 
 # Check prerequisites
 Write-Info "Checking prerequisites..."
@@ -192,11 +136,8 @@ Write-Success "Frontend port $FrontendPort is available"
 # Generate JWT secret if not provided
 if ([string]::IsNullOrEmpty($JwtSecret)) {
     $JwtSecret = [System.Guid]::NewGuid().ToString() + [System.Guid]::NewGuid().ToString()
-    Write-Info "Generated JWT secret (will be saved to .env)"
+    Write-Info "Generated JWT secret (stored in deployment compose file)"
 }
-
-# Create/Update .env file
-Update-EnvFile -JwtSecret $JwtSecret -FrontendPort $FrontendPort
 
 # Determine image names (matches CI/CD build format)
 $BackendImage = "$Registry/$Namespace/$Repo`:$ImagePrefix-backend-$Version"
@@ -223,16 +164,11 @@ services:
       - PORT=3001
       - HOST=0.0.0.0
       - DATABASE_PATH=/app/data/app.db
-      - JWT_SECRET=${dollar}{JWT_SECRET}
-      - DOUBAO_API_KEY=${dollar}{DOUBAO_API_KEY:-}
-      - DOUBAO_API_BASE=${dollar}{DOUBAO_API_BASE:-https://ark.cn-beijing.volces.com/api/v3}
-      - DOUBAO_MODEL=${dollar}{DOUBAO_MODEL:-doubao-4o}
-      - OPENAI_API_KEY=${dollar}{OPENAI_API_KEY:-}
-      - OPENAI_API_BASE=${dollar}{OPENAI_API_BASE:-https://api.openai.com/v1}
-      - OPENAI_MODEL=${dollar}{OPENAI_MODEL:-gpt-4o}
-      - ALLOWED_ORIGINS=${dollar}{ALLOWED_ORIGINS:-http://localhost:$FrontendPort}
+      - JWT_SECRET=$JwtSecret
+      - ALLOWED_ORIGINS=http://localhost:$FrontendPort
     volumes:
       - itops-data:/app/data
+      - itops-backups:/app/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})\""]
@@ -240,6 +176,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   frontend:
     image: $FrontendImage
@@ -250,9 +191,16 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
 
 volumes:
   itops-data:
+    driver: local
+  itops-backups:
     driver: local
 
 networks:
@@ -261,7 +209,7 @@ networks:
 "@
 
     $ComposeContent | Out-File -FilePath "docker-compose.deploy.yml" -Encoding utf8 -Force
-    Write-Success "Deployment configuration created"
+    Write-Success "Deployment configuration created (docker-compose.deploy.yml)"
 } else {
     Write-Info "Update mode: skipping compose file generation"
 }
@@ -344,7 +292,8 @@ Write-Host "===========================================" -ForegroundColor $Cyan
 Write-Host ""
 Write-Host "Access URLs:" -ForegroundColor $Yellow
 Write-Host "  Frontend:   http://$ServerIP`:$FrontendPort"
-Write-Host "  Health:    http://$ServerIP`:$BackendPort/health"
+Write-Host "  Backend:    http://$ServerIP`:$BackendPort"
+Write-Host "  Health:     http://$ServerIP`:$BackendPort/health"
 Write-Host ""
 Write-Host "Default Credentials:" -ForegroundColor $Yellow
 Write-Host "  Username: admin"
@@ -352,17 +301,17 @@ Write-Host "  Password: admin"
 Write-Host ""
 Write-Host "IMPORTANT: Change password after first login!" -ForegroundColor $Red
 Write-Host ""
+Write-Host "Next Steps (configure via Web UI):" -ForegroundColor $Yellow
+Write-Host "  1. Visit http://$ServerIP`:$FrontendPort and login with admin/admin"
+Write-Host "  2. Go to Settings → change your password"
+Write-Host "  3. Go to AI Models → configure your preferred AI provider"
+Write-Host "  4. Go to Notifications → configure notification channels"
+Write-Host "  5. Start creating agents and workflows!"
+Write-Host ""
 Write-Host "Quick Commands:" -ForegroundColor $Yellow
 Write-Host "  View status:      docker compose -f docker-compose.deploy.yml ps"
 Write-Host "  View logs:        docker compose -f docker-compose.deploy.yml logs -f"
 Write-Host "  Stop services:    docker compose -f docker-compose.deploy.yml down"
 Write-Host "  Restart services: docker compose -f docker-compose.deploy.yml restart"
-Write-Host ""
-Write-Host "Next Steps:" -ForegroundColor $Yellow
-Write-Host "  1. Visit http://$ServerIP`:$FrontendPort in your browser"
-Write-Host "  2. Login with admin/admin"
-Write-Host "  3. Change your password immediately in Settings"
-Write-Host "  4. Configure your LLM API keys in Settings"
-Write-Host "  5. Start creating agents and workflows!"
 Write-Host ""
 Write-Host "===========================================" -ForegroundColor $Cyan

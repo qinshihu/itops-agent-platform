@@ -5,7 +5,7 @@
 # ============================================================
 # Stage 1: Builder
 # ============================================================
-FROM node:20-alpine AS builder
+FROM node:20.19.5-alpine AS builder
 
 WORKDIR /app
 
@@ -22,8 +22,9 @@ RUN --mount=type=cache,target=/app/.npm-cache \
 # Copy source code
 COPY frontend/ ./
 
-# Build frontend project with TypeScript incremental compilation
-RUN npm run build
+# Type check first, then build
+RUN npx tsc --noEmit
+RUN npx vite build
 
 # ============================================================
 # Stage 2: Production (Nginx)
@@ -32,12 +33,12 @@ FROM nginx:alpine
 
 # Labels for public registry
 LABEL maintainer="谭策 <huawei_network@foxmail.com>" \
-      org.opencontainers.image.title="ITOps Agent Platform Frontend" \
-      org.opencontainers.image.description="Enterprise IT Operations Multi-Agent Automation Platform - Web UI" \
-      org.opencontainers.image.source="https://github.com/qinshihu/itops-agent-platform" \
-      org.opencontainers.image.licenses="MPL-2.0" \
-      org.opencontainers.image.vendor="谭策" \
-      org.opencontainers.image.url="https://www.zjzwfw.cloud/ITOpsAgentinfo"
+    org.opencontainers.image.title="ITOps Agent Platform Frontend" \
+    org.opencontainers.image.description="Enterprise IT Operations Multi-Agent Automation Platform - Web UI" \
+    org.opencontainers.image.source="https://github.com/qinshihu/itops-agent-platform" \
+    org.opencontainers.image.licenses="MPL-2.0" \
+    org.opencontainers.image.vendor="谭策" \
+    org.opencontainers.image.url="https://www.zjzwfw.cloud/ITOpsAgentinfo"
 
 # Copy nginx configuration
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf

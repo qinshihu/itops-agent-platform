@@ -1,0 +1,121 @@
+# ITops Agent — Cursor 入口文件
+# 创建于 2026-07-21（v2 报告 §9.2 P1-#21）
+# 完整规则见 AGENTS.md（如有冲突，以 AGENTS.md 为准）
+
+ITops Agent is a one-stop intelligent ops platform.
+Stack: Node.js + Express + TypeScript + SQLite (backend) / React + Vite + Ant Design + Tailwind (frontend).
+DDD modules: 24 backend modules + 23 frontend modules. See `.trae/rules/architecture.md` §1.2.
+
+## 5 Iron Rules (请严格遵守)
+
+1. **Layered dependency, single direction**: core/ → modules/ → routes/. Never invert.
+   - Allowed: Module A/services → Module B/services (via service layer)
+   - Allowed: modules/<m>/services → repositories/
+   - Forbidden: repositories/ → modules/
+   - Forbidden: core/ → modules/
+   - Forbidden: Module A/routes → Module B/routes
+   - Forbidden: modules/<m>/routes → repositories/ (ADR-016)
+
+2. **Routes layer does only 3 things**:
+   - (1) Parameter validation (Zod)
+   - (1.5) Auth check (requireRole)
+   - (2) Call service
+   - (3) Return response
+   - Never write business logic in routes. Never import repositories directly. Never call utility functions without going through service.
+
+3. **New files must be ≤ 500 lines (excluding comments/blanks)**. If a new file would exceed 500 lines, split it into subdirectories/sub-components. See `frontend/src/modules/ai/pages/agents/tool/` for a 4-file split example.
+
+4. **Don't write test files unless explicitly asked**. The project is in exploration phase; tests are written on demand. Existing tests concentrate in services/ and repositories/.
+
+5. **All reports/plans go to `docs/`**. All ADRs go to `.trae/adr/NNN-<slug>.md` (numbered, see `.trae/adr/README.md`).
+
+## Naming Conventions
+
+| Object | Naming | Example |
+|---|---|---|
+| Tools/Services | camelCase | `agentToolRegistry` |
+| Classes/Interfaces | PascalCase | `AgentTool`, `ToolCallContext` |
+| Constants | UPPER_SNAKE | `MCP_RATE_LIMIT_PER_MINUTE` |
+| Filenames | camelCase.ts | `agentCrudService.ts` |
+| DB tables/columns | snake_case | `audit_logs`, `user_id` |
+| HTTP paths | kebab-case | `/api/v1/agents/tools` |
+
+## Ubiquitous Language (do not use aliases)
+
+| Concept | ✅ Use | ❌ Don't use |
+|---|---|---|
+| Alert | alert | ~~alarm~~ |
+| Work item | task | ~~job~~ |
+| Process chain | workflow | ~~pipeline~~ |
+| Message | notification | ~~notice~~ |
+| Sign-off | approval | ~~review~~ |
+| Auto fix | remediation | ~~fix~~ |
+| AI worker | agent | ~~bot~~ |
+
+## Directory Layout
+
+backend/src/
+├── core/                    # DI container (infra layer)
+├── middleware/              # auth/errorHandler/rateLimiter/trace/validation
+├── repositories/            # Data access (28 .ts + 11 subdirs, only via this layer)
+├── shared/schemas/          # Zod validation (apiValidation.ts central)
+├── modules/<name>/
+│   ├── routes/              # Thin routes
+│   ├── services/            # Thick business logic
+│   ├── repositories/        # Module-private repos (optional)
+│   └── README.md            # Required
+└── app.ts
+
+frontend/src/modules/<name>/
+├── routes.ts                # React.lazy routes
+├── api.ts                   # API wrapper
+├── index.ts                 # barrel export
+├── pages/                   # Page components
+└── README.md                # Required
+
+## Quality Gates
+
+- TypeScript strict mode: `npm run tsc --noEmit` must show 0 errors
+- ESLint: `npm run lint` should pass (0 errors). `no-any` is enforced.
+- Architecture: `npx depcruise --config .dependency-cruiser.json backend/src`
+- Tests: vitest, see `backend/vitest.config.ts` for thresholds
+
+## Common Anti-Patterns (avoid these!)
+
+| ❌ Wrong | ✅ Right |
+|---|---|
+| Business if/else in routes | Move to service layer |
+| `import { repo } from '../../repositories'` in routes | `import { xxxService } from '../services/xxxCrudService'` |
+| `const result: any = await api.get(...)` | `const { data } = await api.get<MyType>(...)` |
+| `localStorage.getItem('token')` | `useAuth()` from `@/contexts/AuthContext` |
+| New file 800 lines un-split | Split per the `tool/` example |
+| Modify `migrations/v001_*.ts` SQL | Create `v0XX_*.ts` instead |
+| Read+modify .trae/rules/ silently | **Must report to user** (see `.trae/rules/top-rules.md`) |
+| `process.env.SOMETHING` | Use settings table, manage from /settings page |
+
+## Workflow on New Task
+
+1. Read this file (you're reading it)
+2. Read relevant module's README.md
+3. Look at existing code in the same module as a template
+4. Decide which module the task belongs to
+5. Read only relevant code, don't blindly read everything
+6. New files must obey the 5 iron rules above
+7. After changes: run lint + tsc
+
+## Detailed Module List & ADRs
+
+See:
+- `.trae/rules/architecture.md` §1.2 (modules count + DDD boundaries)
+- `.trae/adr/README.md` (22+ ADRs)
+- `.trae/rules/frontend.md` (frontend conventions)
+- `AGENTS.md` (this file's superset, always authoritative)
+
+When the user asks to modify module count or add a new module, sync 3 places:
+1. `.trae/rules/architecture.md` §1.2
+2. `.trae/documents/` (if applicable)
+3. `.trae/adr/README.md` (add ADR number)
+
+## Single-Sentence Summary
+
+> Core is "layered + modularized": business logic in services, data access via repositories, routes do validation+forward only. New feature: migration → repository → service → routes → frontend API → frontend page (6 steps).

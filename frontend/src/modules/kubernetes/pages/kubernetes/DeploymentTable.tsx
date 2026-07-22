@@ -16,7 +16,7 @@ interface DeploymentTableProps {
 }
 
 export default function DeploymentTable({
-  _deployments,
+  deployments: _deployments,
   filteredDeployments,
   isLoading,
   isError,

@@ -1,5 +1,5 @@
 import type { Client } from 'ssh2';
-import type { OSType } from '../../../infra/services/commandDispatcher';
+import type { OSType } from '../../../scripts/services/commandDispatcher';
 
 export interface ServerInfo {
   id: string;

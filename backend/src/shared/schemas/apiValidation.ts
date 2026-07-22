@@ -84,6 +84,71 @@ export const agentSchemas = {
   agentId: z.object({
     id: z.string().uuid('无效的Agent ID'),
   }),
+  createAgent: z.object({
+    name: z.string().min(1, 'Agent名称不能为空').max(100),
+    avatar: z.string().max(100).default('🤖'),
+    role: z.string().max(100).optional(),
+    system_prompt: z.string().max(5000).optional(),
+    model: z.string().max(100).default('doubao-4o'),
+    temperature: z.coerce.number().min(0).max(2).default(0.7),
+    enabled: z.coerce.number().int().min(0).max(1).default(1),
+    category: z.string().max(50).optional().nullable(),
+    tags: z.array(z.string()).optional(),
+    description: z.string().max(500).optional().nullable(),
+    api_provider: z.string().max(50).default('doubao'),
+    primary_model_id: z.string().uuid().optional().nullable(),
+    fallback_model_id: z.string().uuid().optional().nullable(),
+  }),
+  updateAgent: z.object({
+    name: z.string().min(1, 'Agent名称不能为空').max(100).optional(),
+    avatar: z.string().max(100).optional(),
+    role: z.string().max(100).optional(),
+    system_prompt: z.string().max(5000).optional(),
+    model: z.string().max(100).optional(),
+    temperature: z.coerce.number().min(0).max(2).optional(),
+    enabled: z.coerce.number().int().min(0).max(1).optional(),
+    category: z.string().max(50).optional().nullable(),
+    tags: z.array(z.string()).optional(),
+    description: z.string().max(500).optional().nullable(),
+    api_provider: z.string().max(50).optional(),
+    primary_model_id: z.string().uuid().optional().nullable(),
+    fallback_model_id: z.string().uuid().optional().nullable(),
+  }),
+  testAgent: z.object({
+    input: z.string().min(1, '测试输入不能为空'),
+    serverId: z.string().uuid().optional(),
+    serverIds: z.array(z.string().uuid()).optional(),
+    context: z.record(z.unknown()).optional(),
+    databaseId: z.string().uuid().optional(),
+  }),
+  listExecutions: z.object({
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    offset: z.coerce.number().int().min(0).default(0),
+    status: z.string().optional(),
+  }),
+  importAgents: z.object({
+    agents: z.array(z.object({
+      name: z.string().min(1, 'Agent名称不能为空').max(100),
+      avatar: z.string().max(100).default('🤖'),
+      role: z.string().max(100).optional(),
+      system_prompt: z.string().max(5000).optional(),
+      model: z.string().max(100).default('doubao-4o'),
+      temperature: z.coerce.number().min(0).max(2).default(0.7),
+      enabled: z.coerce.boolean().default(true),
+      category: z.string().max(50).optional(),
+      tags: z.array(z.string()).optional(),
+      description: z.string().max(500).optional(),
+    })),
+  }),
+  testTool: z.object({
+    toolId: z.string().min(1, '工具ID不能为空'),
+    args: z.record(z.unknown()).optional(),
+  }),
+  listAgentsQuery: z.object({
+    category: z.string().optional(),
+    enabled: z.enum(['true', 'false']).optional(),
+    search: z.string().optional(),
+  }),
 };
 
 export const remediationSchemas = {
@@ -322,5 +387,129 @@ export const taskExtendedSchemas = {
     node_id: z.string().min(1, '节点ID不能为空'),
     action: z.enum(['skip', 'modify']),
     data: z.unknown().optional(),
+  }),
+};
+
+
+// ── MCP 审批流程 schemas（v4 修复，approvalFlow.ts 引用但原本未导出） ──
+
+export const mcpApprovalSchemas = {
+  createTicket: z.object({
+    toolName: z.string().min(1).max(100),
+    userId: z.string().min(1).max(100),
+    reason: z.string().max(500).optional(),
+    ttlMs: z.number().int().min(1000).max(24 * 60 * 60 * 1000).optional(),
+  }),
+  approveTicket: z.object({
+    ticketId: z.string().min(1).max(100),
+    approverId: z.string().min(1).max(100),
+  }),
+  registerExternalServer: z.object({
+    id: z.string().min(1).max(100),
+    name: z.string().min(1).max(100),
+    endpoint: z.string().url().max(500),
+    apiKey: z.string().optional(),
+  }),
+  externalServerId: z.object({
+    id: z.string().min(1).max(100),
+  }),
+};
+
+// ── 告警降噪 schemas（v4 修复，alertNoiseRoutes.ts 引用但原本未导出） ──
+
+export const alertNoiseSchemas = {
+  unsuppress: z.object({
+    fingerprint: z.string().min(1).max(200),
+  }),
+  suppress: z.object({
+    fingerprint: z.string().min(1).max(200),
+    reason: z.string().min(1).max(500),
+    durationMinutes: z.number().int().min(1).max(30 * 24 * 60).optional(),
+  }),
+  cleanup: z.object({
+    daysToKeep: z.number().int().min(1).max(365).optional(),
+  }),
+};
+
+// ── Prometheus 主动查询 schemas（2026-07-22 修复，prometheusRoutes.ts 引用但原本未导出） ──
+
+const prometheusClientOptions = z.object({
+  url: z.string().url('Prometheus URL 必须为合法 URL'),
+  basicAuth: z
+    .object({
+      username: z.string().min(1).max(100),
+      password: z.string().max(500),
+    })
+    .optional(),
+  bearerToken: z.string().max(2000).optional(),
+  timeoutMs: z.number().int().min(1000).max(60000).optional(),
+});
+
+export const prometheusSchemas = {
+  base: prometheusClientOptions,
+  query: prometheusClientOptions.extend({
+    promql: z.string().min(1, 'PromQL 不能为空').max(2000),
+    time: z.string().max(50).optional(),
+  }),
+  queryRange: prometheusClientOptions.extend({
+    promql: z.string().min(1).max(2000),
+    start: z.union([z.string().max(50), z.number()]),
+    end: z.union([z.string().max(50), z.number()]),
+    step: z.union([z.string().max(50), z.number()]),
+  }),
+  series: prometheusClientOptions.extend({
+    match: z.array(z.string().min(1).max(500)).min(1).max(50),
+    start: z.string().max(50).optional(),
+    end: z.string().max(50).optional(),
+  }),
+};
+
+// ── Zabbix 主动查询 schemas（2026-07-22 修复，zabbixRoutes.ts 引用但原本未导出） ──
+
+const zabbixClientOptions = z.object({
+  url: z.string().url('Zabbix API URL 必须为合法 URL'),
+  apiToken: z.string().min(1).max(2000).optional(),
+  timeoutMs: z.number().int().min(1000).max(60000).optional(),
+});
+
+export const zabbixSchemas = {
+  test: zabbixClientOptions,
+  hosts: zabbixClientOptions.extend({
+    filter: z.record(z.unknown()).optional(),
+  }),
+  items: zabbixClientOptions.extend({
+    hostIds: z.array(z.string().min(1).max(100)).optional(),
+    itemIds: z.array(z.string().min(1).max(100)).optional(),
+    output: z.enum(['extend', 'shorten']).optional(),
+    filter: z.record(z.unknown()).optional(),
+  }),
+  history: zabbixClientOptions.extend({
+    itemIds: z.array(z.string().min(1).max(100)).min(1).max(100),
+    timeFrom: z.union([z.string().max(50), z.number()]),
+    timeTill: z.union([z.string().max(50), z.number()]),
+    history: z.number().int().min(0).max(10).optional(),
+    limit: z.number().int().min(1).max(10000).optional(),
+  }),
+  triggers: zabbixClientOptions.extend({
+    triggerIds: z.array(z.string().min(1).max(100)).optional(),
+    hostIds: z.array(z.string().min(1).max(100)).optional(),
+    output: z.enum(['extend', 'shorten']).optional(),
+    filter: z.record(z.unknown()).optional(),
+    onlyActive: z.boolean().optional(),
+  }),
+  problems: zabbixClientOptions.extend({
+    hostIds: z.array(z.string().min(1).max(100)).optional(),
+    severity: z.array(z.number().int().min(0).max(10)).optional(),
+    recent: z.boolean().optional(),
+    limit: z.number().int().min(1).max(10000).optional(),
+  }),
+};
+
+// ── 告警关联 schemas（v4 修复，alertCorrelationRoutes.ts 引用但原本未导出） ──
+
+export const alertCorrelationSchemas = {
+  createGroup: z.object({
+    alert_ids: z.array(z.string().min(1).max(100)).min(2).max(100),
+    title: z.string().min(1).max(200),
   }),
 };

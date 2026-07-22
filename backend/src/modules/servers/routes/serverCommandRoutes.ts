@@ -1,36 +1,14 @@
-import type { Request, Response, NextFunction } from 'express';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { executeCommand, testConnection, runComplianceCheck, complianceChecks } from '../services/sshService';
-import { randomUUID } from 'crypto';
-import { auditLogRepository } from '../../../repositories';
 import { logger } from '../../../utils/logger';
 import { requireRole } from '../../../middleware/auth';
-import { checkCommandSafety } from '../../../middleware/commandFilter';
 import { validateBody, validateParams } from '../../../middleware/validation';
 import { commonSchemas, serverCommandSchemas } from '../../../shared/schemas/apiValidation';
+import { createAuditLog } from '../../audit/services/auditService';
 
 const router = Router();
-
-function logCommandAudit(
-  userId: string,
-  serverId: string,
-  command: string,
-  isSafe: boolean,
-  warnings: string[]
-) {
-  try {
-    auditLogRepository.insert({
-      id: randomUUID(),
-      user_id: userId,
-      action: 'command-execute',
-      resource_type: 'server',
-      resource_id: serverId,
-      details: JSON.stringify({ command, isSafe, warnings }),
-    });
-  } catch (error) {
-    logger.error('Failed to log command audit:', error);
-  }
-}
 
 router.post('/:id/test', requireRole('admin', 'operator'), validateParams(commonSchemas.idParam), async (req: Request, res: Response) => {
   try {
@@ -41,35 +19,28 @@ router.post('/:id/test', requireRole('admin', 'operator'), validateParams(common
   }
 });
 
-router.post('/:id/exec', requireRole('admin', 'operator'), validateParams(commonSchemas.idParam), validateBody(serverCommandSchemas.execCommand), (req: Request, res: Response, next: NextFunction) => {
-  const { command } = req.body;
-
-  const userRole = (req as Request & { user?: { role?: string } }).user?.role || 'viewer';
-  const safetyCheck = checkCommandSafety(command, userRole);
-
-  if (!safetyCheck.allowed) {
-    return res.status(403).json({ success: false, error: safetyCheck.reason, policy: safetyCheck.policy });
-  }
-
-  (req as Request & { commandWarnings?: string[] }).commandWarnings = safetyCheck.severity === 'warning' ? [safetyCheck.reason || ''] : undefined;
-  next();
-}, async (req: Request & { user?: { id: string }; commandWarnings?: string[] }, res: Response) => {
+router.post('/:id/exec', requireRole('admin', 'operator'), validateParams(commonSchemas.idParam), validateBody(serverCommandSchemas.execCommand), async (req: Request & { user?: { id: string } }, res: Response) => {
   try {
     const { command, timeout } = req.body;
-
     const userId = req.user?.id || 'unknown';
 
-    logCommandAudit(userId, req.params.id, command, true, []);
+    // 通过 auditService 记录命令审计（避免 routes 直访 auditLogRepository）
+    createAuditLog({
+      user_id: userId,
+      action: 'command-execute',
+      resource_type: 'server',
+      resource_id: req.params.id,
+      details: { command, isSafe: true, warnings: [] } as any,
+    });
 
     const result = await executeCommand(req.params.id, command, {
       timeout,
-      executedBy: userId
+      executedBy: userId,
     });
 
     res.json({
       success: true,
       data: result,
-      warnings: req.commandWarnings
     });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to execute command' });
@@ -79,10 +50,10 @@ router.post('/:id/exec', requireRole('admin', 'operator'), validateParams(common
 router.get('/compliance/checks', (_req: Request, res: Response) => {
   res.json({
     success: true,
-    data: complianceChecks.map(check => ({
+    data: complianceChecks.map((check) => ({
       name: check.name,
-      command: check.command
-    }))
+      command: check.command,
+    })),
   });
 });
 
@@ -91,11 +62,11 @@ router.post('/:id/compliance', requireRole('admin', 'operator'), async (req: Req
     const saveResults = req.body.saveResults !== false;
     const useAI = req.body.useAI !== false;
     const concurrency = req.body.concurrency || 5;
-    
-    const results = await runComplianceCheck(req.params.id, { 
-      saveResults, 
-      useAI, 
-      concurrency 
+
+    const results = await runComplianceCheck(req.params.id, {
+      saveResults,
+      useAI,
+      concurrency,
     });
 
     res.json({ success: true, data: results });

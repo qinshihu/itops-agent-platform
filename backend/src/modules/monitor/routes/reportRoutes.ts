@@ -1,9 +1,9 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { reportService } from '../../infra/services/reportService';
+import { reportService } from '../services/reportService';
 import { requireRole } from '../../../middleware/auth';
-import { analyticsRepository } from '../../../repositories';
 import { getErrorMessage } from '../../../utils/errorHelpers';
+import { dashboardCrudService } from '../services/dashboardCrudService';
 
 const router = Router();
 
@@ -87,7 +87,7 @@ router.get('/', (req: Request, res: Response) => {
 
 router.get('/analytics', (_req: Request, res: Response) => {
   try {
-    const data = analyticsRepository.getReportAnalytics();
+    const data = dashboardCrudService.getReportAnalytics();
 
     res.json({
       success: true,

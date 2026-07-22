@@ -74,22 +74,39 @@ export default function useDataRoom(): UseDataRoomReturn {
     let cancelled = false;
 
     const load = async () => {
+      // 真实接口路径：/dc/slots/batch（不是 /dc/batch-slots）
       try {
         const [ovRes, rackRes, slotsRes] = await Promise.all([
-          api.get('/dc/overview'),
-          api.get('/dc/racks'),
-          api.get('/dc/batch-slots').catch(() => ({ data: { data: [] } })),
+          api.get('/dc/overview').catch((err: unknown) => {
+            const status = (err as { response?: { status?: number } })?.response?.status;
+            const url = (err as { config?: { url?: string } })?.config?.url;
+            logger.error(`[useDataRoom] /dc/overview 失败: status=${status} url=${url}`, err);
+            throw err;
+          }),
+          api.get('/dc/racks').catch((err: unknown) => {
+            const status = (err as { response?: { status?: number } })?.response?.status;
+            const url = (err as { config?: { url?: string } })?.config?.url;
+            logger.error(`[useDataRoom] /dc/racks 失败: status=${status} url=${url}`, err);
+            throw err;
+          }),
+          api.get('/dc/slots/batch').catch((err: unknown) => {
+            const status = (err as { response?: { status?: number } })?.response?.status;
+            // batch 失败不影响是否演示模式，仅记 warn
+            logger.warn(`[useDataRoom] /dc/slots/batch 失败: status=${status}`);
+            return { data: { data: { slots: [], racks: [], rooms: [] } } };
+          }),
         ]);
 
         if (cancelled) return;
 
-        const ov = ovRes.data.data as OverviewData;
+        const ov = (ovRes.data?.data ?? ovRes.data) as OverviewData;
         setOverview(ov);
         setIsReal(true);
 
-        // 按机柜分组 U 位
+        // 按机柜分组 U 位（/dc/slots/batch 返回 { slots, racks, rooms }）
+        const slotsData = ((slotsRes.data?.data?.slots ?? slotsRes.data?.data ?? []) as RawSlotItem[]);
         const slotsByRack: Record<string, SlotInfo[]> = {};
-        for (const s of (slotsRes.data.data || []) as RawSlotItem[]) {
+        for (const s of slotsData) {
           if (!slotsByRack[s.rack_id]) slotsByRack[s.rack_id] = [];
           slotsByRack[s.rack_id].push({
             id: s.slot_id,
@@ -106,7 +123,7 @@ export default function useDataRoom(): UseDataRoomReturn {
         setRackSlotsMap(slotsByRack);
 
         // 处理机柜列表
-        const rawRacks = (rackRes.data.data || []) as RawRackItem[];
+        const rawRacks = ((rackRes.data?.data ?? rackRes.data) || []) as RawRackItem[];
         if (rawRacks.length > 0) {
           setRacks(rawRacks.map((r: RawRackItem) => ({
             id: r.id,
@@ -123,20 +140,19 @@ export default function useDataRoom(): UseDataRoomReturn {
             sceneZ: r.position_z || 0,
           })));
         } else if (ov.rackData) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          setRacks(ov.rackData.map((r: any, i: number) => ({
+          setRacks(ov.rackData.map((r, i) => ({
             id: r.id || `mock-${i}`,
             name: r.name,
-            roomName: r.room_name || '',
-            roomLabel: r.room_label || '',
-            row: r.row_number || 1,
-            totalU: r.total_u || 42,
-            usedU: r.used_u || 0,
-            deviceCount: r.device_count || 0,
-            alertCount: r.alert_count || 0,
-            deviceStatus: (r.alert_count || 0) > 0 ? 'warning' : 'normal',
-            sceneX: r.position_x || 0,
-            sceneZ: r.position_z || 0,
+            roomName: r.roomName || '',
+            roomLabel: r.roomLabel || '',
+            row: r.row || 1,
+            totalU: r.totalU || 42,
+            usedU: r.usedU || 0,
+            deviceCount: r.deviceCount || 0,
+            alertCount: r.alertCount || 0,
+            deviceStatus: (r.alertCount || 0) > 0 ? 'warning' : 'normal',
+            sceneX: r.sceneX || 0,
+            sceneZ: r.sceneZ || 0,
           })));
         } else {
           setRacks([]);
@@ -165,12 +181,14 @@ export default function useDataRoom(): UseDataRoomReturn {
     api.get('/alerts', { params: { limit: 50, status: 'open' } })
       .then(res => {
         if (cancelled) return;
-        const items = (res.data.data || []) as RawAlertItem[];
+        // ⚠️ 修复：原本写 `(data || [])` 是 typo（data 是外层变量），导致告警永远为空
+        const items = (res.data?.data ?? res.data ?? []) as RawAlertItem[];
         setAlerts(items);
         setAlertsList(items);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (!cancelled) {
+          logger.warn('加载告警失败:', err);
           setAlerts([]);
           setAlertsList([]);
         }
@@ -204,9 +222,9 @@ export default function useDataRoom(): UseDataRoomReturn {
   /** 加载选中机柜的 U 位详情 */
   const fetchRackSlots = useCallback(async (rackId: string) => {
     try {
-      const res = await api.get(`/dc/slots/${rackId}`);
-      const data = (res.data.data || []) as RawSlotItem[];
-      setRackSlots(data.map((s: RawSlotItem) => ({
+      const { data } = await api.get(`/dc/slots/${rackId}`);
+      const slots = (data || []) as RawSlotItem[];
+      setRackSlots(slots.map((s: RawSlotItem) => ({
         id: s.slot_id,
         startU: s.start_u,
         endU: s.end_u,

@@ -23,11 +23,22 @@
 
 本项目采用 [Contributor Covenant](https://www.contributor-covenant.org/) 行为准则。参与本项目即表示你同意遵守其条款。
 
+## 项目许可证
+
+本项目整体采用 **Mozilla Public License 2.0 (MPL-2.0)**（见 [LICENSE](./LICENSE)）。
+
+**关于 `frontend/package.json` 的双声明说明**：
+
+- `"license": "MPL-2.0"` — 仓库整体许可证
+- `"private": true` — **仅阻止 `npm publish` 到 npm registry**，与许可证无关
+
+两者不冲突：MPL-2.0 适用于**源代码分发**，`private: true` 仅控制 **npm 私有包发布**。外部贡献者无需担心"private 是否意味着闭源"，本项目源代码 100% 开源在 GitHub 上。
+
 ## 开发环境搭建
 
 ### 前置要求
 
-- Node.js >= 18.0.0
+- Node.js 20.19.5（与 [.nvmrc](./.nvmrc) 一致，推荐使用 nvm/fnm 管理版本）
 - npm >= 9.0.0
 - Git
 - Docker & Docker Compose（可选，用于容器化部署）
@@ -42,10 +53,7 @@ cd itops-agent-platform
 # 2. 安装依赖
 npm run install:all
 
-# 3. 配置环境变量
-cp .env.example .env
-
-# 4. 启动开发服务器
+# 3. 启动开发服务器（零配置，所有变量有默认值）
 npm run dev
 ```
 
@@ -131,17 +139,42 @@ npm run lint
 
 ### 后端
 
-- 路由文件统一放在 `backend/src/routes/`
-- 业务逻辑放在 `backend/src/services/`
-- 中间件放在 `backend/src/middleware/`
-- 工具函数放在 `backend/src/utils/`
+项目采用 **4A 分层架构 + DDD 领域驱动设计**，共 24 个业务模块：
+
+- **模块入口**：`backend/src/modules/<module>/` — 每个模块是独立的限界上下文
+  - `routes/` — RESTful 路由（只做参数校验 + 调用服务 + 返回结果）
+  - `services/` — 业务逻辑与服务编排
+  - `README.md` — 模块职责与依赖说明
+- **通用基础设施**：
+  - `backend/src/middleware/` — 通用中间件（auth、errorHandler 等）
+  - `backend/src/utils/` — 通用工具函数
+  - `backend/src/repositories/` — 数据仓储层（业务代码必须通过 Repository 访问数据）
+  - `backend/src/core/` — DI 容器与服务注册
+- **架构规则**：
+  - routes 层禁止直接操作 Repository，必须经过 Service 层
+  - 模块间只能通过 services/ 跨模块通信，禁止直接 import 对方 routes/
+  - core/ 禁止 import modules/ 下的任何代码
+  - 详见 [`.trae/rules/architecture.md`](./.trae/rules/architecture.md)
 
 ### 前端
 
-- 页面组件放在 `frontend/src/pages/`
-- 通用组件放在 `frontend/src/components/`
-- 自定义 Hooks 放在 `frontend/src/hooks/`
-- API 调用封装在 `frontend/src/lib/api.ts`
+项目采用 **模块化架构**，共 23 个业务模块：
+
+- **模块入口**：`frontend/src/modules/<module>/` — 每个模块是独立的限界上下文
+  - `pages/` — 页面组件
+  - `components/` — 模块级共享组件
+  - `api.ts` — 模块 API 调用封装
+  - `routes.ts` — 路由定义
+- **通用基础设施**：
+  - `frontend/src/components/` — 跨模块通用组件
+  - `frontend/src/shared/` — 跨模块共享逻辑
+  - `frontend/src/lib/` — 基础库封装（api、errorHandler 等）
+  - `frontend/src/hooks/` — 通用自定义 Hooks
+- **架构规则**：
+  - 必须使用 React.lazy 做代码分割
+  - API 调用统一通过 `@/lib/api` 实例，禁止直接用 axios
+  - 禁止使用 `any` 类型，用 `unknown` 或具体类型替代
+  - 详见 [`.trae/rules/frontend.md`](./.trae/rules/frontend.md)
 
 ## Git 提交规范
 
@@ -152,6 +185,7 @@ npm run lint
 ```
 
 **type 可选值**：
+
 - `feat`: 新功能
 - `fix`: Bug 修复
 - `docs`: 文档更新
@@ -161,6 +195,7 @@ npm run lint
 - `chore`: 构建过程或辅助工具变动
 
 **scope 可选值**：
+
 - `frontend`: 前端相关
 - `backend`: 后端相关
 - `docker`: Docker 配置
@@ -169,6 +204,7 @@ npm run lint
 - `docs`: 文档
 
 **示例**：
+
 ```
 feat(backend): 添加服务器分组管理功能
 fix(frontend): 修复工作流编辑器节点拖拽偏移问题

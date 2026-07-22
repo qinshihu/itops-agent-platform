@@ -14,6 +14,7 @@ vi.mock('../../../models/database', () => {
     default: {
       prepare: vi.fn(() => stmt),
     },
+    performMaintenance: vi.fn(),
   };
 });
 
@@ -24,6 +25,7 @@ vi.mock('../../../utils/logger', () => ({
 vi.mock('../../containers/services/vmManagement', () => ({
   vmManagementService: {
     getVM: vi.fn(),
+    migrateVM: vi.fn(),
   },
 }));
 
@@ -84,6 +86,8 @@ describe('VmMigrationService', () => {
     }
     // Reset singleton state
     (vmMigrationService as any).activeMigrations.clear();
+    // 2026-07-21 修正：mock migrateVM 永远 pending（防止 runRealMigration 立刻 resolve 后从 activeMigrations 删除 task）
+    vi.mocked(vmManagementService.migrateVM).mockImplementation(() => new Promise(() => {}));
     const intervals: Map<string, NodeJS.Timeout> = (vmMigrationService as any).progressIntervals;
     if (intervals) {
       intervals.forEach((iv: NodeJS.Timeout) => clearInterval(iv));
@@ -147,8 +151,12 @@ describe('VmMigrationService', () => {
       expect(task.reason).toBe('scale-up');
       expect(task.startedAt).toBeDefined();
 
-      // Verify DB insert
-      expect(stmt.run).toHaveBeenCalledWith(
+      // Verify DB insert (1st call = INSERT, 2nd call = UPDATE progress=5)
+      // 2026-07-21 修正：生产代码 create() 后会立刻 updateProgress(5)，所以 stmt.run 被调 2 次
+      // SQL 字段顺序：id, vm_id, vm_name, source_host, target_host, platform_id,
+      //               status, progress, reason, error_message, started_at, completed_at
+      // service 显式传 status: 'running'（见 vmMigrationService.ts:56）
+      expect(stmt.run.mock.calls[0]).toEqual([
         task.id,
         'vm-001',
         'test-vm',
@@ -156,9 +164,12 @@ describe('VmMigrationService', () => {
         'host-b',
         'plat-001',
         'running',
+        0, // progress
         'scale-up',
+        null, // error_message
         expect.any(String), // startedAt
-      );
+        null, // completedAt
+      ]);
     });
 
     it('should handle missing source host gracefully', async () => {
@@ -243,7 +254,7 @@ describe('VmMigrationService', () => {
       const result = vmMigrationService.listMigrations('vm-001');
 
       expect(db.prepare).toHaveBeenCalledWith(
-        expect.stringContaining('WHERE vm_id = ?')
+        expect.stringContaining('vm_id = ?')
       );
       expect(result).toHaveLength(1);
     });

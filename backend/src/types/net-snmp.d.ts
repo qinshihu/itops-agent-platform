@@ -7,7 +7,17 @@ declare module 'net-snmp' {
     createV3(target: string, user: string, options: V3SessionOptions): Session;
   };
 
-  export function createReceiver(address: string, port: number, callback: (error: Error | null, data?: TrapData) => void): Receiver;
+  // net-snmp v3.x API: createReceiver(options, callback)
+  // options 是对象 { port, address, transport, ... }
+  // 详见 https://github.com/markabrahamsen/node-net-snmp#createreceiver
+  export interface ReceiverOptions {
+    port?: number;
+    address?: string;
+    transport?: string;
+    family?: 'udp4' | 'udp6';
+    disableFamily?: boolean;
+  }
+  export function createReceiver(options: ReceiverOptions, callback: (error: Error | null, data?: TrapData) => void): Receiver;
   export function createAgent(): any;
   export function isVarbindError(varbind: Varbind): boolean;
   export function varbindError(varbind: Varbind): string;

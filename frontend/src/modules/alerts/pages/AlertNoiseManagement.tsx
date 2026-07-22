@@ -33,23 +33,23 @@ export default function AlertNoiseManagement() {
   const { data: stats } = useQuery<Stats>({
     queryKey: ['alert-noise-stats'],
     queryFn: async () => {
-      const res = await api.get('/alert-noise/stats');
-      return res.data.data;
+      const { data } = await api.get('/alert-noise/stats');
+      return data;
     }
   });
 
   const { data: suppressedAlerts } = useQuery<NoiseAlert[]>({
     queryKey: ['suppressed-alerts'],
     queryFn: async () => {
-      const res = await api.get('/alert-noise/suppressed');
-      return res.data.data || [];
+      const { data } = await api.get('/alert-noise/suppressed');
+      return data || [];
     }
   });
 
   const unsuppressMutation = useMutation({
     mutationFn: async (fingerprint: string) => {
-      const res = await api.post('/alert-noise/unsuppress', { fingerprint });
-      return res.data;
+      const { data } = await api.post('/alert-noise/unsuppress', { fingerprint });
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['alert-noise-stats'] });
@@ -59,8 +59,8 @@ export default function AlertNoiseManagement() {
 
   const suppressMutation = useMutation({
     mutationFn: async ({ fingerprint, reason, duration }: { fingerprint: string; reason: string; duration: number }) => {
-      const res = await api.post('/alert-noise/suppress', { fingerprint, reason, durationMinutes: duration });
-      return res.data;
+      const { data } = await api.post('/alert-noise/suppress', { fingerprint, reason, durationMinutes: duration });
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['alert-noise-stats'] });
@@ -72,8 +72,8 @@ export default function AlertNoiseManagement() {
 
   const cleanupMutation = useMutation({
     mutationFn: async (days: number) => {
-      const res = await api.post('/alert-noise/cleanup', { daysToKeep: days });
-      return res.data;
+      const { data } = await api.post('/alert-noise/cleanup', { daysToKeep: days });
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['alert-noise-stats'] });

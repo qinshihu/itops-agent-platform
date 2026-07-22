@@ -27,6 +27,25 @@ export const roomsRepo = {
     return db.prepare('SELECT * FROM dc_rooms ORDER BY sort_order').all() as DcRoom[];
   },
 
+  /**
+   * 获取机房 3D 场景的布局配置
+   * 返回 { id, name, layout_config: object }[]，layout_config 已 JSON.parse
+   */
+  listLayouts(): Array<{ id: string; name: string; layout_config: Record<string, unknown> }> {
+    const rows = db.prepare(`
+      SELECT id, name, layout_config
+      FROM dc_rooms
+      WHERE layout_config IS NOT NULL AND layout_config != '' AND layout_config != '{}'
+    `).all() as Array<{ id: string; name: string; layout_config: string }>;
+    return rows.map(r => {
+      try {
+        return { id: r.id, name: r.name, layout_config: JSON.parse(r.layout_config) as Record<string, unknown> };
+      } catch {
+        return { id: r.id, name: r.name, layout_config: {} };
+      }
+    });
+  },
+
   /** 导出用：不排序，保留原始顺序 */
   listAll(): DcRoom[] {
     return db.prepare('SELECT * FROM dc_rooms').all() as DcRoom[];
@@ -67,10 +86,28 @@ export const roomsRepo = {
   },
 
   delete(id: string): void {
-    // 级联删除：先删 rack + slot，再删 room
-    db.prepare('DELETE FROM dc_rack_slots WHERE rack_id IN (SELECT id FROM dc_racks WHERE room_id = ?)').run(id);
-    db.prepare('DELETE FROM dc_racks WHERE room_id = ?').run(id);
-    db.prepare('DELETE FROM dc_rooms WHERE id = ?').run(id);
+    // v058 migration 已为 dc_racks.room_id 加 FK ON DELETE CASCADE，
+    // 即可级联 dc_rack_slots、dc_pdus.rack_id (SET NULL)
+    // 但 PDU 不在 v058 的 SET NULL 链路里（PDU 仅当 rack 删除时 SET NULL），
+    // 所以手写事务以确保：
+    //   1) 先清理该机房下所有 PDU 的关联（保留 PDU 记录，仅置 null）
+    //   2) 删 dc_rack_slots（FK 自动级联）
+    //   3) 删 dc_racks（FK 自动级联到 slot）
+    //   4) 删 dc_rooms
+    const tx = db.transaction((roomId: string) => {
+      // PDU.rack_id → null（如果机柜没了，PDU 不必删除）
+      db.prepare(`
+        UPDATE dc_pdus SET rack_id = NULL
+        WHERE rack_id IN (SELECT id FROM dc_racks WHERE room_id = ?)
+      `).run(roomId);
+
+      // 删除该机房下所有机柜 → FK CASCADE 自动清理 slot
+      db.prepare('DELETE FROM dc_racks WHERE room_id = ?').run(roomId);
+
+      // 删除机房本身
+      db.prepare('DELETE FROM dc_rooms WHERE id = ?').run(roomId);
+    });
+    tx(id);
   },
 
   deleteAll(): void {

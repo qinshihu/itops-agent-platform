@@ -70,7 +70,7 @@ export const sshKeysRepo = {
   createPassword(input: {
     id: string;
     name: string;
-    username: string;
+    username?: string | null;
     password: string;
     description?: string | null;
   }): void {

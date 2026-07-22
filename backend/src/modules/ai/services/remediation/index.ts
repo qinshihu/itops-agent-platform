@@ -10,6 +10,7 @@
  */
 
 import type { WorkflowParsed } from '../../../../types';
+import { aiRemediationRepository } from '../../../../repositories/aiRemediationRepository';
 
 // 从子文件导入方法实现
 import {
@@ -111,6 +112,16 @@ class AiRemediationService {
   /** 更新修复记录 */
   updateRecord(record: AiRemediationRecord): void {
     return impl_updateRecord(record);
+  }
+
+  /** 统计：MTTR + 成功率 + 告警降噪率 */
+  getStats() {
+    return aiRemediationRepository.getStats();
+  }
+
+  /** 告警降噪率 */
+  getNoiseFilterRate() {
+    return aiRemediationRepository.getNoiseFilterRate();
   }
 
   /** 获取修复记录 */

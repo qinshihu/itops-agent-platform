@@ -47,15 +47,15 @@ export function useNetworkDevices() {
   // ── 设备列表 ──
   const { data: devices = [], isLoading } = useQuery({
     queryKey: ['network-devices'],
-    queryFn: () => api.get('/network-devices').then(res => res.data.data),
+    queryFn: () => api.get('/network-devices').then(res => res.data),
   });
 
   // ── 设备时间轴 ──
   const { data: deviceTimeline = {} as Record<string, DeviceTimelineEntry> } = useQuery({
     queryKey: ['device-timeline'],
     queryFn: async () => {
-      const res = await api.get('/inspection-center?limit=300');
-      const items = (res.data.data || []) as TimelineItem[];
+      const { data } = await api.get('/inspection-center?limit=300');
+      const items = (data || []) as TimelineItem[];
       const map: Record<string, DeviceTimelineEntry> = {};
       items.forEach((item: TimelineItem) => {
         if (!item.device_id) return;
@@ -197,6 +197,8 @@ export function useNetworkDevices() {
   };
 
   const clearSelection = () => setSelectedDevices(new Set());
+
+  const setSelectAll = (ids: string[]) => setSelectedDevices(new Set(ids));
 
   const handleBatchInspect = () => {
     if (selectedDevices.size === 0) {

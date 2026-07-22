@@ -18,7 +18,15 @@ alerts/
 │   │   ├── useAlertSocket.ts             # WebSocket 实时推送 hook
 │   │   ├── AutomationLogPanel.tsx        # 自动化日志面板
 │   │   └── types.ts                      # 子模块类型
-│   ├── AlertProviders.tsx                # 告警源配置 (636 行)
+│   ├── AlertProviders.tsx                # 告警源配置（精简主入口 163 行）
+│   │   └── alert-providers/
+│   │       ├── types.ts                       # 接口（51 行）
+│   │       ├── providerGuides.ts              # PROVIDER_GUIDES + getFormFields（79 行）
+│   │       ├── useAlertProvidersData.ts       # 全部 hooks + handlers（293 行）
+│   │       ├── ConfiguredAlertSourceList.tsx  # 已配置 list（141 行）
+│   │       ├── AvailableProviderGrid.tsx      # 可用 provider grid（135 行）
+│   │       ├── EditConfigModal.tsx            # 编辑 modal（310 行）
+│   │       └── index.ts                       # barrel（10 行）
 │   ├── AlertMappings.tsx                 # 告警映射
 │   ├── AlertCorrelationGroups.tsx        # 关联规则
 │   ├── AlertAutoAnalysis.tsx             # 自动分析
@@ -29,6 +37,8 @@ alerts/
     ├── InspectionResult.tsx              # 巡检结果
     └── ImpactChain.tsx                   # 影响链
 ```
+
+**最后刷新**：2026-07-22
 
 ## 对应后端
 `backend/src/modules/alerts/`

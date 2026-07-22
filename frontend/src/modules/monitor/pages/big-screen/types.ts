@@ -116,6 +116,15 @@ export interface ServerMetricsData {
   memory_history: Array<{ server_id: string; value: number; timestamp: string }>;
   network_history: Array<{ server_id: string; value: number; timestamp: string }>;
   disk_history: Array<{ server_id: string; value: number; timestamp: string }>;
+  /** 可选：当前选中的服务器 ID（单服务器模式） */
+  selected_server_id?: string;
+  /** 可用服务器列表（用于下拉选择器） */
+  available_servers?: Array<{
+    id: string;
+    name: string;
+    hostname: string;
+    is_local: boolean;
+  }>;
 }
 
 export interface RemediationStats {
@@ -147,7 +156,7 @@ export interface StatCardProps {
   label: string;
   value: string | number;
   subValue?: string;
-  color: string;
+  color: { bg: string; fg: string };
   onClick?: () => void;
 }
 

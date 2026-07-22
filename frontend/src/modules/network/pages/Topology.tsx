@@ -60,8 +60,8 @@ function DeleteDependencyButton({ dependencyId }: { dependencyId: string }) {
   
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.delete(`/topology/dependency/${dependencyId}`);
-      return res.data;
+      const { data } = await api.delete(`/topology/dependency/${dependencyId}`);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['topology'] });
@@ -99,31 +99,31 @@ export default function Topology() {
   const { data: topologyData, isLoading: topologyLoading, refetch: refetchTopology } = useQuery({
     queryKey: ['topology', 'global'],
     queryFn: async () => {
-      const res = await api.get('/topology/global');
-      return res.data.data as TopologyData;
+      const { data } = await api.get('/topology/global');
+      return data as TopologyData;
     },
   });
 
   const { data: dependencies, isLoading: depsLoading } = useQuery({
     queryKey: ['topology', 'dependencies'],
     queryFn: async () => {
-      const res = await api.get('/topology/dependency');
-      return res.data.data as Dependency[];
+      const { data } = await api.get('/topology/dependency');
+      return data as Dependency[];
     },
   });
 
   const { data: servers } = useQuery({
     queryKey: ['servers'],
     queryFn: async () => {
-      const res = await api.get('/servers');
-      return res.data.data as Server[];
+      const { data } = await api.get('/servers');
+      return data as Server[];
     },
   });
 
   const addDependencyMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const res = await api.post('/topology/dependency', data);
-      return res.data;
+      const { data: result } = await api.post('/topology/dependency', data);
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['topology'] });

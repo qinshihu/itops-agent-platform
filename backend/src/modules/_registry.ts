@@ -15,18 +15,24 @@ import { errorHandler, notFoundHandler } from '../middleware/errorHandler';
 // === 模块路由导入（仅从各模块的 routes.ts 导入）===
 import aiRoutes from './ai/routes';
 import alertRoutes, { alertAutoRouter, alertCorrelationRouter, webhookRouter } from './alerts/routes';
+import auditRoutes2 from './audit/routes';
 import autoRoutes from './auto/routes';
 import backupRoutes from './backup/routes';
-import _changeManagementRoutes from './change-management/routes';
-import _configManagementRoutes from './config-management/routes';
+import changeManagementRoutes from './change-management/routes';
+import configManagementRoutes from './config-management/routes';
 import containerRoutes from './containers/routes';
 import databaseRoutes from './database/routes';
 import dcRoutes from './dc/routes';
-import infraRoutes, { linkageRouter } from './infra/routes';
+import importExportRoutes from './import-export/routes';
+import infraRoutes from './infra/routes';
 import kubernetesRoutes from './kubernetes/routes';
+import linkageRoutes from './linkage/routes';
 import monitorRoutes from './monitor/routes';
 import networkRoutes, { networkDiscoveryRouter } from './network/routes';
 import serverRoutes from './servers/routes';
+import settingsRoutes from './settings/routes';
+import scriptsRoutes from './scripts/routes';
+import toolLinksRoutes from './tool-links/routes';
 import workflowRoutes from './workflow/routes';
 import mcpRoutes from './mcp/routes';
 import notificationRoutes from './notification/routes';
@@ -51,24 +57,33 @@ const modules: ModuleConfig[] = [
   // === 受保护路由（需要认证） ===
   { path: '/api/v1', router: aiRoutes },
   { path: '/api/v1', router: alertRoutes },
+  { path: '/api/v1/audit', router: auditRoutes2 },
   { path: '/api/v1', router: autoRoutes },
   { path: '/api/v1', router: backupRoutes },
+  { path: '/api/v1', router: changeManagementRoutes },
+  { path: '/api/v1', router: configManagementRoutes },
   { path: '/api/v1', router: containerRoutes },
   { path: '/api/v1', router: databaseRoutes },
   { path: '/api/v1', router: dcRoutes },
+  { path: '/api/v1', router: importExportRoutes },
   { path: '/api/v1', router: infraRoutes },
   { path: '/api/v1', router: kubernetesRoutes },
+  { path: '/api/v1', router: linkageRoutes },
   { path: '/api/v1', router: monitorRoutes },
   { path: '/api/v1', router: networkRoutes },
   { path: '/api/v1', router: notificationRoutes },
   { path: '/api/v1', router: serverRoutes },
+  { path: '/api/v1', router: settingsRoutes },
+  { path: '/api/v1', router: toolLinksRoutes },
   { path: '/api/v1', router: workflowRoutes },
   { path: '/api/v1/mcp', router: mcpRoutes },
+  // scripts 的 `GET /:id` 通过 onlyUuidId 中间件穿透非 UUID 段（如 /settings, /users），
+  // 因此 userRouter 的注册位置不再关键。保留前置声明以便未来扩展。
   { path: '/api/v1/users', router: userRouter },
+  { path: '/api/v1', router: scriptsRoutes },
 
   // === 受保护特殊路由 ===
   { path: '/api/v1', router: alertAutoRouter },
-  { path: '/api/v1', router: linkageRouter },
   { path: '/api/v1', router: networkDiscoveryRouter },
   { path: '/api/v1', router: alertCorrelationRouter },
 ];
@@ -108,3 +123,4 @@ export function registerAllModules(app: Express): void {
   app.use(notFoundHandler);
   app.use(errorHandler);
 }
+

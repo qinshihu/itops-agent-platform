@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Plus, Play, Eye, Trash2, AlertTriangle, CheckCircle, Clock, Zap, Lightbulb } from 'lucide-react';
 import api from '../../../lib/api';
+import RecommendationCard from '../components/RecommendationCard';
+import { useNavigate } from 'react-router-dom';
 
 interface RootCauseAnalysis {
   id: string;
@@ -21,6 +23,7 @@ interface RootCauseAnalysis {
 
 export default function RootCauseAnalysisPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedRca, setSelectedRca] = useState<RootCauseAnalysis | null>(null);
@@ -33,15 +36,15 @@ export default function RootCauseAnalysisPage() {
   const { data: rcas, isLoading } = useQuery({
     queryKey: ['rootCauseAnalyses'],
     queryFn: async () => {
-      const res = await api.get('/root-cause-analysis');
-      return res.data.data || [];
+      const { data } = await api.get('/root-cause-analysis');
+      return data || [];
     }
   });
 
   const createMutation = useMutation({
     mutationFn: async (rca: Record<string, unknown>) => {
-      const res = await api.post('/root-cause-analysis', rca);
-      return res.data;
+      const { data } = await api.post('/root-cause-analysis', rca);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rootCauseAnalyses'] });
@@ -52,8 +55,8 @@ export default function RootCauseAnalysisPage() {
 
   const analyzeMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.post(`/root-cause-analysis/${id}/analyze`);
-      return res.data;
+      const { data } = await api.post(`/root-cause-analysis/${id}/analyze`);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rootCauseAnalyses'] });
@@ -326,12 +329,31 @@ export default function RootCauseAnalysisPage() {
 
                   {selectedRca.recommendations?.length > 0 && (
                     <div>
-                      <h4 className="font-medium text-text-primary mb-2">修复建议</h4>
-                      <ul className="list-disc list-inside text-text-secondary space-y-1">
+                      <h4 className="font-medium text-text-primary mb-3">修复建议</h4>
+                      <div className="grid gap-3">
                         {selectedRca.recommendations.map((rec, idx) => (
-                          <li key={idx}>{rec}</li>
+                          <RecommendationCard
+                            key={idx}
+                            recommendation={{
+                              id: `${selectedRca.id}-rec-${idx}`,
+                              // 风险等级简单推断：含「重启/删除/修改/格式」等关键词视为高风险
+                              risk: /重启|删除|rm\s|reboot|shutdown|format/i.test(rec) ? 'high' : 'low',
+                              title: `建议 ${idx + 1}`,
+                              // 每个建议作为单一步骤
+                              steps: [{ title: rec }],
+                              auto_executable: !/重启|删除|rm\s|reboot|shutdown|format/i.test(rec),
+                            }}
+                            onExecute={(id) => {
+                              // 低风险建议：跳转到 AI 修复页，让用户在那里触发自动化执行
+                              navigate('/ai-remediations');
+                            }}
+                            onCreateTicket={(id) => {
+                              // 高风险建议：跳转到 AI 修复页，让用户走审批流程
+                              navigate('/ai-remediations');
+                            }}
+                          />
                         ))}
-                      </ul>
+                      </div>
                     </div>
                   )}
                 </>

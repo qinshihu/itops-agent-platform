@@ -1,10 +1,29 @@
-[English](README.en.md) | [中文](README.md)
+[English](README.en.md) | [中文](README.md) | [繁體中文](README.tw.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [Deutsch](README.de.md) | [Français](README.fr.md)
+
+***
+
+**專案正基於 4A 架構框架與 DDD 領域驅動設計進行全面重構。本次重構旨在徹底解耦業務邏輯與技術實現，重塑架構合理性，在提升程式碼可維護性與規範性的同時，賦予系統更強的彈性擴展能力。**
+
+**⚠️ 重構工作量巨大，目前處於漸進式替換階段。近期構建的 Docker 鏡像為過渡態，未經驗證依賴混亂，不建議直接拉取使用。建議一般使用者等待穩定版本發布；具備原始碼除錯能力的開發者可先行基於原始碼構建，並歡迎協助修復臨時性缺陷。**
+
+```bash
+# Linux/Mac 一鍵指令碼部署（推薦）
+curl -sL https://gitee.com/IT_Oline/itops-agent-platform/raw/main/deploy.sh -o deploy.sh && chmod +x deploy.sh && ./deploy.sh
+```
 
 ***
 
 **重要許可證變更通知（2026-05-27）**
 
-本專案自 2026年5月27日 起，所有新提交的程式碼採用 **Mozilla Public License 2.0 (MPL-2.0)** 許可證開源。本專案禁止閉源二次開發、打包銷售、SaaS化營運等商業用途，永久開源。專案屬於成千上萬擁抱開源精神的工程師，而不是一個公司。
+本專案 2026 年 5 月 27 日之前提交的所有程式碼，依舊沿用 MIT 許可證，可按照 MIT 協議規則自由使用、修改、商用分發。
+
+自 2026 年 5 月 27 日起，本專案所有新增、修改的程式碼，統一採用 Mozilla Public License 2.0（MPL-2.0）開源授權，使用者必須嚴格遵循 MPL-2.0 官方協議約束：
+
+若對外分發包含本專案修改程式碼的二進位制包、鏡像、部署程式，必須開源所有修改過的原始檔，同時完整保留原專案版權、許可證宣告，不得抹除出處冒充自研產品；
+允許企業內網私有化部署、內部二次改造自用；允許基於本專案提供部署除錯、技術諮詢、定製開發等人力類付費服務；
+嚴禁僅對本專案原始碼簡單封裝後，閉源打包作為獨立商業化軟體、鏡像產品對外售賣；嚴禁直接基於本專案搭建同類型競品 SaaS 平臺進行商業化運營。
+
+本專案將永久開源，歸屬全體開源技術社群，不會被任何商業公司獨佔買斷。我們鼓勵合規前提下的技術交流、二次迭代與行業落地，共同維護良性開源生態。
 
 ***
 
@@ -433,7 +452,6 @@ curl -sL https://gitee.com/IT_Oline/itops-agent-platform/raw/main/deploy.sh -o d
 ### 方式二：Docker Compose
 
 ```bash
-cp .env.example .env
 docker compose up -d --build
 # 前端: http://localhost:8080
 # 健康檢查: http://localhost:3001/health

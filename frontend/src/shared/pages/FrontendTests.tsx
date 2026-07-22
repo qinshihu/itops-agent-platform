@@ -9,7 +9,6 @@ import {
   FileCode2,
   Boxes,
   Globe,
-  _Shield,
   Database,
   GanttChartSquare,
   Terminal,

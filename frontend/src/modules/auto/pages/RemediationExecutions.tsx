@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
-import { 
-  CheckCircle, 
-  XCircle, 
+import {
+  CheckCircle,
+  XCircle,
   Clock,
   AlertTriangle,
   RefreshCw,
@@ -17,6 +17,27 @@ import {
   CheckSquare,
   ArrowLeftRight
 } from 'lucide-react';
+
+export interface RemediationExecution {
+  id: string;
+  status: string;
+  status_reason?: string;
+  created_at: string;
+  policy_id?: string;
+  policy_name?: string;
+  alert_id?: string;
+  execution_duration_ms?: number;
+  verification_status?: string;
+  verification_completed_at?: string;
+  verification_result?: string | unknown;
+  rollback_triggered?: number;
+  rollback_completed_at?: string;
+  rollback_result?: string | unknown;
+  approval_comment?: string;
+  approved_at?: string;
+  execution_result?: string | unknown;
+  [key: string]: unknown;
+}
 
 export default function RemediationExecutions() {
   const queryClient = useQueryClient();
@@ -34,8 +55,8 @@ export default function RemediationExecutions() {
       if (statusFilter !== 'all') {
         params.status = statusFilter;
       }
-      const res = await api.get('/remediation-executions', { params });
-      return res.data.data;
+      const { data } = await api.get('/remediation-executions', { params });
+      return data;
     }
   });
 
@@ -61,8 +82,8 @@ export default function RemediationExecutions() {
     queryKey: ['remediation-execution-detail', selectedExecutionId],
     queryFn: async () => {
       if (!selectedExecutionId) return null;
-      const res = await api.get(`/remediation-executions/${selectedExecutionId}`);
-      return res.data.data;
+      const { data } = await api.get(`/remediation-executions/${selectedExecutionId}`);
+      return data;
     },
     enabled: !!selectedExecutionId
   });
@@ -147,7 +168,8 @@ export default function RemediationExecutions() {
     });
   };
 
-  const formatDuration = (ms: number) => {
+  const formatDuration = (ms?: number) => {
+    if (ms == null) return '-';
     if (!ms) return '-';
     if (ms < 1000) return `${ms}ms`;
     return `${(ms / 1000).toFixed(1)}s`;
@@ -201,7 +223,7 @@ export default function RemediationExecutions() {
                 </tr>
               </thead>
               <tbody>
-                {data.executions.map((execution: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                {data.executions.map((execution: RemediationExecution) => (
                   <tr key={execution.id} className="border-b border-border/30 hover:bg-slate-700/20 transition-colors">
                     <td className="py-3 px-4">
                       <div className="text-sm text-text-primary">{formatTime(execution.created_at)}</div>

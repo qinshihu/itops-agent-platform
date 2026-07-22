@@ -28,10 +28,10 @@ export function VolumeSection({ endpointId }: VolumeSectionProps) {
   const { data: volumes = [], isLoading: volumesLoading, error: volumesError } = useQuery<VolumeItem[]>({
     queryKey: volumesQueryKey,
     queryFn: async () => {
-      const res = await api.get('/containers/volumes/list', {
+      const { data } = await api.get('/containers/volumes/list', {
         params: { endpointId: endpointId !== 'local' ? endpointId : undefined },
       });
-      return res.data.data || [];
+      return data || [];
     },
   });
 

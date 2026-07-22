@@ -1,7 +1,19 @@
 # Backup 模块
 
+> **DDD 限界上下文**：数据库备份与恢复
+> **聚合根**：`Backup`、`BackupConfig`
+> **最后刷新**：2026-07-22
+
 ## 职责
 数据库备份与恢复：自动备份、手动备份、加密备份、备份恢复。
+
+## 路由端点（受保护）
+
+> `backup/routes.ts` 自身仅挂载 `router.use('/backups', backupRoutes)`，所有路径来自 `backupRoutes.ts`。
+
+| 前缀 | 来源 | 说明 |
+|------|------|------|
+| `/backups/*` | `backupRoutes.ts` | 备份列表 / 创建 / 恢复 / 删除 / 下载 |
 
 ## 内部结构
 ```

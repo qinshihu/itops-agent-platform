@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Activity, Loader2, Plus } from 'lucide-react';
 import clsx from 'clsx';
-import api from '../../../lib/api';
+import api from '../../../../lib/api';
 import type { SnmpTrap } from './types';
 
 export function SnmpTrapsTab() {

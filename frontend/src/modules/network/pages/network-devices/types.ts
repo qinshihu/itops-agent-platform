@@ -87,13 +87,5 @@ export interface DeviceTimelineEntry {
   lastExecution?: TimelineItem;
 }
 
-export const VENDORS = ['all', 'huawei', 'cisco', 'h3c', 'ruijie', 'zte'];
-
-export const VENDOR_LABELS: Record<string, string> = {
-  all: '全部厂商',
-  huawei: '华为',
-  cisco: '思科',
-  h3c: '华三',
-  ruijie: '锐捷',
-  zte: '中兴',
-};
+// 厂商数据已统一在 @/config/vendors，本文件 re-export 以保持旧 import 兼容
+export { VENDORS, VENDOR_LABELS } from '@/config/vendors';

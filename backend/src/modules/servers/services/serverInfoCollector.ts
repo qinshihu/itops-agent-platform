@@ -3,8 +3,8 @@ import { serversRepo } from '../../../repositories/serverRepository';
 import { sshPool } from './sshService';
 import { logger } from '../../../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
-import type { OSType } from '../../infra/services/commandDispatcher';
-import { getCommandTemplates, detectOSType } from '../../infra/services/commandDispatcher';
+import type { OSType } from '../../scripts/services/commandDispatcher';
+import { getCommandTemplates, detectOSType } from '../../scripts/services/commandDispatcher';
 
 interface ServerInfo {
   id: string;

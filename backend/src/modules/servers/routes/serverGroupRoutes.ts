@@ -1,160 +1,128 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Router } from 'express';
-import { randomUUID } from 'crypto';
-import { serverRepository } from '../../../repositories';
-import { logger } from '../../../utils/logger';
 import { validateBody, validateParams } from '../../../middleware/validation';
 import { serverGroupSchemas } from '../../../shared/schemas/apiValidation';
+import { serverGroupCrudService } from '../services/serverGroupCrudService';
 
 const router = Router();
 
 router.get('/', (_req, res) => {
-  const groups = serverRepository.groups.list();
-  res.json({ success: true, data: groups });
+  try {
+    const groups = serverGroupCrudService.listGroups();
+    res.json({ success: true, data: groups });
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to get groups' });
+  }
 });
 
 router.get('/tree', (_req, res) => {
-  const groups = serverRepository.groups.listForTree() as unknown as Array<{ id: string; name: string; description: string | null; parent_id: string | null; sort_order: number; children?: unknown[] }>;
-
-  function buildTree(parentId: string | null): Array<{ id: string; name: string; description: string | null; parent_id: string | null; sort_order: number; children?: unknown[] }> {
-    return groups
-      .filter((g) => (g.parent_id as string | null) === parentId)
-      .map((g) => ({ ...g, children: buildTree(g.id as string) }));
+  try {
+    const tree = serverGroupCrudService.getGroupTree();
+    res.json({ success: true, data: tree });
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to get group tree' });
   }
-
-  res.json({ success: true, data: buildTree(null) });
 });
 
 router.post('/', validateBody(serverGroupSchemas.createGroup), (req, res) => {
-  const { name, description, parent_id, sort_order } = req.body as {
-    name: string;
-    description?: string;
-    parent_id?: string | null;
-    sort_order?: number;
-  };
-
-  const id = randomUUID();
-  serverRepository.groups.create({ id, name, description: description || null, parent_id: parent_id || null, sort_order: sort_order || 0 });
-
-  logger.info(`Server group created: ${name} (${id})`);
-  res.json({ success: true, data: { id, name, description, parent_id, sort_order } });
+  try {
+    const result = serverGroupCrudService.createGroup(req.body);
+    res.json(result);
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to create group' });
+  }
 });
 
 router.put('/:id', validateParams(serverGroupSchemas.groupId), validateBody(serverGroupSchemas.updateGroup), (req, res) => {
-  const { id } = req.params;
-  const { name, description, parent_id, sort_order } = req.body as {
-    name?: string;
-    description?: string;
-    parent_id?: string | null;
-    sort_order?: number;
-  };
-
-  const group = serverRepository.groups.getById(id);
-  if (!group) {
-    res.status(404).json({ success: false, error: '分组不存在' });
-    return;
+  try {
+    const result = serverGroupCrudService.updateGroup(req.params.id, req.body);
+    if (!result.success) {
+      const status = result.error === '分组不存在' ? 404 : 400;
+      return res.status(status).json({ success: false, error: result.error });
+    }
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to update group' });
   }
-
-  if (parent_id === id) {
-    res.status(400).json({ success: false, error: '不能将分组设置为自己的子分组' });
-    return;
-  }
-
-  serverRepository.groups.update(id, {
-    name,
-    description: description !== undefined ? description : null,
-    parent_id: parent_id !== undefined ? parent_id : null,
-    sort_order,
-  });
-
-  logger.info(`Server group updated: ${id}`);
-  res.json({ success: true });
 });
 
 router.delete('/mapping', (req, res) => {
-  const { server_id, group_id } = req.query as { server_id: string; group_id: string };
-
-  if (!server_id || !group_id) {
-    res.status(400).json({ success: false, error: '缺少 server_id 或 group_id' });
-    return;
+  try {
+    const { server_id, group_id } = req.query as { server_id?: string; group_id?: string };
+    const result = serverGroupCrudService.removeMapping(server_id ?? '', group_id ?? '');
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to remove mapping' });
   }
-
-  serverRepository.groups.removeMapping(server_id, group_id);
-  res.json({ success: true });
 });
 
 router.get('/servers/:serverId', (req, res) => {
-  const { serverId } = req.params;
-  const groups = serverRepository.groups.listByServer(serverId);
-  res.json({ success: true, data: groups });
+  try {
+    const groups = serverGroupCrudService.listGroupsByServer(req.params.serverId);
+    res.json({ success: true, data: groups });
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to list groups' });
+  }
 });
 
 router.delete('/:id', (req, res) => {
-  const { id } = req.params;
-
-  const group = serverRepository.groups.getById(id);
-  if (!group) {
-    res.status(404).json({ success: false, error: '分组不存在' });
-    return;
+  try {
+    const result = serverGroupCrudService.deleteGroup(req.params.id);
+    if (!result.success) {
+      const status = result.error === '分组不存在' ? 404 : 400;
+      return res.status(status).json({ success: false, error: result.error });
+    }
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to delete group' });
   }
-
-  const childrenCount = serverRepository.groups.countChildren(id);
-  if (childrenCount > 0) {
-    res.status(400).json({ success: false, error: '请先删除或移动子分组' });
-    return;
-  }
-
-  serverRepository.groups.delete(id);
-
-  logger.info(`Server group deleted: ${id}`);
-  res.json({ success: true });
 });
 
 router.post('/:id/move', validateParams(serverGroupSchemas.groupId), validateBody(serverGroupSchemas.moveGroup), (req, res) => {
-  const { id } = req.params;
-  const { new_parent_id, sort_order } = req.body as {
-    new_parent_id?: string | null;
-    sort_order?: number;
-  };
-
-  const group = serverRepository.groups.getById(id);
-  if (!group) {
-    res.status(404).json({ success: false, error: '分组不存在' });
-    return;
+  try {
+    const { new_parent_id, sort_order } = req.body as { new_parent_id?: string | null; sort_order?: number };
+    const group = serverGroupCrudService.getGroupById(req.params.id);
+    if (!group) {
+      return res.status(404).json({ success: false, error: '分组不存在' });
+    }
+    const result = serverGroupCrudService.moveGroup(
+      req.params.id,
+      new_parent_id ?? null,
+      sort_order !== undefined ? sort_order : (group as { sort_order: number }).sort_order,
+    );
+    if (!result.success) {
+      const status = result.error === '分组不存在' ? 404 : 400;
+      return res.status(status).json({ success: false, error: result.error });
+    }
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to move group' });
   }
-
-  if (new_parent_id === id) {
-    res.status(400).json({ success: false, error: '不能将分组移动到自身' });
-    return;
-  }
-
-  serverRepository.groups.move(id, new_parent_id || null, sort_order !== undefined ? sort_order : group.sort_order);
-
-  logger.info(`Server group moved: ${id}`);
-  res.json({ success: true });
 });
 
 router.post('/mapping', validateBody(serverGroupSchemas.groupMapping), (req, res) => {
-  const { server_id, group_id } = req.body as { server_id: string; group_id: string };
-
-  if (!serverRepository.servers.existsById(server_id)) {
-    res.status(404).json({ success: false, error: '服务器不存在' });
-    return;
+  try {
+    const { server_id, group_id } = req.body as { server_id: string; group_id: string };
+    const result = serverGroupCrudService.addMapping(server_id, group_id);
+    if (!result.success) {
+      return res.status(404).json({ success: false, error: result.error });
+    }
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to add mapping' });
   }
-
-  if (!serverRepository.groups.existsById(group_id)) {
-    res.status(404).json({ success: false, error: '分组不存在' });
-    return;
-  }
-
-  serverRepository.groups.addMapping(server_id, group_id);
-
-  res.json({ success: true });
 });
 
 router.get('/groups/:groupId/servers', (req, res) => {
-  const { groupId } = req.params;
-  const servers = serverRepository.groups.listServersByGroup(groupId);
-  res.json({ success: true, data: servers });
+  try {
+    const servers = serverGroupCrudService.listServersByGroup(req.params.groupId);
+    res.json({ success: true, data: servers });
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to list servers' });
+  }
 });
 
 export default router;

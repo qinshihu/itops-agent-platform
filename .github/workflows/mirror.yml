@@ -20,8 +20,8 @@ jobs:
 
       - name: Setup Git
         run: |
-          git config --global user.name "qinshihu"
-          git config --global user.email "huawei_network@foxmail.com"
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
 
       - name: Push to Gitee
         env:

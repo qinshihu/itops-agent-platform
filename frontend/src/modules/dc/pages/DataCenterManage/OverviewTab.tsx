@@ -2,6 +2,18 @@ import { Card, Row, Col, Statistic, Spin, Empty } from 'antd';
 import { Server, Monitor, Wifi, LayoutGrid, Plus, Thermometer, AlertTriangle, Clock } from 'lucide-react';
 import type { OverviewData, Rack, Room } from './types';
 
+/**
+ * Overview 页面使用的机柜精简类型（来源于后端 overview API 的 rackData 元素）
+ */
+interface RackSummary {
+  id: string;
+  name: string;
+  room_id?: string;
+  total_u?: number;
+  used_u?: number;
+  [key: string]: unknown;
+}
+
 interface OverviewTabProps {
   overview: OverviewData | null;
   rooms: Room[];
@@ -12,7 +24,7 @@ interface OverviewTabProps {
 }
 
 export default function OverviewTab({
-  overview, rooms, _racks, rackAlertMap,
+  overview, rooms, racks, rackAlertMap,
   onAddRoom, onSelectRack,
 }: OverviewTabProps) {
   if (!overview) return <Spin className="flex justify-center py-20" />;
@@ -39,13 +51,12 @@ export default function OverviewTab({
   }
 
   const { summary, rackData } = overview;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const roomsGrouped: Record<string, any[]> = {};
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (rackData || []).forEach((r: any) => {
-    const roomKey = r.room_id || 'unknown';
+  const roomsGrouped: Record<string, RackSummary[]> = {};
+  (rackData || []).forEach((r) => {
+    const rack = r as RackSummary;
+    const roomKey = rack.room_id ?? 'unknown';
     if (!roomsGrouped[roomKey]) roomsGrouped[roomKey] = [];
-    roomsGrouped[roomKey].push(r);
+    roomsGrouped[roomKey].push(rack);
   });
 
   return (
@@ -58,8 +69,30 @@ export default function OverviewTab({
         <Col span={3}><Card size="small"><Statistic title="在线" value={summary?.onlineDevices || 0} valueStyle={{ color: '#52c41a' }} prefix={<Wifi size={14} />} /></Card></Col>
         <Col span={3}><Card size="small"><Statistic title="告警" value={summary?.alertDevices || 0} valueStyle={{ color: summary?.alertDevices ? '#ff4d4f' : undefined }} prefix={<AlertTriangle size={14} />} /></Card></Col>
         <Col span={3}><Card size="small"><Statistic title="离线" value={summary?.offlineDevices || 0} valueStyle={{ color: '#ff4d4f' }} prefix={<Clock size={14} />} /></Card></Col>
-        <Col span={3}><Card size="small"><Statistic title="温度" value={summary?.avgTemp ? `${summary.avgTemp.toFixed(1)}°C` : 'N/A'} prefix={<Thermometer size={14} />} /></Card></Col>
-        <Col span={3}><Card size="small"><Statistic title="湿度" value={summary?.avgHumidity ? `${summary.avgHumidity.toFixed(1)}%` : 'N/A'} prefix={<Thermometer size={14} />} /></Card></Col>
+        <Col span={3}>
+          <Card size="small">
+            <Statistic
+              title="温度"
+              value={summary?.avgTemp ? `${summary.avgTemp.toFixed(1)}°C` : '—'}
+              valueStyle={{
+                color: summary?.avgTemp && (summary.avgTemp < 18 || summary.avgTemp > 28) ? '#ff4d4f' : '#52c41a',
+              }}
+              prefix={<Thermometer size={14} />}
+            />
+          </Card>
+        </Col>
+        <Col span={3}>
+          <Card size="small">
+            <Statistic
+              title="湿度"
+              value={summary?.avgHumidity ? `${summary.avgHumidity.toFixed(1)}%` : '—'}
+              valueStyle={{
+                color: summary?.avgHumidity && (summary.avgHumidity < 30 || summary.avgHumidity > 70) ? '#ff4d4f' : '#52c41a',
+              }}
+              prefix={<Thermometer size={14} />}
+            />
+          </Card>
+        </Col>
       </Row>
 
       {/* 机柜热力图 */}
@@ -80,8 +113,7 @@ export default function OverviewTab({
                     {roomInfo?.label || roomInfo?.name || roomId}
                   </h4>
                   <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 lg:grid-cols-16 gap-1.5">
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    {roomRacks.map((rack: any) => {
+                    {roomRacks.map((rack) => {
                       const totalU = rack.total_u || 42;
                       const usedU = rack.used_u || 0;
                       const util = totalU > 0 ? Math.round((usedU / totalU) * 100) : 0;
@@ -99,7 +131,7 @@ export default function OverviewTab({
                           className={`${bg} border border-gray-700/50 rounded cursor-pointer
                             hover:border-cyan-500/60 hover:shadow-[0_0_10px_rgba(0,200,255,0.15)]
                             transition-all text-center py-1.5 px-1 relative group`}
-                          onClick={() => onSelectRack(rack)}
+                          onClick={() => onSelectRack(rack as unknown as Rack)}
                         >
                           <div className="text-[10px] text-text-secondary truncate" title={rack.name}>
                             {rack.name}

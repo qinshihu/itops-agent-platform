@@ -46,24 +46,26 @@ export function useAgents() {
       const params: Record<string, string> = {};
       if (selectedCategory) params.category = selectedCategory;
       if (searchQuery) params.search = searchQuery;
-      const res = await api.get('/agents', { params });
-      return res.data.data as Agent[];
+      const { data } = await api.get('/agents', { params });
+      // v4 修复：api 拦截器已剥外层 data，这里 data 就是后端的 data 字段（即数组）
+      // 原代码 `data?.items || []` 永远走兜底空数组，导致 useAgents 模式下完全不显示 agent
+      return (Array.isArray(data) ? data : []) as Agent[];
     },
   });
 
   const { data: servers } = useQuery({
     queryKey: ['servers'],
     queryFn: async () => {
-      const res = await api.get('/servers');
-      return res.data.data as Server[];
+      const { data } = await api.get('/servers');
+      return (Array.isArray(data) ? data : []) as Server[];
     },
   });
 
   const { data: dbConnections } = useQuery({
     queryKey: ['db-connections'],
     queryFn: async () => {
-      const res = await api.get('/db-connections');
-      return res.data.data as DbConnection[];
+      const { data } = await api.get('/db-connections');
+      return (Array.isArray(data) ? data : []) as DbConnection[];
     },
   });
 
@@ -83,8 +85,8 @@ export function useAgents() {
       const payload: Record<string, unknown> = { input };
       if (serverIds && serverIds.length > 0) payload.serverIds = serverIds;
       if (databaseId) payload.databaseId = databaseId;
-      const res = await api.post(`/agents/${agentId}/test`, payload);
-      return res.data.data;
+      const { data } = await api.post(`/agents/${agentId}/test`, payload);
+      return data;
     },
   });
 

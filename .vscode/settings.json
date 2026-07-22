@@ -1,0 +1,74 @@
+{
+  "markdown.validate.enabled": true,
+
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.formatOnSave": true,
+  "editor.formatOnPaste": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "never"
+  },
+  "editor.rulers": [100],
+  "editor.bracketPairColorization.enabled": true,
+
+  "files.eol": "\n",
+  "files.encoding": "utf8",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.exclude": {
+    "**/.git": true,
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/coverage": true,
+    "**/.next": true
+  },
+
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "javascript.preferences.importModuleSpecifier": "relative",
+  "javascript.updateImportsOnFileMove.enabled": "always",
+
+  "eslint.validate": ["javascript", "typescript", "typescriptreact"],
+  "eslint.workingDirectories": ["./backend", "./frontend"],
+
+  "prettier.requireConfig": true,
+
+  "tailwindCSS.includeLanguages": {
+    "typescript": "javascript",
+    "typescriptreact": "javascript"
+  },
+  "tailwindCSS.experimental.classRegex": [["clsx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]],
+
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/coverage": true,
+    "**/.git": true,
+    "**/data": true
+  },
+
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.wordWrap": "on"
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "python.defaultInterpreterPath": "D:\\kaifahuanjing\\Python313\\python.exe",
+  "python.analysis.extraPaths": [],
+  "python.linting.enabled": false
+}

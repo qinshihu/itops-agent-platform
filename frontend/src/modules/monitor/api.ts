@@ -1,91 +1,129 @@
 /**
- * Monitor 模块 API 服务层
- * 封装仪表盘统计、报告管理、成本分析相关端点
+ * monitor 模块 API 封装
+ *
+ * 仅封装 monitor 域的接口（/dashboard/*、/cost-analysis/*、/monitor/zabbix/*、
+ *   /monitor/prometheus/*、/reports/*、/trends/*）。
+ * 跨模块调用（如 /agents、/servers、/tasks、/alerts、/knowledge、/workflows）
+ *   不在本文件，调用方应改用对应模块的 api（如 agentsApi、serversApi 等）。
  */
 
-import api from '@/lib/api';
-import type { Dashboard as _Dashboard, Report as _Report, CostEntry as _CostEntry } from '../../types/monitor';
+import api from '../../lib/api';
 
 // ============================================================
 // 类型定义
 // ============================================================
 
-// ── 仪表盘统计 ──
-
-export interface DashboardFullData {
-  [key: string]: unknown;
+// Dashboard / BigScreen
+export interface DashboardStats {
+  servers: { total: number; enabled: number };
+  agents: { total: number; enabled: number };
+  tasks: { total: number; running: number; completed: number; successRate: number };
+  alerts: { active: number; critical: number; high: number };
 }
 
-export interface AlertTrends {
-  [key: string]: unknown;
+export interface TaskSummary {
+  id: string;
+  name: string;
+  status: string;
+  created_at: string;
 }
 
-export interface TaskTrends {
-  [key: string]: unknown;
+export interface AlertSummary {
+  id: string;
+  title: string;
+  severity: string;
+  status: string;
+  created_at: string;
 }
 
-export interface AgentStats {
-  [key: string]: unknown;
+export interface ServerSummary {
+  id: string;
+  name: string;
+  enabled: number;
 }
 
-export interface TaskDistribution {
-  [key: string]: unknown;
+export interface DashboardFullResponse {
+  stats: DashboardStats;
+  recentTasks: TaskSummary[];
+  recentAlerts: AlertSummary[];
+  servers: ServerSummary[];
+}
+
+export interface TrendPoint {
+  time_bucket: string;
+  total: number;
+}
+
+export interface AgentStatEntry {
+  id: string;
+  name: string;
+  avatar: string;
+  enabled: number;
+  total_executions: number;
+  successRate?: number;
+}
+
+export interface AgentStatsResponse {
+  agents: AgentStatEntry[];
+  overall: {
+    totalExecutions: number;
+    totalSuccess: number;
+    overallSuccessRate: number;
+    todayExecutions: number;
+  };
+}
+
+export interface TaskDistributionResponse {
+  byStatus: Array<{ status: string; count: number }>;
+  byWorkflow: Array<{ name: string; count: number }>;
+}
+
+export interface RemediationExecution {
+  id: string;
+  policy_name: string;
+  status: string;
 }
 
 export interface RemediationStats {
-  [key: string]: unknown;
+  today: { total: number; success_rate: number; failed: number };
+  waiting_approval: number;
+  recent_executions: RemediationExecution[];
 }
 
-export interface ServerMetrics {
-  [key: string]: unknown;
+export interface ServerMetricRow {
+  server_id: string;
+  server_name: string;
+  cpu_usage: number | null;
+  memory_usage: number | null;
+  network_in_mbps: number | null;
+  network_out_mbps: number | null;
+  disk_usage: number | null;
+}
+
+export interface ServerHistoryPoint {
+  server_id: string;
+  value: number;
+  timestamp: string;
+}
+
+export interface ServerMetricsData {
+  has_real_data: boolean;
+  available_servers: ServerMetricRow[];
+  servers: ServerMetricRow[];
+  cpu_history: ServerHistoryPoint[];
+  memory_history: ServerHistoryPoint[];
+  network_history: ServerHistoryPoint[];
+  disk_history: ServerHistoryPoint[];
 }
 
 export interface SlaStats {
-  [key: string]: unknown;
+  mttr_minutes?: number;
+  uptime_percentage?: number;
+  avg_response_seconds?: number;
+  alert_resolution_rate?: number;
 }
 
-// ── 报告 ──
-
-export interface ReportTemplate {
-  id: string;
-  name: string;
-  description?: string;
-  type: 'incident' | 'inspection' | 'change';
-  content: string;
-  variables: string[];
-  [key: string]: unknown;
-}
-
-export interface ReportTemplateInput {
-  name: string;
-  description?: string;
-  type: 'incident' | 'inspection' | 'change';
-  content: string;
-  variables: string[];
-}
-
-export interface ReportRecord {
-  id: string;
-  [key: string]: unknown;
-}
-
-export interface ReportAnalytics {
-  [key: string]: unknown;
-}
-
-export interface ScheduledReport {
-  id: string;
-  [key: string]: unknown;
-}
-
-export interface GenerateReportInput {
-  templateId: string;
-  variables: Record<string, string>;
-  format?: string;
-}
-
-// ── 成本分析 ──
-
+// Cost Analysis
 export interface ContainerCost {
   name: string;
   host: string;
@@ -122,143 +160,259 @@ export interface CostSummary {
   idleWaste: number;
 }
 
+// Reports
+export interface ReportTemplate {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  content: string;
+  variables: string[];
+  is_preset?: boolean;
+}
+
+export interface GeneratedReport {
+  id: string;
+  name: string;
+  type: string;
+  format: string;
+  content?: string;
+  variables?: Record<string, string>;
+  created_at: string;
+}
+
+export interface ScheduledReport {
+  id: string;
+  name: string;
+  format: string;
+  enabled: boolean;
+  cron_expression: string;
+  last_generated?: string;
+  recipients?: string[];
+}
+
+export interface ReportAnalytics {
+  total_reports: number;
+  total_templates: number;
+  by_type: Record<string, number>;
+  by_format: Record<string, number>;
+  recent_activity: Array<{ date: string; count: number }>;
+}
+
+// Trends（components/TrendCharts 使用）
+export interface InspectionTrendPoint {
+  date: string;
+  total: number;
+  passed: number;
+  failed: number;
+}
+
+export interface TrendSummary {
+  total_inspections: number;
+  pass_rate: number;
+  avg_duration_seconds: number;
+}
+
+// Prometheus
+export interface PromAuthConfig {
+  url: string;
+  username?: string;
+  password?: string;
+  bearerToken?: string;
+  timeoutMs?: string | number;
+}
+
+export interface PromResponse {
+  status: 'success' | 'error';
+  data?: { resultType: string; result: Array<Record<string, unknown>> };
+  errorType?: string;
+  error?: string;
+}
+
+// Zabbix
+export interface ZabbixAuthConfig {
+  url: string;
+  username?: string;
+  password?: string;
+  apiToken?: string;
+  authMode: 'password' | 'token';
+  timeoutMs: number;
+}
+
+export interface ZabbixResponse<T = unknown> {
+  result: T[];
+  error?: string;
+}
+
+export interface ZabbixHost { hostid: string; host: string; name: string; status?: string; }
+export interface ZabbixItem { itemid: string; hostid: string; name: string; key_: string; }
+export interface ZabbixTrigger { triggerid: string; description: string; priority: string; value?: string; }
+export interface ZabbixProblem { eventid: string; name: string; severity: string; acknowledged?: string; }
+export interface ZabbixHistoryRow { itemid: string; value: string; clock: string; ns?: string; }
+
 // ============================================================
-// monitorApi 对象
+// API 封装
 // ============================================================
 
 export const monitorApi = {
-  // ── 仪表盘统计 ──
-
-  /** 获取完整仪表盘数据 */
-  async getDashboardFull(): Promise<DashboardFullData> {
+  // ---------- Dashboard / BigScreen ----------
+  async getFullDashboard(): Promise<DashboardFullResponse> {
     const { data } = await api.get('/dashboard/full');
-    return data.data;
+    return data;
   },
 
-  /** 获取告警趋势 */
-  async getAlertTrends(): Promise<AlertTrends> {
+  async getAlertTrends(): Promise<TrendPoint[]> {
     const { data } = await api.get('/dashboard/alert-trends');
-    return data.data;
+    return data;
   },
 
-  /** 获取任务趋势 */
-  async getTaskTrends(): Promise<TaskTrends> {
+  async getTaskTrends(): Promise<TrendPoint[]> {
     const { data } = await api.get('/dashboard/task-trends');
-    return data.data;
+    return data;
   },
 
-  /** 获取 Agent 统计 */
-  async getAgentStats(): Promise<AgentStats> {
+  async getAgentStats(): Promise<AgentStatsResponse> {
     const { data } = await api.get('/dashboard/agent-stats');
-    return data.data;
+    return data;
   },
 
-  /** 获取任务分布 */
-  async getTaskDistribution(): Promise<TaskDistribution> {
+  async getTaskDistribution(): Promise<TaskDistributionResponse> {
     const { data } = await api.get('/dashboard/task-distribution');
-    return data.data;
+    return data;
   },
 
-  /** 获取修复统计 */
   async getRemediationStats(): Promise<RemediationStats> {
     const { data } = await api.get('/dashboard/remediation-stats');
-    return data.data;
+    return data;
   },
 
-  /** 获取服务器指标 */
-  async getServerMetrics(): Promise<ServerMetrics> {
-    const { data } = await api.get('/dashboard/server-metrics');
-    return data.data;
+  /**
+   * 服务器资源监控数据
+   * @param serverId 'auto' = 后端自动选本机；'__all__' 或 undefined = 全部聚合；具体 id = 单服务器
+   */
+  async getServerMetrics(serverId: 'auto' | '__all__' | string = '__all__'): Promise<ServerMetricsData> {
+    let url = '/dashboard/server-metrics';
+    if (serverId === 'auto') {
+      url += '?autoSelectLocal=1';
+    } else if (serverId !== '__all__') {
+      url += `?serverId=${encodeURIComponent(serverId)}`;
+    }
+    const { data } = await api.get(url);
+    return data;
   },
 
-  /** 获取 SLA 统计 */
   async getSlaStats(): Promise<SlaStats> {
     const { data } = await api.get('/dashboard/sla-stats');
-    return data.data;
+    return data;
   },
 
-  /** 获取仪表盘联动数据 */
-  async getDashboardLinkage(): Promise<unknown> {
-    const { data } = await api.get('/dashboard/linkage');
-    return data.data;
+  // ---------- Cost Analysis ----------
+  async getContainerCosts(): Promise<ContainerCost[]> {
+    const { data } = await api.get('/cost-analysis/containers');
+    return data || [];
   },
 
-  // ── 报告 ──
+  async getVMCosts(): Promise<VMCost[]> {
+    const { data } = await api.get('/cost-analysis/vms');
+    return data || [];
+  },
 
-  /** 获取报告模板列表 */
+  async getCostRecommendations(): Promise<CostRecommendation[]> {
+    const { data } = await api.get('/cost-analysis/recommendations');
+    return data || [];
+  },
+
+  async getCostSummary(): Promise<CostSummary> {
+    const { data } = await api.get('/cost-analysis/summary');
+    return data || { containerMonthly: 0, vmMonthly: 0, totalMonthly: 0, idleWaste: 0 };
+  },
+
+  // ---------- Reports ----------
   async listReportTemplates(): Promise<ReportTemplate[]> {
     const { data } = await api.get('/reports/templates');
-    return data.data || [];
+    return data || [];
   },
 
-  /** 获取报告列表 */
-  async listReports(): Promise<ReportRecord[]> {
-    const { data } = await api.get('/reports');
-    return data.data || [];
+  async createReportTemplate(template: Omit<ReportTemplate, 'id' | 'is_preset'>): Promise<ReportTemplate> {
+    const { data } = await api.post('/reports/templates', template);
+    return data;
   },
 
-  /** 获取报告分析统计 */
-  async getReportAnalytics(): Promise<ReportAnalytics> {
-    const { data } = await api.get('/reports/analytics');
-    return data.data;
-  },
-
-  /** 获取定时报告列表 */
-  async listScheduledReports(): Promise<ScheduledReport[]> {
-    const { data } = await api.get('/reports/scheduled/all');
-    return data.data || [];
-  },
-
-  /** 创建报告模板 */
-  async createReportTemplate(input: ReportTemplateInput): Promise<ReportTemplate> {
-    const { data } = await api.post('/reports/templates', input);
-    return data.data;
-  },
-
-  /** 生成报告 */
-  async generateReport(input: GenerateReportInput): Promise<ReportRecord> {
-    const { data } = await api.post('/reports/generate', input);
-    return data.data;
-  },
-
-  /** 删除报告模板 */
   async deleteReportTemplate(id: string): Promise<void> {
     await api.delete(`/reports/templates/${id}`);
   },
 
-  /** 导出报告（返回 Blob） */
-  async exportReport(reportId: string, format: string): Promise<Blob> {
-    const { data } = await api.get(`/reports/${reportId}/export`, {
-      params: { format },
-      responseType: 'blob',
-    });
+  async listReports(): Promise<GeneratedReport[]> {
+    const { data } = await api.get('/reports');
+    return data || [];
+  },
+
+  async generateReport(params: {
+    templateId: string;
+    variables: Record<string, string>;
+    format?: 'markdown' | 'pdf' | 'word';
+  }): Promise<GeneratedReport> {
+    const { data } = await api.post('/reports/generate', { ...params, format: params.format || 'markdown' });
     return data;
   },
 
-  // ── 成本分析 ──
-
-  /** 获取容器成本 */
-  async listContainerCosts(): Promise<ContainerCost[]> {
-    const { data } = await api.get('/cost-analysis/containers');
-    return data.data;
+  async exportReport(reportId: string, format: 'markdown' | 'pdf' | 'word' = 'markdown'): Promise<Blob> {
+    const response = await api.get(`/reports/${reportId}/export?format=${format}`, { responseType: 'blob' });
+    return response.data;
   },
 
-  /** 获取虚拟机成本 */
-  async listVmCosts(): Promise<VMCost[]> {
-    const { data } = await api.get('/cost-analysis/vms');
-    return data.data;
+  async getReportAnalytics(): Promise<ReportAnalytics> {
+    const { data } = await api.get('/reports/analytics');
+    return data;
   },
 
-  /** 获取成本优化建议 */
-  async listCostRecommendations(): Promise<CostRecommendation[]> {
-    const { data } = await api.get('/cost-analysis/recommendations');
-    return data.data;
+  async listScheduledReports(): Promise<ScheduledReport[]> {
+    const { data } = await api.get('/reports/scheduled/all');
+    return data || [];
   },
 
-  /** 获取成本汇总 */
-  async getCostSummary(): Promise<CostSummary> {
-    const { data } = await api.get('/cost-analysis/summary');
-    return data.data;
+  // ---------- Trends（TrendCharts 组件使用）----------
+  async getInspectionHistory(params: { days?: number } = {}): Promise<InspectionTrendPoint[]> {
+    const { data } = await api.get('/trends/inspection-history', { params });
+    return data || [];
+  },
+
+  async getTrendSummary(): Promise<TrendSummary> {
+    const { data } = await api.get('/trends/summary');
+    return data;
+  },
+
+  // ---------- Prometheus ----------
+  async testPrometheus(auth: PromAuthConfig): Promise<{ success: boolean; message?: string }> {
+    const { data } = await api.post('/monitor/prometheus/test', auth);
+    return data;
+  },
+
+  async queryPrometheus(
+    auth: PromAuthConfig,
+    promql: string,
+    range?: { start: string; end: string; step: string },
+  ): Promise<PromResponse> {
+    const endpoint = range ? '/monitor/prometheus/query-range' : '/monitor/prometheus/query';
+    const body = range ? { ...auth, query: promql, ...range } : { ...auth, query: promql };
+    const { data } = await api.post(endpoint, body);
+    return data;
+  },
+
+  // ---------- Zabbix ----------
+  async callZabbix<T = unknown>(
+    endpoint: 'test' | 'hosts' | 'items' | 'triggers' | 'problems' | 'history',
+    payload: Record<string, unknown>,
+  ): Promise<T[]> {
+    const { data } = await api.post(`/monitor/zabbix/${endpoint}`, payload);
+    const body = data as { success: boolean; data?: ZabbixResponse<T>; error?: string };
+    if (!body.success || !body.data) {
+      throw new Error(body.error || 'Zabbix 请求失败');
+    }
+    if (body.data.error) {
+      throw new Error(body.data.error);
+    }
+    return body.data.result ?? [];
   },
 };
 

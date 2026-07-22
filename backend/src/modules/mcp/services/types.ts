@@ -13,7 +13,7 @@ import { z } from 'zod';
 // ============================================================
 
 /** MCP 工具输入参数（动态键值对，运行时由 Zod Schema 校验） */
-export type ToolInput = Record<string, unknown>;
+export type ToolInput = Record<string, any>;
 
 /** MCP 工具结构化输出数据（动态键值对） */
 export type ToolOutput = Record<string, unknown>;

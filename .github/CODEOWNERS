@@ -20,6 +20,31 @@
 /backend/src/modules/alerts/           @tance
 /backend/src/modules/auto/             @tance
 
+# 基础设施与安全模块
+/backend/src/modules/auth/             @tance
+/backend/src/modules/audit/            @tance
+/backend/src/modules/settings/         @tance
+
+# 资源管理模块
+/backend/src/modules/servers/          @tance
+/backend/src/modules/containers/       @tance
+/backend/src/modules/kubernetes/       @tance
+/backend/src/modules/network/          @tance
+/backend/src/modules/database/         @tance
+/backend/src/modules/dc/               @tance
+
+# 业务支撑模块
+/backend/src/modules/notification/     @tance
+/backend/src/modules/monitor/          @tance
+/backend/src/modules/backup/           @tance
+/backend/src/modules/change-management/  @tance
+/backend/src/modules/config-management/  @tance
+/backend/src/modules/import-export/    @tance
+/backend/src/modules/scripts/          @tance
+/backend/src/modules/tool-links/       @tance
+/backend/src/modules/linkage/          @tance
+/backend/src/modules/infra/            @tance
+
 # 前端核心
 /frontend/src/lib/             @tance
 /frontend/src/contexts/        @tance

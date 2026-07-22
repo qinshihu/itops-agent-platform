@@ -1,0 +1,136 @@
+# ITops Agent — Aider 配置文件
+# 创建于 2026-07-21（v2 报告 §9.2 P1-#22）
+# 完整规则见 AGENTS.md（如有冲突，以 AGENTS.md 为准）
+# Aider 用 YAML，TOML 字段名参考 https://aider.chat/docs/config/
+
+# === 项目基础元信息 ===
+project:
+  name: ITops Agent
+  description: 一站式智能运维平台（Node.js + Express + TypeScript + SQLite / React + Vite + Ant Design）
+  modules: 24 backend + 23 frontend
+  architecture_doc: .trae/rules/architecture.md
+
+# === Aider 行为配置（顶层 YAML keys）===
+# Aider 顶层 key: model, edit-format, auto-commits, dirty-commits, attribute-author, etc.
+
+# 推荐模型
+model: claude-sonnet-4.5
+
+# 编辑格式
+edit-format: diff
+
+# 自动 commit（每次任务自动提交）
+auto-commits: false  # 关闭自动提交，要求用户手动确认
+
+# 提交消息作者标识
+attribute-author: AI-Assistant
+
+# 读取的项目上下文文件（每次都加载）
+read:
+  - AGENTS.md                                       # 入口铁律
+  - .trae/rules/architecture.md                      # 架构 + 模块清单
+  - .trae/rules/code-style.md                       # 编码规范
+  - .trae/rules/lessons-learned.md                  # L1/L2/L3 错误沉淀
+  - .trae/rules/top-rules.md                                # 顶层规则（必须报告）
+  - .trae/adr/README.md                             # 22+ ADR 索引
+
+# === 项目专属 prompt 指令 ===
+# 用 ----- 开头（Aider 特殊 YAML block），所有追加到系统 prompt
+instructions: |
+  你正在为 ITops Agent（一站式智能运维平台）工作，技术栈是 Node.js + Express + TypeScript + SQLite（后端）+ React + Vite + Ant Design + Tailwind（前端）。
+
+  ## 必须遵守的 5 条铁律（违反会被 ESLint/depcruise 拦截）
+
+  1. 分层单向依赖：core/ → modules/ → routes/。禁止反向。
+     - 允许：模块间通过 services 互调
+     - 允许：modules/<m>/services → repositories/
+     - 禁止：repositories/ → modules/
+     - 禁止：core/ → modules/
+     - 禁止：routes → repositories（直访，参见 ADR-016）
+
+  2. routes 层只做 3 件事：参数校验（Zod）→ 可选鉴权 → 调 service → 返回。
+     - 禁止在 routes 写业务判断
+     - 禁止直访 repositories
+     - 禁止调用工具函数（必须经过 service）
+
+  3. 新文件 ≤ 500 行（不含注释/空行）。超出必须拆分。
+     - 参考 4 文件拆 1 文件的范例：frontend/src/modules/ai/pages/agents/tool/
+
+  4. 不主动写测试，除非用户明确要求。
+
+  5. 报告→docs/，ADR→.trae/adr/NNN-<slug>.md。
+
+  ## 命名
+
+  - 工具/服务：camelCase（如 agentToolRegistry）
+  - 类/接口：PascalCase
+  - 常量：UPPER_SNAKE
+  - 文件：camelCase.ts
+  - 数据库表/列：snake_case
+  - HTTP 路径：kebab-case
+
+  ## 统一业务语言（不许别名）
+
+  - 告警 → alert
+  - 工单 → task
+  - 工作流 → workflow
+  - 通知 → notification
+  - 审批 → approval
+  - 修复 → remediation
+  - 代理 → agent
+
+  ## 关键目录
+
+  backend/src/
+  - core/                       DI 容器
+  - middleware/                 auth/errorHandler/rateLimiter/trace/validation
+  - repositories/               28 .ts + 11 子目录（只通过此层访问 db）
+  - shared/schemas/             Zod 集中
+  - modules/<name>/             routes/services/repositories/README.md
+
+  frontend/src/modules/<name>/
+  - routes.ts/api.ts/index.ts/pages/README.md
+
+  ## 质量门禁
+
+  - npm run tsc --noEmit  → 0 errors
+  - npm run lint           → 0 errors
+  - npx depcruise --config .dependency-cruiser.json backend/src  → 通过
+  - npm test               → 903/903 全绿
+
+  ## AI 常见错误（绝对避免）
+
+  - ❌ routes 写业务逻辑（if/else）
+  - ❌ routes 直 import repository
+  - ❌ 用 `any`（用 `unknown` 或具体类型）
+  - ❌ 直接 localStorage.getItem('token')（用 useAuth()）
+  - ❌ 新文件超过 500 行不拆
+  - ❌ 修改 migrations/v001_*（新建 v0XX_*）
+  - ❌ 改 .trae/rules/ 不报告（必须告知用户）
+  - ❌ 用 process.env.SOMETHING（写到 settings 表）
+
+  ## 接到新任务时
+
+  1. 读 AGENTS.md（如还未读过）
+  2. 读相关模块 README.md
+  3. 看同模块已有代码作为模板
+  4. 只读相关代码，不要全部读
+  5. 新文件遵守 5 铁律
+  6. 改完后跑 npm run lint && npm run tsc --noEmit
+
+  ## 一句话总结
+
+  > 核心「分层 + 模块化」：业务在 services、数据走 repositories、routes 只做校验+转发。新功能 6 步：migration → repository → service → routes → frontend API → frontend page。
+
+# === 完成报告模板 ===
+summary-template: |
+  ## 已完成
+  - 文件变更: [列出]
+  - 是否符合 5 铁律: [是/否 + 简述]
+
+  ## 需要用户决策
+  - [如有，列出]
+
+  ## 文档同步（如影响架构）
+  - .trae/rules/architecture.md 是否更新: [是/否]
+  - .trae/adr/README.md 是否新增 ADR: [是/否]

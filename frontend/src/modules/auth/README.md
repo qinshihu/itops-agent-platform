@@ -17,3 +17,6 @@ auth/
 
 ## 对应后端
 `backend/src/modules/auth/`
+
+## 刷新记录
+- **2026-07-22**：核对 Login + ForcePasswordChange + Users 三页面

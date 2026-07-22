@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Box, Image, HardDrive, Globe, Server, Monitor } from 'lucide-react';
 import type { Tab } from '../types';
 import { ImageSection } from '../ImageSection';
@@ -9,8 +11,11 @@ import { ContainersTab } from './ContainersTab';
 import { NetworksTab } from './NetworksTab';
 import { EndpointsTab } from './EndpointsTab';
 
+const VALID_TABS: Tab[] = ['containers', 'images', 'volumes', 'networks', 'endpoints'];
+
 export default function ContainersPage() {
   const ctx = useContainers();
+  const [searchParams] = useSearchParams();
   const {
     activeTab, setActiveTab,
     endpointId, setEndpointId,
@@ -22,6 +27,16 @@ export default function ContainersPage() {
     selectedContainerName,
     setPage, setSearch, setStatusFilter,
   } = ctx;
+
+  // 同步 URL ?tab=xxx 与 activeTab
+  //   - URL 是 source of truth（避免双向同步引发的 re-render 循环）
+  //   - 外部链接（如"前往配置"）可通过 ?tab=endpoints 直接打开端点 Tab
+  useEffect(() => {
+    const tab = searchParams.get('tab') as Tab | null;
+    if (tab && VALID_TABS.includes(tab) && tab !== activeTab) {
+      setActiveTab(tab);
+    }
+  }, [searchParams, activeTab, setActiveTab]);
 
   const tabs: { key: Tab; label: string; icon: ReactNode }[] = [
     { key: 'containers', label: '容器', icon: <Box className="w-4 h-4" /> },

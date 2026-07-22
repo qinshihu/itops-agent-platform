@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { virtualMachineRepository } from '../../../repositories';
 import crypto from 'crypto';
 import { requireRole } from '../../../middleware/auth';
 import { vmManagementService } from '../services/vmManagement';
 import { getErrorMessage } from '../../../utils/errorHelpers';
-import type { VirtualMachine, VMDisk } from '../../../types/vmManagement';
+import type { VMDisk } from '../../../types/vmManagement';
+import { virtualMachineCrudService } from '../services/virtualMachineCrudService';
 
 interface AuthenticatedRequest extends Request {
   user?: { id: string; username: string };
@@ -16,13 +16,13 @@ const router = Router();
 
 function getDefaultPlatformId(): string {
   const platforms = vmManagementService.listPlatformConfigs();
-  const active = platforms.find(p => p.status === 'active');
+  const active = platforms.find((p) => p.status === 'active');
   if (!active) throw new Error('没有可用的虚拟化平台');
   return active.id;
 }
 
 function getPlatformId(req: Request): string {
-  return (req.body.platformId || req.query.platformId as string) || getDefaultPlatformId();
+  return (req.body.platformId || (req.query.platformId as string)) || getDefaultPlatformId();
 }
 
 function getUserId(req: Request): string | undefined {
@@ -35,7 +35,6 @@ function getUsername(req: Request): string | undefined {
 
 // ==================== 平台管理 ====================
 
-// GET /platforms
 router.get('/platforms', (req: Request, res: Response) => {
   try {
     const platforms = vmManagementService.listPlatformConfigs();
@@ -45,7 +44,6 @@ router.get('/platforms', (req: Request, res: Response) => {
   }
 });
 
-// POST /platforms
 router.post('/platforms', requireRole('admin'), async (req: Request, res: Response) => {
   try {
     const { name, hypervisorType, host, port, username, password, config, status, tags } = req.body;
@@ -69,7 +67,6 @@ router.post('/platforms', requireRole('admin'), async (req: Request, res: Respon
   }
 });
 
-// DELETE /platforms/:id
 router.delete('/platforms/:id', requireRole('admin'), async (req: Request, res: Response) => {
   try {
     await vmManagementService.deletePlatform(req.params.id);
@@ -79,7 +76,6 @@ router.delete('/platforms/:id', requireRole('admin'), async (req: Request, res: 
   }
 });
 
-// POST /platforms/:id/test
 router.post('/platforms/:id/test', requireRole('admin'), async (req: Request, res: Response) => {
   try {
     const result = await vmManagementService.testPlatformConnection(req.params.id);
@@ -91,12 +87,10 @@ router.post('/platforms/:id/test', requireRole('admin'), async (req: Request, re
 
 // ==================== VM 列表与统计 ====================
 
-// GET /stats
 router.get('/stats', async (req: Request, res: Response) => {
   try {
-    // 聚合所有平台的 VM 统计
     const platforms = vmManagementService.listPlatformConfigs();
-    interface PlatformStat {
+    const platformStats: Array<{
       platformId: string;
       platformName: string;
       total?: number;
@@ -104,8 +98,7 @@ router.get('/stats', async (req: Request, res: Response) => {
       stopped?: number;
       suspended?: number;
       error?: string;
-    }
-    const platformStats: PlatformStat[] = [];
+    }> = [];
 
     for (const p of platforms) {
       try {
@@ -114,9 +107,9 @@ router.get('/stats', async (req: Request, res: Response) => {
           platformId: p.id,
           platformName: p.name,
           total: vms.length,
-          running: vms.filter((v: VirtualMachine) => v.powerState === 'poweredOn').length,
-          stopped: vms.filter((v: VirtualMachine) => v.powerState === 'poweredOff').length,
-          suspended: vms.filter((v: VirtualMachine) => v.powerState === 'suspended').length,
+          running: vms.filter((v: any) => v.powerState === 'poweredOn').length,
+          stopped: vms.filter((v: any) => v.powerState === 'poweredOff').length,
+          suspended: vms.filter((v: any) => v.powerState === 'suspended').length,
         });
       } catch {
         platformStats.push({
@@ -130,9 +123,9 @@ router.get('/stats', async (req: Request, res: Response) => {
     const totalVMs = platformStats.reduce((sum, s) => sum + (s.total || 0), 0);
     const totalRunning = platformStats.reduce((sum, s) => sum + (s.running || 0), 0);
 
-    // 后备：从 SQLite 获取
-    const sqliteTotal = virtualMachineRepository.countAll();
-    const byStatus = virtualMachineRepository.countByStatus();
+    // 通过 service 调 repository（routes 不直访）
+    const sqliteTotal = virtualMachineCrudService.countAll();
+    const byStatus = virtualMachineCrudService.countByStatus();
 
     res.json({
       success: true,
@@ -147,23 +140,21 @@ router.get('/stats', async (req: Request, res: Response) => {
   }
 });
 
-// GET /
 router.get('/', async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const pageSize = parseInt(req.query.pageSize as string) || 20;
     const offset = (page - 1) * pageSize;
-    const status = req.query.status as string || '';
-    const hypervisor = req.query.hypervisor as string || '';
-    const search = req.query.search as string || '';
-    const platformId = req.query.platformId as string || req.body.platformId;
+    const status = (req.query.status as string) || '';
+    const hypervisor = (req.query.hypervisor as string) || '';
+    const search = (req.query.search as string) || '';
+    const platformId = (req.query.platformId as string) || req.body.platformId;
 
     // 优先从 Hypervisor API 获取
     if (platformId) {
       try {
         const vms = await vmManagementService.listVMs(platformId);
         let filtered = vms;
-
         if (status) {
           filtered = filtered.filter((v: any) => {
             if (status === 'running') return v.powerState === 'poweredOn';
@@ -186,16 +177,15 @@ router.get('/', async (req: Request, res: Response) => {
 
         const total = filtered.length;
         const paged = filtered.slice(offset, offset + pageSize);
-
         return res.json({ success: true, data: paged, total, source: 'hypervisor' });
       } catch {
-        // 失败时回退到 SQLite
+        // 失败时回退 SQLite
       }
     }
 
-    // 后备：SQLite 查询
-    const total = virtualMachineRepository.count({ status, hypervisor, search });
-    const data = virtualMachineRepository.list({ status, hypervisor, search, limit: pageSize, offset });
+    // 后备：SQLite 查询（通过 service）
+    const total = virtualMachineCrudService.countVms({ status, hypervisor, search });
+    const data = virtualMachineCrudService.listVms({ status, hypervisor, search, limit: pageSize, offset });
     res.json({ success: true, data, total, source: 'sqlite' });
   } catch (error: unknown) {
     res.status(500).json({ success: false, message: getErrorMessage(error) });
@@ -204,10 +194,9 @@ router.get('/', async (req: Request, res: Response) => {
 
 // ==================== VM CRUD ====================
 
-// GET /:id
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const platformId = req.query.platformId as string || req.body.platformId;
+    const platformId = (req.query.platformId as string) || req.body.platformId;
     if (platformId) {
       try {
         const vm = await vmManagementService.getVM(platformId, req.params.id);
@@ -219,7 +208,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       }
     }
 
-    const item = virtualMachineRepository.getById(req.params.id);
+    const item = virtualMachineCrudService.getVmById(req.params.id);
     if (!item) return res.status(404).json({ success: false, message: '未找到' });
     res.json({ success: true, data: item, source: 'sqlite' });
   } catch (error: unknown) {
@@ -227,7 +216,6 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// POST /
 router.post('/', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const { name, host, os, cpu_cores, memory_mb, disk_gb, ip_address, hypervisor, agent_id, server_id, tags, notes } = req.body;
@@ -256,10 +244,7 @@ router.post('/', requireRole('admin', 'operator'), async (req: Request, res: Res
       // 回退 SQLite
     }
 
-    // 后备：SQLite 插入
-    const id = crypto.randomUUID();
-    virtualMachineRepository.insert({
-      id,
+    const id = virtualMachineCrudService.createVm({
       name: name || '',
       host: host || '',
       status: 'stopped',
@@ -280,11 +265,10 @@ router.post('/', requireRole('admin', 'operator'), async (req: Request, res: Res
   }
 });
 
-// PUT /:id
 router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { name, host, status, os, cpu_cores, memory_mb, disk_gb, ip_address, hypervisor, tags, notes } = req.body;
-    virtualMachineRepository.update(req.params.id, {
+    virtualMachineCrudService.updateVm(req.params.id, {
       name: name || '',
       host: host || '',
       status: status || '',
@@ -303,22 +287,19 @@ router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Respons
   }
 });
 
-// DELETE /:id
 router.delete('/:id', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const platformId = getPlatformId(req);
     const userId = getUserId(req);
     const username = getUsername(req);
 
-    // 尝试通过 Hypervisor API 删除
     try {
       await vmManagementService.deleteVM(platformId, req.params.id, userId, username);
     } catch {
       // 继续删除 SQLite 记录
     }
 
-    // 删除 SQLite 记录
-    virtualMachineRepository.deleteById(req.params.id);
+    virtualMachineCrudService.deleteVm(req.params.id);
     res.json({ success: true, message: '虚拟机已删除' });
   } catch (error: unknown) {
     res.status(500).json({ success: false, message: getErrorMessage(error) });
@@ -327,7 +308,6 @@ router.delete('/:id', requireRole('admin', 'operator'), async (req: Request, res
 
 // ==================== 电源操作 ====================
 
-// POST /:id/start
 router.post('/:id/start', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const platformId = getPlatformId(req);
@@ -335,9 +315,7 @@ router.post('/:id/start', requireRole('admin', 'operator'), async (req: Request,
     const username = getUsername(req);
 
     await vmManagementService.powerOnVM(platformId, req.params.id, userId, username);
-
-    // 同步更新 SQLite 状态
-    virtualMachineRepository.updateStatus(req.params.id, 'running');
+    virtualMachineCrudService.startVm(req.params.id);
 
     res.json({ success: true, message: '虚拟机已开机' });
   } catch (error: unknown) {
@@ -345,7 +323,6 @@ router.post('/:id/start', requireRole('admin', 'operator'), async (req: Request,
   }
 });
 
-// POST /:id/stop
 router.post('/:id/stop', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const platformId = getPlatformId(req);
@@ -353,8 +330,7 @@ router.post('/:id/stop', requireRole('admin', 'operator'), async (req: Request, 
     const username = getUsername(req);
 
     await vmManagementService.powerOffVM(platformId, req.params.id, userId, username);
-
-    virtualMachineRepository.updateStatus(req.params.id, 'stopped');
+    virtualMachineCrudService.stopVm(req.params.id);
 
     res.json({ success: true, message: '虚拟机已关机' });
   } catch (error: unknown) {
@@ -362,7 +338,6 @@ router.post('/:id/stop', requireRole('admin', 'operator'), async (req: Request, 
   }
 });
 
-// POST /:id/restart
 router.post('/:id/restart', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const platformId = getPlatformId(req);
@@ -370,8 +345,7 @@ router.post('/:id/restart', requireRole('admin', 'operator'), async (req: Reques
     const username = getUsername(req);
 
     await vmManagementService.restartVM(platformId, req.params.id, userId, username);
-
-    virtualMachineRepository.updateStatus(req.params.id, 'running');
+    virtualMachineCrudService.restartVm(req.params.id);
 
     res.json({ success: true, message: '虚拟机已重启' });
   } catch (error: unknown) {
@@ -381,11 +355,9 @@ router.post('/:id/restart', requireRole('admin', 'operator'), async (req: Reques
 
 // ==================== 同步 ====================
 
-// POST /sync
 router.post('/sync', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const platformId = getPlatformId(req);
-
     const vms = await vmManagementService.listVMs(platformId);
 
     let synced = 0;
@@ -395,7 +367,7 @@ router.post('/sync', requireRole('admin', 'operator'), async (req: Request, res:
         : vm.powerState === 'suspended' ? 'suspended'
         : 'stopped';
 
-      virtualMachineRepository.upsertFromHypervisor({
+      virtualMachineCrudService.upsertFromHypervisor({
         id: vm.id,
         name: vm.name,
         host: vm.hostName || '',
@@ -418,7 +390,6 @@ router.post('/sync', requireRole('admin', 'operator'), async (req: Request, res:
 
 // ==================== 快照管理 ====================
 
-// GET /:id/snapshots
 router.get('/:id/snapshots', async (req: Request, res: Response) => {
   try {
     const platformId = getPlatformId(req);
@@ -429,7 +400,6 @@ router.get('/:id/snapshots', async (req: Request, res: Response) => {
   }
 });
 
-// POST /:id/snapshots
 router.post('/:id/snapshots', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const platformId = getPlatformId(req);
@@ -454,7 +424,6 @@ router.post('/:id/snapshots', requireRole('admin', 'operator'), async (req: Requ
   }
 });
 
-// POST /:id/snapshots/:snapshotId/restore
 router.post('/:id/snapshots/:snapshotId/restore', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const platformId = getPlatformId(req);
@@ -472,7 +441,6 @@ router.post('/:id/snapshots/:snapshotId/restore', requireRole('admin', 'operator
   }
 });
 
-// DELETE /:id/snapshots/:snapshotId
 router.delete('/:id/snapshots/:snapshotId', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const platformId = getPlatformId(req);
@@ -489,7 +457,6 @@ router.delete('/:id/snapshots/:snapshotId', requireRole('admin', 'operator'), as
 
 // ==================== 性能统计 ====================
 
-// GET /:id/stats
 router.get('/:id/stats', async (req: Request, res: Response) => {
   try {
     const platformId = getPlatformId(req);
@@ -502,7 +469,6 @@ router.get('/:id/stats', async (req: Request, res: Response) => {
 
 // ==================== 模板 ====================
 
-// GET /:id/templates
 router.get('/:id/templates', async (req: Request, res: Response) => {
   try {
     const platformId = getPlatformId(req);
@@ -515,7 +481,6 @@ router.get('/:id/templates', async (req: Request, res: Response) => {
 
 // ==================== 克隆 ====================
 
-// POST /:id/clone
 router.post('/:id/clone', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const platformId = getPlatformId(req);
@@ -534,9 +499,8 @@ router.post('/:id/clone', requireRole('admin', 'operator'), async (req: Request,
       powerOn: powerOn || false,
     }, userId, username);
 
-    // 同步到 SQLite
     const totalDiskGB = (cloned.disks || []).reduce((sum: number, d: VMDisk) => sum + (d.sizeGB || 0), 0);
-    virtualMachineRepository.insertOrReplace({
+    virtualMachineCrudService.insertOrReplace({
       id: cloned.id,
       name: cloned.name,
       host: cloned.hostName || '',

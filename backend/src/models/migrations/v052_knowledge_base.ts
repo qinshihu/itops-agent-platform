@@ -33,13 +33,9 @@ const v052KnowledgeBase: Migration = {
         created_at DATETIME DEFAULT (datetime('now','localtime')),
         updated_at DATETIME DEFAULT (datetime('now','localtime'))
       );
-      CREATE INDEX IF NOT EXISTS idx_kb_category ON knowledge_base(category);
-      CREATE INDEX IF NOT EXISTS idx_kb_source ON knowledge_base(source);
-      CREATE INDEX IF NOT EXISTS idx_kb_alert_id ON knowledge_base(alert_id);
-      CREATE INDEX IF NOT EXISTS idx_kb_workflow_id ON knowledge_base(workflow_id);
     `);
 
-    // 兼容旧数据的列补齐（幂等）
+    // 兼容旧数据的列补齐（幂等）—— 必须在 CREATE INDEX 之前执行，否则索引引用的列可能还不存在
     const addColumnIfMissing = (col: string, def: string) => {
       try { db.exec(`ALTER TABLE knowledge_base ADD COLUMN ${col} ${def}`); } catch { /* 列已存在 */ }
     };
@@ -50,6 +46,14 @@ const v052KnowledgeBase: Migration = {
     addColumnIfMissing('task_id', 'TEXT');
     addColumnIfMissing('server_id', 'TEXT');
     addColumnIfMissing('duration_ms', 'INTEGER');
+
+    // 列补齐后再创建索引（避免引用尚不存在的列）
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_kb_category ON knowledge_base(category);
+      CREATE INDEX IF NOT EXISTS idx_kb_source ON knowledge_base(source);
+      CREATE INDEX IF NOT EXISTS idx_kb_alert_id ON knowledge_base(alert_id);
+      CREATE INDEX IF NOT EXISTS idx_kb_workflow_id ON knowledge_base(workflow_id);
+    `);
   },
 
   down: async (db: any) => {

@@ -8,7 +8,7 @@ import {
   getCoordinator,
   specialistRegistry,
 } from '../services/multiAgent';
-import { agentExecutionRepository } from '../../../repositories';
+import { agentExecutionCrudService } from '../services/agentExecutionCrudService';
 
 const router = Router();
 
@@ -35,7 +35,7 @@ router.post('/task', async (req: Request, res: Response) => {
     // 保存执行记录
     const executionId = randomUUID();
     try {
-      agentExecutionRepository.create({
+      agentExecutionCrudService.createExecution({
         id: executionId,
         agentId: result.agentId,
         agentName: result.agentName,
