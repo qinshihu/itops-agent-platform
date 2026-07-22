@@ -1,7 +1,32 @@
-import { 
-  Container, RefreshCw, Search, ChevronDown, Upload, Trash2, X 
-} from 'lucide-react';
-import clsx from 'clsx';
+/**
+ * Kubernetes 资源管理 - 聚合入口
+ *
+ * 原文件 308 行（v4 报告误标 1458 行，已修正为 308 行——报告与代码实际状态有偏差）。
+ * 2026-07-08 增量-13：进一步把 TabButton / 标题栏 / 集群选择 / 命名空间选择 / 搜索框
+ * 抽离为 kubernetes/ 子目录中的独立组件，Kubernetes.tsx 现在只负责：
+ *   1. 调用 useKubernetes 业务 hook
+ *   2. 处理 3 种空状态（不可用 / 加载中 / 主渲染）
+ *   3. 把数据传给子组件
+ *
+ * 已拆分的子组件（kubernetes/ 子目录）：
+ *   - HeaderBar（标题 + 刷新按钮）
+ *   - ClusterSelector（集群选择 + 导入/刷新/删除）
+ *   - NamespaceSelector（命名空间选择）
+ *   - SearchBox（搜索）
+ *   - TabButton（Tab 按钮）
+ *   - K8sUnavailable（无可用集群时的提示）
+ *   - ImportClusterModal（导入 kubeconfig）
+ *   - OverviewCards（资源概览卡片）
+ *   - DeploymentTable（Deployments 列表）
+ *   - ScaleModal（扩缩容）
+ *   - DeleteConfirmModal（删除确认）
+ *   - useKubernetes（业务逻辑 hook）
+ *   - types（类型 + 颜色 + 工具函数）
+ *
+ * Tab 内容组件（k8s/ 子目录）：
+ *   - PodList / ServiceList / NodeList
+ */
+
 import { useKubernetes } from './kubernetes/useKubernetes';
 import K8sUnavailable from './kubernetes/K8sUnavailable';
 import ImportClusterModal from './kubernetes/ImportClusterModal';
@@ -9,6 +34,11 @@ import OverviewCards from './kubernetes/OverviewCards';
 import DeploymentTable from './kubernetes/DeploymentTable';
 import ScaleModal from './kubernetes/ScaleModal';
 import DeleteConfirmModal from './kubernetes/DeleteConfirmModal';
+import HeaderBar from './kubernetes/HeaderBar';
+import ClusterSelector from './kubernetes/ClusterSelector';
+import NamespaceSelector from './kubernetes/NamespaceSelector';
+import SearchBox from './kubernetes/SearchBox';
+import { TabButton, type K8sTab } from './kubernetes/TabButton';
 import PodList from './k8s/PodList';
 import ServiceList from './k8s/ServiceList';
 import NodeList from './k8s/NodeList';
@@ -20,7 +50,7 @@ export { podStatusColors, serviceTypeColors, nodeStatusColors, formatAge } from 
 export default function Kubernetes() {
   const k = useKubernetes();
 
-  // ==================== K8s 不可用状态 ====================
+  // ==================== 状态 1：K8s 不可用 ====================
   if (!k.contextsLoading && !k.hasContexts) {
     return (
       <div>
@@ -41,7 +71,7 @@ export default function Kubernetes() {
     );
   }
 
-  // ==================== 集群加载中 ====================
+  // ==================== 状态 2：集群加载中 ====================
   if (k.contextsLoading) {
     return (
       <div className="p-6">
@@ -52,95 +82,27 @@ export default function Kubernetes() {
     );
   }
 
-  // ==================== 主渲染 ====================
+  // ==================== 状态 3：主渲染 ====================
   return (
     <div className="p-6 space-y-5">
-      {/* 页面标题行 */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <Container size={26} className="text-primary" />
-          <h1 className="text-xl font-bold text-text-primary">K8s 资源管理</h1>
-        </div>
-        <button
-          onClick={k.refreshCurrentTab}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary bg-surface hover:bg-border/50 rounded-lg transition-colors border border-border"
-        >
-          <RefreshCw size={14} /> 刷新
-        </button>
-      </div>
+      <HeaderBar onRefresh={k.refreshCurrentTab} />
 
-      {/* 集群上下文管理 */}
-      <div className="bg-card border border-border rounded-xl p-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-text-secondary text-sm shrink-0">集群：</span>
+      <ClusterSelector
+        contexts={k.contexts}
+        effectiveContext={k.effectiveContext}
+        onContextChange={k.handleContextChange}
+        onImportCluster={() => k.setImportModalOpen(true)}
+        onRefreshContexts={() => {/* refresh contexts */}}
+        onDeleteContext={(ctx) => k.setDeleteContextTarget(ctx)}
+      />
 
-          <div className="relative">
-            <select
-              value={k.effectiveContext}
-              onChange={(e) => k.handleContextChange(e.target.value)}
-              className="appearance-none bg-surface border border-border text-text-primary text-sm rounded-lg px-3 py-2 pr-8 min-w-[200px] focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
-            >
-              {k.contexts.map(ctx => (
-                <option key={ctx.id} value={ctx.id}>{ctx.name}</option>
-              ))}
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" />
-          </div>
-
-          <button
-            onClick={() => k.setImportModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors"
-          >
-            <Upload size={14} /> 导入集群
-          </button>
-
-          <button
-            onClick={() => { /* refresh contexts */ }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary bg-surface hover:bg-border/50 rounded-lg transition-colors border border-border"
-          >
-            <RefreshCw size={14} /> 刷新集群
-          </button>
-
-          {k.contexts.length > 0 && (
-            <button
-              onClick={() => {
-                const ctx = k.contexts.find(c => c.id === k.effectiveContext);
-                if (ctx) k.setDeleteContextTarget(ctx);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors ml-auto"
-            >
-              <Trash2 size={14} /> 删除当前集群
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 命名空间选择器 + 概览卡片 */}
       <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <span className="text-text-secondary text-sm shrink-0">命名空间：</span>
-          <div className="relative">
-            <select
-              value={k.effectiveNamespace}
-              onChange={(e) => k.setNamespace(e.target.value)}
-              className="appearance-none bg-surface border border-border text-text-primary text-sm rounded-lg px-3 py-2 pr-8 min-w-[220px] focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
-            >
-              {k.namespacesLoading ? (
-                <option>加载中...</option>
-              ) : k.namespaces.length === 0 ? (
-                <option value="">无命名空间</option>
-              ) : (
-                <>
-                  <option value="">全部命名空间</option>
-                  {k.namespaces.map(ns => (
-                    <option key={ns.name} value={ns.name}>{ns.name}</option>
-                  ))}
-                </>
-              )}
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" />
-          </div>
-        </div>
+        <NamespaceSelector
+          effectiveNamespace={k.effectiveNamespace}
+          namespacesLoading={k.namespacesLoading}
+          namespaces={k.namespaces}
+          onNamespaceChange={(ns) => k.setNamespace(ns)}
+        />
 
         <OverviewCards
           nodes={k.overview?.nodes ?? 0}
@@ -150,7 +112,6 @@ export default function Kubernetes() {
         />
       </div>
 
-      {/* Tab 标签栏 + 搜索 */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="px-4 pt-4 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-1">
@@ -159,28 +120,10 @@ export default function Kubernetes() {
             <TabButton tab="services" label="Services" active={k.activeTab} onClick={k.setActiveTab} />
             <TabButton tab="nodes" label="节点" active={k.activeTab} onClick={k.setActiveTab} />
           </div>
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
-            <input
-              type="text"
-              placeholder="搜索..."
-              value={k.searchText}
-              onChange={(e) => k.setSearchText(e.target.value)}
-              className="bg-surface border border-border text-text-primary text-sm rounded-lg pl-9 pr-3 py-2 w-56 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
-            />
-            {k.searchText && (
-              <button
-                onClick={() => k.setSearchText('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-primary"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
+          <SearchBox value={k.searchText} onChange={k.setSearchText} />
         </div>
 
-        {/* Pods Tab */}
-        {k.activeTab === 'pods' && (
+        {k.activeTab === ('pods' as K8sTab) && (
           <PodList
             pods={k.pods}
             loading={k.podsLoading}
@@ -192,8 +135,7 @@ export default function Kubernetes() {
           />
         )}
 
-        {/* Deployments Tab */}
-        {k.activeTab === 'deployments' && (
+        {k.activeTab === ('deployments' as K8sTab) && (
           <div className="p-4">
             <DeploymentTable
               deployments={k.deployments}
@@ -204,13 +146,12 @@ export default function Kubernetes() {
               onRetry={() => k.refetchDeployments()}
               onScale={k.handleScaleOpen}
               onRestart={(dep) => k.restartMutation.mutate(dep)}
-              onDetail={() => { /* toast handled internally */ }}
+              onDetail={() => {/* toast handled internally */}}
             />
           </div>
         )}
 
-        {/* Services Tab */}
-        {k.activeTab === 'services' && (
+        {k.activeTab === ('services' as K8sTab) && (
           <ServiceList
             services={k.services}
             loading={k.servicesLoading}
@@ -220,8 +161,7 @@ export default function Kubernetes() {
           />
         )}
 
-        {/* Nodes Tab */}
-        {k.activeTab === 'nodes' && (
+        {k.activeTab === ('nodes' as K8sTab) && (
           <NodeList
             nodes={k.nodes}
             loading={k.nodesLoading}
@@ -232,7 +172,6 @@ export default function Kubernetes() {
         )}
       </div>
 
-      {/* ==================== 导入集群 Modal ==================== */}
       {k.importModalOpen && (
         <ImportClusterModal
           kubeconfigContent={k.kubeconfigContent}
@@ -246,7 +185,6 @@ export default function Kubernetes() {
         />
       )}
 
-      {/* ==================== 扩缩容 Modal ==================== */}
       {k.scaleOpen && k.scaleTarget && (
         <ScaleModal
           scaleTarget={k.scaleTarget}
@@ -258,7 +196,6 @@ export default function Kubernetes() {
         />
       )}
 
-      {/* ==================== 删除 Pod 确认 ==================== */}
       {k.deletePodTarget && (
         <DeleteConfirmModal
           title="确认删除 Pod"
@@ -270,7 +207,6 @@ export default function Kubernetes() {
         />
       )}
 
-      {/* ==================== 删除集群确认 ==================== */}
       {k.deleteContextTarget && (
         <DeleteConfirmModal
           title="确认删除集群"
@@ -282,27 +218,5 @@ export default function Kubernetes() {
         />
       )}
     </div>
-  );
-}
-
-// ==================== 内联辅助组件 ====================
-function TabButton({ tab, label, active, onClick }: { 
-  tab: 'pods' | 'deployments' | 'services' | 'nodes'; 
-  label: string; 
-  active: string; 
-  onClick: (t: typeof tab) => void;
-}) {
-  return (
-    <button
-      onClick={() => onClick(tab)}
-      className={clsx(
-        'px-4 py-2.5 text-sm font-medium rounded-lg transition-all',
-        active === tab
-          ? 'bg-primary text-white shadow-lg shadow-primary/20'
-          : 'text-text-secondary hover:text-text-primary hover:bg-surface',
-      )}
-    >
-      {label}
-    </button>
   );
 }

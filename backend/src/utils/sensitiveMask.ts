@@ -95,7 +95,7 @@ export function safeLog(...args: unknown[]): void {
     }
     return arg;
   });
-  logger.info(...maskedArgs);
+  logger.info(...(maskedArgs as Parameters<typeof logger.info>));
 }
 
 export function safeError(...args: unknown[]): void {

@@ -1,7 +1,6 @@
 import { logger } from '../../../utils/logger';
 import { env } from '../../../utils/env';
-import { settingsRepository, alertRepository } from '../../../repositories';
-import { rcaRepository } from '../../ai/services/rca/rootCauseAnalysisService/rcaRepository';
+import { settingsRepository, alertRepository, rcaRepository } from '../../../repositories';
 import { rootCauseAnalysisService } from '../../ai/services/rca/rootCauseAnalysisService';
 import { circuitBreakers } from '../../ai/services/llm/llmService';
 import { credentialService } from '../../auth/services/credentialService';
@@ -43,7 +42,7 @@ const DEFAULT_ALERT_RULES: AlertRule[] = [
     threshold: 90,
     enabled: true,
     channels: ['log', 'webhook'],
-    cooldownMs: 300000
+    cooldownMs: 300000,
   },
   {
     id: 'high-cpu-usage',
@@ -54,7 +53,7 @@ const DEFAULT_ALERT_RULES: AlertRule[] = [
     threshold: 85,
     enabled: true,
     channels: ['log'],
-    cooldownMs: 300000
+    cooldownMs: 300000,
   },
   {
     id: 'database-slow',
@@ -65,7 +64,7 @@ const DEFAULT_ALERT_RULES: AlertRule[] = [
     threshold: 1000,
     enabled: true,
     channels: ['log', 'webhook'],
-    cooldownMs: 60000
+    cooldownMs: 60000,
   },
   {
     id: 'high-error-rate',
@@ -76,7 +75,7 @@ const DEFAULT_ALERT_RULES: AlertRule[] = [
     threshold: 10,
     enabled: true,
     channels: ['log', 'webhook'],
-    cooldownMs: 300000
+    cooldownMs: 300000,
   },
   {
     id: 'disk-space-low',
@@ -87,8 +86,8 @@ const DEFAULT_ALERT_RULES: AlertRule[] = [
     threshold: 90,
     enabled: true,
     channels: ['log'],
-    cooldownMs: 600000
-  }
+    cooldownMs: 600000,
+  },
 ];
 
 export class AlertService {
@@ -99,31 +98,35 @@ export class AlertService {
   private emailConfig?: { host: string; port: number; user: string; pass: string; to: string };
   private initialized = false;
 
+  /**
+   * 注意：loadCredentials() 由 init() 触发，不在构造函数中调用。
+   * 历史问题：构造函数中调用 loadCredentials() 会因 db Proxy 未初始化而抛出
+   * "Database not initialized" 错误（模块加载时序早于 initializeDatabase）。
+   */
   constructor() {
-    this.loadCredentials();
     // 延迟初始化，等待数据库准备就绪
   }
 
   private loadCredentials(): void {
     this.webhookUrl = env.ALERT_WEBHOOK_URL || '';
-    
+
     // Check credential service for overrides (values set through UI)
     try {
       const credWebhook = credentialService.getCredential('alert_webhook');
       if (credWebhook) {
         this.webhookUrl = credWebhook;
       }
-      
+
       const emailCredStr = credentialService.getCredential('alert_email');
       if (emailCredStr) {
         try {
           const emailCred = JSON.parse(emailCredStr);
           this.emailConfig = {
             host: emailCred.host || env.ALERT_EMAIL_HOST || '',
-            port: emailCred.port ? parseInt(emailCred.port, 10) : (env.ALERT_EMAIL_PORT || 587),
+            port: emailCred.port ? parseInt(emailCred.port, 10) : env.ALERT_EMAIL_PORT || 587,
             user: emailCred.user || env.ALERT_EMAIL_USER || '',
             pass: emailCred.pass || env.ALERT_EMAIL_PASS || '',
-            to: emailCred.to || env.ALERT_EMAIL_TO || ''
+            to: emailCred.to || env.ALERT_EMAIL_TO || '',
           };
         } catch {
           // Not a valid JSON, fall back to env
@@ -133,7 +136,7 @@ export class AlertService {
               port: env.ALERT_EMAIL_PORT || 587,
               user: env.ALERT_EMAIL_USER || '',
               pass: env.ALERT_EMAIL_PASS || '',
-              to: env.ALERT_EMAIL_TO || ''
+              to: env.ALERT_EMAIL_TO || '',
             };
           }
         }
@@ -143,7 +146,7 @@ export class AlertService {
           port: env.ALERT_EMAIL_PORT || 587,
           user: env.ALERT_EMAIL_USER || '',
           pass: env.ALERT_EMAIL_PASS || '',
-          to: env.ALERT_EMAIL_TO || ''
+          to: env.ALERT_EMAIL_TO || '',
         };
       }
     } catch {
@@ -154,7 +157,7 @@ export class AlertService {
           port: env.ALERT_EMAIL_PORT || 587,
           user: env.ALERT_EMAIL_USER || '',
           pass: env.ALERT_EMAIL_PASS || '',
-          to: env.ALERT_EMAIL_TO || ''
+          to: env.ALERT_EMAIL_TO || '',
         };
       }
     }
@@ -162,6 +165,7 @@ export class AlertService {
 
   init(): void {
     if (!this.initialized) {
+      this.loadCredentials();
       this.loadRules();
       this.initialized = true;
       logger.info('AlertService initialized');
@@ -173,14 +177,16 @@ export class AlertService {
       const saved = settingsRepository.getValue('alert_rules');
       if (saved) {
         const rules = JSON.parse(saved) as AlertRule[];
-        rules.forEach(rule => this.rules.set(rule.id, rule));
+        rules.forEach((rule) => this.rules.set(rule.id, rule));
       }
     } catch (error) {
-      logger.warn('Failed to load alert rules, using defaults', { error: error instanceof Error ? error.message : String(error) });
+      logger.warn('Failed to load alert rules, using defaults', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
 
     if (this.rules.size === 0) {
-      DEFAULT_ALERT_RULES.forEach(rule => this.rules.set(rule.id, rule));
+      DEFAULT_ALERT_RULES.forEach((rule) => this.rules.set(rule.id, rule));
       this.saveRules();
     }
   }
@@ -240,7 +246,7 @@ export class AlertService {
 
       if (value >= rule.threshold) {
         const now = Date.now();
-        if (rule.lastTriggered && (now - rule.lastTriggered) < rule.cooldownMs) {
+        if (rule.lastTriggered && now - rule.lastTriggered < rule.cooldownMs) {
           continue;
         }
 
@@ -259,7 +265,7 @@ export class AlertService {
   private async triggerAlert(
     rule: AlertRule,
     value: number,
-    metrics: Record<string, number | undefined>
+    metrics: Record<string, number | undefined>,
   ): Promise<AlertNotification> {
     const alert: AlertNotification = {
       id: `alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -273,8 +279,8 @@ export class AlertService {
         condition: rule.condition,
         currentValue: value,
         threshold: rule.threshold,
-        allMetrics: metrics
-      }
+        allMetrics: metrics,
+      },
     };
 
     this.alertHistory.unshift(alert);
@@ -287,7 +293,7 @@ export class AlertService {
     logger.error(`Alert triggered: ${rule.name}`, undefined, {
       severity: rule.severity,
       value,
-      threshold: rule.threshold
+      threshold: rule.threshold,
     });
 
     return alert;
@@ -313,7 +319,7 @@ export class AlertService {
 
   private async sendToLog(alert: AlertNotification): Promise<void> {
     const logMessage = `[ALERT] ${alert.severity.toUpperCase()} - ${alert.message}`;
-    
+
     switch (alert.severity) {
       case 'critical':
         logger.error(logMessage, undefined, alert.metadata);
@@ -332,7 +338,7 @@ export class AlertService {
       const response = await fetch(this.webhookUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           alert_id: alert.id,
@@ -340,19 +346,23 @@ export class AlertService {
           severity: alert.severity,
           message: alert.message,
           timestamp: alert.timestamp,
-          metadata: alert.metadata
-        })
+          metadata: alert.metadata,
+        }),
       });
 
       if (!response.ok) {
         logger.warn(`Webhook notification failed: ${response.status}`, {
-          alertId: alert.id
+          alertId: alert.id,
         });
       }
     } catch (error) {
-      logger.error('Failed to send webhook notification', { error: error instanceof Error ? error.message : String(error) }, {
-        alertId: alert.id
-      });
+      logger.error(
+        'Failed to send webhook notification',
+        { error: error instanceof Error ? error.message : String(error) },
+        {
+          alertId: alert.id,
+        },
+      );
     }
   }
 
@@ -361,18 +371,24 @@ export class AlertService {
 
     try {
       const nodemailer = await import('nodemailer');
-      
+
       const transporter = nodemailer.createTransport({
         host: this.emailConfig.host,
         port: this.emailConfig.port,
         secure: this.emailConfig.port === 465,
         auth: {
           user: this.emailConfig.user,
-          pass: this.emailConfig.pass
-        }
+          pass: this.emailConfig.pass,
+        },
       });
 
-      const escapeHtml = (str: string) => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      const escapeHtml = (str: string) =>
+        str
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
 
       await transporter.sendMail({
         from: this.emailConfig.user,
@@ -386,11 +402,11 @@ export class AlertService {
           <p><strong>Message:</strong> ${escapeHtml(alert.message)}</p>
           <p><strong>Time:</strong> ${escapeHtml(alert.timestamp)}</p>
           ${alert.metadata ? `<pre>${escapeHtml(JSON.stringify(alert.metadata, null, 2))}</pre>` : ''}
-        `
+        `,
       });
     } catch (error) {
       logger.error('Failed to send email notification', error as Error, {
-        alertId: alert.id
+        alertId: alert.id,
       });
     }
   }
@@ -411,15 +427,15 @@ export class AlertService {
     const bySeverity: Record<AlertSeverity, number> = {
       critical: 0,
       warning: 0,
-      info: 0
+      info: 0,
     };
 
     const ruleCounts: Map<string, { name: string; count: number }> = new Map();
     let last24Hours = 0;
 
-    this.alertHistory.forEach(alert => {
+    this.alertHistory.forEach((alert) => {
       bySeverity[alert.severity]++;
-      
+
       if (new Date(alert.timestamp).getTime() > oneDayAgo) {
         last24Hours++;
       }
@@ -441,7 +457,7 @@ export class AlertService {
       totalAlerts: this.alertHistory.length,
       bySeverity,
       last24Hours,
-      topRules
+      topRules,
     };
   }
 
@@ -458,13 +474,19 @@ export class AlertService {
       return;
     }
 
-    if (alert.severity === 'critical' || alert.severity === 'high' || alert.severity === 'warning') {
+    if (
+      alert.severity === 'critical' ||
+      alert.severity === 'high' ||
+      alert.severity === 'warning'
+    ) {
       setImmediate(async () => {
         try {
-          const existingRCA = rcaRepository.getByAlert(alert.id);
+          const existingRCA = rcaRepository.getByAlertId(alert.id);
 
           if (existingRCA && existingRCA.status !== 'failed') {
-            logger.info(`⏭️ [AlertService] Skipping RCA for alert ${alertId} - already analyzed (existing RCA: ${existingRCA.id})`);
+            logger.info(
+              `⏭️ [AlertService] Skipping RCA for alert ${alertId} - already analyzed (existing RCA: ${existingRCA.id})`,
+            );
             return;
           }
 
@@ -476,13 +498,19 @@ export class AlertService {
           }
 
           if (openBreakers.length > 0) {
-            logger.warn(`⚠️ [AlertService] LLM circuit breakers are open: ${openBreakers.join(', ')}. RCA will rely more on rule engine fallback.`);
+            logger.warn(
+              `⚠️ [AlertService] LLM circuit breakers are open: ${openBreakers.join(', ')}. RCA will rely more on rule engine fallback.`,
+            );
           }
 
-          logger.info(`🔔 [AlertService] Auto-triggering RCA for alert: ${alertId} (severity: ${alert.severity})`);
+          logger.info(
+            `🔔 [AlertService] Auto-triggering RCA for alert: ${alertId} (severity: ${alert.severity})`,
+          );
           await rootCauseAnalysisService.autoAnalyze(alert.id);
         } catch (error) {
-          logger.error(`❌ [AlertService] Failed to auto-analyze alert: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          logger.error(
+            `❌ [AlertService] Failed to auto-analyze alert: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
         }
       });
     }

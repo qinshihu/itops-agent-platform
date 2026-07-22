@@ -33,9 +33,10 @@ export default function DashboardOverlay({
   };
 
   const pue = overview?.pue ?? 0;
-  const totalPower = (overview?.totalPower || 0) / 1000;
-  const coolingPower = (overview?.coolingPower || 0) / 1000;
-  const itPower = (overview?.itPower || 0) / 1000;
+  // 后端 overview 返回 totalPowerKw（已是 kW），直接用
+  const totalPower = (overview as { totalPowerKw?: number } | undefined)?.totalPowerKw ?? overview?.totalPower ?? 0;
+  const coolingPower = overview?.coolingPower ?? 0;
+  const itPower = overview?.itPower ?? 0;
 
   // 使用真实机柜数据生成左侧机柜状态列表
   const rackStatusList = racks.slice(0, 12).map(r => ({
@@ -67,11 +68,13 @@ export default function DashboardOverlay({
           <span className="text-[12px] text-[#5a7a94] font-mono tracking-[0.5px]">{timeStr}</span>
         </div>
 
-        <h1 className="text-2xl font-bold tracking-[5px] bg-gradient-to-r from-[#00f5ff] via-white to-[#00ff88] bg-[length:200%_auto] bg-clip-text text-transparent animate-gradient"
-          style={{ filter: 'drop-shadow(0 0 12px rgba(0,245,255,0.3))' }}>
-          <span className="text-[#00f5ff] text-xs animate-pulse">◆</span>
-          {' '}机房数字孪生监控平台{' '}
-          <span className="text-[#00f5ff] text-xs animate-pulse">◆</span>
+        <h1 className="text-2xl font-bold tracking-[5px]"
+          style={{ color: '#00f5ff' }}>
+          <span className="text-[#00ff88] text-xs animate-pulse">◆</span>
+          {' '}
+          <span style={{ color: '#e8f6ff' }}>机房数字孪生监控平台</span>
+          {' '}
+          <span className="text-[#00ff88] text-xs animate-pulse">◆</span>
         </h1>
 
         <div className="flex items-center gap-4">

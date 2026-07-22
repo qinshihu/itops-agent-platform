@@ -31,8 +31,7 @@ jobs:
     name: Quality Gates
     runs-on: ubuntu-latest
     outputs:
-      backend_ok: ${{ steps.backend-check.outputs.ok }}
-      frontend_ok: ${{ steps.frontend-check.outputs.ok }}
+      ok: ${{ steps.quality.outputs.ok }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,7 +39,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
           cache-dependency-path: |
             backend/package-lock.json
@@ -124,6 +123,7 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
+            ${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/${{ env.ALIYUN_REPO }}:${{ env.IMAGE_PREFIX }}-backend-${{ steps.version.outputs.version }}
             ${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/${{ env.ALIYUN_REPO }}:${{ env.IMAGE_PREFIX }}-backend-latest
           labels: |
             org.opencontainers.image.title=ITOps Agent Platform Backend
@@ -181,6 +181,7 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
+            ${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/${{ env.ALIYUN_REPO }}:${{ env.IMAGE_PREFIX }}-frontend-${{ steps.version.outputs.version }}
             ${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/${{ env.ALIYUN_REPO }}:${{ env.IMAGE_PREFIX }}-frontend-latest
           labels: |
             org.opencontainers.image.title=ITOps Agent Platform Frontend
@@ -218,8 +219,8 @@ jobs:
           echo "" >> release_notes.md
           echo "| Component | Image |" >> release_notes.md
           echo "|-----------|-------|" >> release_notes.md
-          echo "| Backend | \`${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/${{ env.ALIYUN_REPO }}:${{ env.IMAGE_PREFIX }}-backend-latest\` |" >> release_notes.md
-          echo "| Frontend | \`${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/${{ env.ALIYUN_REPO }}:${{ env.IMAGE_PREFIX }}-frontend-latest\` |" >> release_notes.md
+          echo "| Backend | \`${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/${{ env.ALIYUN_REPO }}:${{ env.IMAGE_PREFIX }}-backend-${VERSION}\` (latest: \`${{ env.IMAGE_PREFIX }}-backend-latest\`) |" >> release_notes.md
+          echo "| Frontend | \`${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/${{ env.ALIYUN_REPO }}:${{ env.IMAGE_PREFIX }}-frontend-${VERSION}\` (latest: \`${{ env.IMAGE_PREFIX }}-frontend-latest\`) |" >> release_notes.md
           echo "" >> release_notes.md
           echo "### 🚀 一键部署" >> release_notes.md
           echo "" >> release_notes.md

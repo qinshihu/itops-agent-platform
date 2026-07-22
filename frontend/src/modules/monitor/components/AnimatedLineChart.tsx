@@ -36,15 +36,43 @@ export default function AnimatedLineChart({
     ctx.scale(dpr, dpr);
 
     const width = rect.width;
-    const padding = { top: 20, right: 20, bottom: 30, left: 40 };
+    const padding = { top: 16, right: 24, bottom: 30, left: 48 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
     ctx.clearRect(0, 0, width, height);
 
-    const maxValue = Math.max(...data.map(d => d.value)) * 1.1;
-    const minValue = Math.min(0, Math.min(...data.map(d => d.value)));
-    const range = Math.max(maxValue - minValue, 1);
+    // 计算 nicenum（0.5 / 1 / 2 / 5 / 10 / 20 / 50 / 100 ...）让 Y 轴刻度是人类可读的整数
+    const niceNum = (range: number, round: boolean): number => {
+      const exp = Math.floor(Math.log10(range));
+      const fraction = range / Math.pow(10, exp);
+      let niceFraction;
+      if (round) {
+        if (fraction < 1.5) niceFraction = 1;
+        else if (fraction < 3) niceFraction = 2;
+        else if (fraction < 7) niceFraction = 5;
+        else niceFraction = 10;
+      } else {
+        if (fraction <= 1) niceFraction = 1;
+        else if (fraction <= 2) niceFraction = 2;
+        else if (fraction <= 5) niceFraction = 5;
+        else niceFraction = 10;
+      }
+      return niceFraction * Math.pow(10, exp);
+    };
+
+    const rawMax = Math.max(...data.map(d => d.value));
+    const rawMin = Math.min(0, Math.min(...data.map(d => d.value)));
+    const rawRange = rawMax - rawMin;
+    // 防止全 0 或常数数据时退化
+    const tmpRange = rawRange < 1 ? 1 : rawRange;
+    const niceStep = niceNum(tmpRange, false);
+    // 自适应上限：至少保证上方有 20% 视觉余量
+    const chartMaxCeil = Math.max(rawMax * 1.2, niceStep * 1.2);
+    const niceStepUp = niceNum(chartMaxCeil, true);
+    const maxValue = Math.ceil(chartMaxCeil / niceStepUp) * niceStepUp;
+    const minValue = 0;
+    const range = Math.max(maxValue - minValue, niceStepUp);
 
     const getX = (index: number) => {
       if (data.length === 1) return padding.left + chartWidth / 2;
@@ -121,12 +149,15 @@ export default function AnimatedLineChart({
     ctx.font = '11px Inter, system-ui, sans-serif';
     ctx.fillStyle = '#94a3b8';
     ctx.textAlign = 'right';
-    
-    for (let i = 0; i <= 4; i++) {
-      const value = minValue + (range / 4) * i;
+    ctx.textBaseline = 'middle';
+
+    // 用 niceStep 计算合适的刻度数量（>= 2, <= 6）
+    const tickCount = Math.max(2, Math.min(6, Math.round(range / niceStepUp)));
+    for (let i = 0; i <= tickCount; i++) {
+      const value = (maxValue / tickCount) * i;
       const y = getY(value);
-      ctx.fillText(value.toFixed(0), padding.left - 8, y + 4);
-      
+      ctx.fillText(value.toFixed(0), padding.left - 6, y);
+
       ctx.beginPath();
       ctx.moveTo(padding.left, y);
       ctx.lineTo(width - padding.right, y);

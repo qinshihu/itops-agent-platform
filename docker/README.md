@@ -9,6 +9,7 @@ Enterprise IT Operations Multi-Agent Automation Platform powered by Large Langua
 ITOps Agent Platform is an enterprise-grade IT operations automation platform where multiple AI agents work together through visual workflows to handle alert processing, fault diagnosis, system inspection, compliance checks, and more.
 
 **Features:**
+
 - **Multi-Agent Collaboration** - 9 preset operation agents with custom agent support
 - **Visual Workflow Orchestration** - Drag-and-drop editor with serial/parallel/conditional branches
 - **Server Management** - SSH remote connection, command execution, 13 compliance checks
@@ -21,12 +22,14 @@ ITOps Agent Platform is an enterprise-grade IT operations automation platform wh
 ## 📦 Available Images
 
 ### Backend API Server
+
 ```bash
 # Latest tag (Always pull the newest version)
 docker pull registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:IT_Onlin-ITOps-backend-latest
 ```
 
 ### Frontend Web UI
+
 ```bash
 # Latest tag (Always pull the newest version)
 docker pull registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:IT_Onlin-ITOps-frontend-latest
@@ -46,15 +49,12 @@ services:
     image: registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:IT_Onlin-ITOps-backend-latest
     container_name: itops-backend
     ports:
-      - "3001:3001"
+      - '3001:3001'
     environment:
       - NODE_ENV=production
       - PORT=3001
       - HOST=0.0.0.0
       - DATABASE_PATH=/app/data/app.db
-      - JWT_SECRET=your-secret-key-change-in-production
-      - DOUBAO_API_KEY=your-doubao-api-key
-      - OPENAI_API_KEY=your-openai-api-key
     volumes:
       - app-data:/app/data
     restart: unless-stopped
@@ -63,7 +63,7 @@ services:
     image: registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:IT_Onlin-ITOps-frontend-latest
     container_name: itops-frontend
     ports:
-      - "8080:80"
+      - '8080:80'
     depends_on:
       - backend
     restart: unless-stopped
@@ -82,54 +82,61 @@ docker-compose up -d
 ### Using Docker Run
 
 **Backend:**
+
 ```bash
 docker run -d \
   --name itops-backend \
   -p 3001:3001 \
   -e NODE_ENV=production \
-  -e JWT_SECRET=your-secret-key \
-  -e DOUBAO_API_KEY=your-api-key \
   -v itops-data:/app/data \
   registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:IT_Onlin-ITOps-backend-latest
 ```
 
 **Frontend:**
+
 ```bash
 docker run -d \
   --name itops-frontend \
   -p 8080:80 \
   --link itops-backend \
-  -e BACKEND_URL=http://itops-backend:3001 \
   registry.cn-hangzhou.aliyuncs.com/huluwa666/tsq-images-hub:IT_Onlin-ITOps-frontend-latest
 ```
 
 ## ⚙️ Configuration
 
-### Environment Variables
+### 配置方式
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NODE_ENV` | Runtime environment | `production` |
-| `PORT` | Backend API port | `3001` |
-| `DATABASE_PATH` | SQLite database path | `/app/data/app.db` |
-| `JWT_SECRET` | JWT signing key (required) | - |
-| `JWT_EXPIRES_IN` | Token expiration time | `24h` |
-| `ALLOWED_ORIGINS` | CORS allowed origins | `http://localhost:8080` |
-| `DOUBAO_API_KEY` | Doubao LLM API key | - |
-| `DOUBAO_API_BASE` | Doubao API endpoint | `https://ark.cn-beijing.volces.com/api/v3` |
-| `DOUBAO_MODEL` | Doubao model name | `doubao-4o` |
-| `OPENAI_API_KEY` | OpenAI API key | - |
-| `OPENAI_API_BASE` | OpenAI API endpoint | `https://api.openai.com/v1` |
-| `OPENAI_MODEL` | OpenAI model name | `gpt-4o` |
+**本项目所有配置通过前端 UI 管理，不需要环境变量文件（.env）。**
+
+部署完成后，在 Web 界面中进行配置：
+
+| 配置项   | 位置                          | 说明                         |
+| -------- | ----------------------------- | ---------------------------- |
+| API Keys | `/settings` 页面              | 写入 `settings` 表           |
+| AI 模型  | `/ai-models` 页面             | 写入 `ai_models` 表          |
+| 通知渠道 | `/notification-settings` 页面 | 企业微信/飞书/钉钉等         |
+| 告警源   | `/alert-providers` 页面       | Prometheus/Zabbix 等 Webhook |
+
+### Environment Variables（仅基础配置）
+
+仅以下基础配置可通过环境变量设置，业务配置全部通过 UI 管理：
+
+| Variable          | Description                             | Default                 |
+| ----------------- | --------------------------------------- | ----------------------- |
+| `NODE_ENV`        | Runtime environment                     | `production`            |
+| `PORT`            | Backend API port                        | `3001`                  |
+| `DATABASE_PATH`   | SQLite database path                    | `/app/data/app.db`      |
+| `JWT_SECRET`      | JWT signing key（可选，不设则自动生成） | 自动生成并持久化        |
+| `JWT_EXPIRES_IN`  | Token expiration time                   | `24h`                   |
+| `ALLOWED_ORIGINS` | CORS allowed origins                    | `http://localhost:8080` |
 
 ## 📚 Documentation
 
-- **Full Documentation:** [GitHub Repository](https://github.com/qinshihu/itops-agent-platform)
-- **API Reference:** [API Docs](https://github.com/qinshihu/itops-agent-platform/blob/main/docs/API.md)
-- **Deployment Guide:** [Deployment Guide](https://github.com/qinshihu/itops-agent-platform/blob/main/DEPLOYMENT.md)
-- **Quick Deployment:** [Quick Deployment](https://github.com/qinshihu/itops-agent-platform/blob/main/QUICK_DEPLOY.md)
-- **Architecture:** [Architecture Docs](https://github.com/qinshihu/itops-agent-platform/blob/main/docs/ARCHITECTURE.md)
-- **Development Guide:** [Development Guide](https://github.com/qinshihu/itops-agent-platform/blob/main/docs/DEVELOPMENT.md)
+- **项目根目录文档：** [`docs/`](../docs/)
+- **架构文档：** [TECH_ARCHITECTURE.md](../.trae/documents/TECH_ARCHITECTURE.md)
+- **架构规则：** [architecture.md](../.trae/rules/architecture.md)
+- **API 文档：** 启动后访问 `/api/v1/docs`
+- **部署指南：** [`docs/`](../docs/)
 
 ## 🔧 Building from Source
 
@@ -138,18 +145,12 @@ docker run -d \
 git clone https://github.com/qinshihu/itops-agent-platform.git
 cd ITOpsAgent
 
-# Build images (standard version)
+# Build images
 docker build -f docker/Dockerfile.backend -t itops-backend:latest .
 docker build -f docker/Dockerfile.frontend -t itops-frontend:latest .
 
-# Build images (simplified backend version)
-docker build -f docker/Dockerfile.backend.simple -t itops-backend-simple:latest .
-
-# Start with docker-compose (standard)
+# Start with docker-compose
 docker-compose up -d --build
-
-# Start with docker-compose (simplified)
-docker-compose -f docker-compose.simple.yml up -d --build
 ```
 
 ## 🎯 Usage

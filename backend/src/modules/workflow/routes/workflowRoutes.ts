@@ -1,22 +1,17 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { randomUUID } from 'crypto';
-import { workflowRepository } from '../../../repositories';
-import type { WorkflowParsed } from '../../../types';
 import { requireRole } from '../../../middleware/auth';
 import { workflowProviderRegistry } from '../services/workflowProviderRegistry';
+import { workflowCrudService } from '../services/workflowCrudService';
+import { validateBody, validateParams } from '../../../middleware/validation';
+import { workflowSchemas, workflowExtendedSchemas } from '../../../shared/schemas/apiValidation';
 
 const router = Router();
 
 router.get('/', (_req: Request, res: Response) => {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const workflows = workflowRepository.workflows.list() as any[];
-    workflows.forEach((w) => {
-      if (w.nodes) w.nodes = JSON.parse(w.nodes);
-      if (w.edges) w.edges = JSON.parse(w.edges);
-      if (w.agent_configs) w.agent_configs = JSON.parse(w.agent_configs);
-    });
+    const workflows = workflowCrudService.listWorkflows();
     res.json({ success: true, data: workflows });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to fetch workflows' });
@@ -25,57 +20,28 @@ router.get('/', (_req: Request, res: Response) => {
 
 router.get('/:id', (req: Request, res: Response) => {
   try {
-    const workflow = workflowRepository.workflows.getById(req.params.id);
+    const workflow = workflowCrudService.getWorkflowById(req.params.id);
     if (!workflow) {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = workflow as any;
-    if (w.nodes) w.nodes = JSON.parse(w.nodes as string);
-    if (w.edges) w.edges = JSON.parse(w.edges as string);
-    if (w.agent_configs) w.agent_configs = JSON.parse(w.agent_configs as string);
     res.json({ success: true, data: workflow });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to fetch workflow' });
   }
 });
 
-router.post('/', requireRole('admin', 'operator'), (req: Request, res: Response) => {
+router.post('/', requireRole('admin', 'operator'), validateBody(workflowSchemas.createWorkflow), (req: Request, res: Response) => {
   try {
-    const { name, description, nodes, edges, agent_configs, is_template } = req.body;
-    const id = randomUUID();
-
-    workflowRepository.workflows.create({
-      id,
-      name,
-      description,
-      nodes: JSON.stringify(nodes || []),
-      edges: JSON.stringify(edges || []),
-      agent_configs: JSON.stringify(agent_configs || {}),
-      is_template: is_template ? 1 : 0
-    });
-
-    const workflow = workflowRepository.workflows.getById(id);
+    const workflow = workflowCrudService.createWorkflow(req.body);
     res.status(201).json({ success: true, data: workflow });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to create workflow' });
   }
 });
 
-router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
+router.put('/:id', requireRole('admin', 'operator'), validateParams(workflowSchemas.workflowId), validateBody(workflowExtendedSchemas.updateWorkflow), (req: Request, res: Response) => {
   try {
-    const { name, description, nodes, edges, agent_configs, is_template } = req.body;
-
-    workflowRepository.workflows.update(req.params.id, {
-      name,
-      description,
-      nodes: JSON.stringify(nodes || []),
-      edges: JSON.stringify(edges || []),
-      agent_configs: JSON.stringify(agent_configs || {}),
-      is_template: is_template ? 1 : 0
-    });
-
-    const workflow = workflowRepository.workflows.getById(req.params.id);
+    const workflow = workflowCrudService.updateWorkflow(req.params.id, req.body);
     res.json({ success: true, data: workflow });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to update workflow' });
@@ -84,37 +50,19 @@ router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Respons
 
 router.delete('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
-    const workflow = workflowRepository.workflows.getById(req.params.id);
-    if (!workflow) {
+    const { existed } = workflowCrudService.deleteWorkflow(req.params.id);
+    if (!existed) {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
-
-    workflowRepository.workflows.delete(req.params.id);
     res.json({ success: true, message: 'Workflow deleted successfully' });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to delete workflow' });
   }
 });
 
-router.post('/import', requireRole('admin', 'operator'), (req: Request, res: Response) => {
+router.post('/import', requireRole('admin', 'operator'), validateBody(workflowExtendedSchemas.importWorkflow), (req: Request, res: Response) => {
   try {
-    const workflowData = req.body.workflow;
-    if (!workflowData) {
-      return res.status(400).json({ success: false, error: 'Invalid format: workflow data required' });
-    }
-
-    const id = randomUUID();
-    workflowRepository.workflows.create({
-      id,
-      name: workflowData.name,
-      description: workflowData.description,
-      nodes: JSON.stringify(workflowData.nodes || []),
-      edges: JSON.stringify(workflowData.edges || []),
-      agent_configs: JSON.stringify(workflowData.agent_configs || {}),
-      is_template: 0
-    });
-
-    const workflow = workflowRepository.workflows.getById(id);
+    const workflow = workflowCrudService.importWorkflow(req.body.workflow);
     res.status(201).json({ success: true, data: workflow });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to import workflow' });
@@ -123,25 +71,10 @@ router.post('/import', requireRole('admin', 'operator'), (req: Request, res: Res
 
 router.get('/export/:id', (req: Request, res: Response) => {
   try {
-    const workflow = workflowRepository.workflows.getById(req.params.id);
-    if (!workflow) {
+    const exportData = workflowCrudService.exportWorkflow(req.params.id);
+    if (!exportData) {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = workflow as any;
-    const exportData: WorkflowParsed = {
-      id: '',
-      name: w.name as string,
-      description: w.description as string,
-      nodes: JSON.parse((w.nodes as string) || '[]'),
-      edges: JSON.parse((w.edges as string) || '[]'),
-      agent_configs: JSON.parse((w.agent_configs as string) || '{}'),
-      is_template: 0,
-      created_at: '',
-      updated_at: ''
-    };
-
     res.json({ success: true, data: exportData });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to export workflow' });
@@ -154,23 +87,19 @@ router.get('/providers/list', (req: Request, res: Response) => {
   try {
     const { type } = req.query;
     let providers;
-
     if (type) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       providers = workflowProviderRegistry.listProvidersByType(type as any);
     } else {
       providers = workflowProviderRegistry.listProviders();
     }
-
     const simplifiedProviders = providers.map(p => ({
       id: p.id,
       name: p.name,
       type: p.type,
-      configSchema: p.configSchema
+      configSchema: p.configSchema,
     }));
-
     res.json({ success: true, data: simplifiedProviders });
-  } catch (_error) {
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to get workflow providers' });
   }
 });
@@ -178,19 +107,16 @@ router.get('/providers/list', (req: Request, res: Response) => {
 router.post('/providers/test', async (req: Request, res: Response) => {
   try {
     const { providerId, config, context } = req.body;
-
     if (!providerId) {
       return res.status(400).json({ success: false, error: 'Provider ID is required' });
     }
-
     const provider = workflowProviderRegistry.getProvider(providerId);
     if (!provider) {
       return res.status(404).json({ success: false, error: `Provider ${providerId} not found` });
     }
-
     const result = await provider.execute(config || {}, context || {});
     res.json({ success: true, data: result });
-  } catch (_error) {
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to test workflow provider' });
   }
 });

@@ -1,34 +1,59 @@
-# ITOps Agent Platform - Backend Development
-# 用于本地开发环境，支持热重载
-FROM node:20-slim
+# ============================================================
+# ITOps Agent Platform - Backend Development Image
+# ============================================================
+# 用途：本地开发用镜像，支持热重载（tsx watch + inspect 调试器）
+#
+# 关键依赖：
+#   - Node 20（与项目 .nvmrc 对齐）
+#   - libsnmp-dev（net-snmp native module 编译必需）
+#   - python3 + make + g++（better-sqlite3 / bcryptjs / ssh2 native 编译）
+#
+# 启动：tsx watch（自动热重载）+ NODE_OPTIONS=--inspect=0.0.0.0:9229（由 compose 注入）
+# ============================================================
+
+FROM node:20.19.5-bookworm-slim
 
 WORKDIR /app
 
-# Install build dependencies for native modules (better-sqlite3)
-# Use Aliyun mirror for faster downloads in China
-RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
-    apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    make \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
+# 1. 切换到阿里云 apt 镜像（中国大陆加速）
+#    - bookworm-slim 默认存在 /etc/apt/sources.list.d/debian.sources（新格式）
+#    - 旧镜像可能只存在 /etc/apt/sources.list（兜底）
+RUN if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+  sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources; \
+  elif [ -f /etc/apt/sources.list ]; then \
+  sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list; \
+  fi
 
-# Copy package files first for better layer caching
-COPY backend/package.json backend/package-lock.json ./
+# 2. 安装系统依赖（net-snmp + native 编译工具）
+#   - libsnmp-dev：net-snmp native 必需（Debian/Ubuntu 实际包名，不是 libnetsnmp-dev）
+#   - python3 / make / g++：better-sqlite3 / bcryptjs / ssh2 native 编译
+#   - pkg-config：部分 native 模块查找头文件需要
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  libsnmp-dev \
+  python3 \
+  make \
+  g++ \
+  pkg-config \
+  ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
-# Install all dependencies and build native modules
-RUN npm ci
+# 3. 先复制 package.json 走 Docker 缓存层（依赖不变则不重装）
+COPY backend/package.json backend/package-lock.json* ./
 
-# Create data directory
-RUN mkdir -p /app/data
+# 4. 安装所有依赖（包含 devDependencies，因为需要 tsx / typescript / vitest）
+RUN npm ci --include=dev
 
-# Expose API port and debugger port
+# 5. 创建数据 / 备份 / 上传目录
+RUN mkdir -p /app/data /app/data/uploads /app/backups
+
+# ⚠️ 原本有 "COPY backend/src/assets ./src/assets" 但 docker-compose 会把 ../backend/src
+#    整个挂载到 /app/src，覆盖所有 COPY 出的文件。assets 文件实际是通过源码挂载自带进来的。
+#    这里不再 COPY，避免误导。
+
+# 6. 暴露端口
 EXPOSE 3001
 EXPOSE 9229
 
-# Health check
-HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
-
-# Use tsx watch for hot-reload
-CMD ["npm", "run", "dev"]
+# 8. 启动：tsx watch 自动热重载；调试器由 compose 注入 NODE_OPTIONS=--inspect=0.0.0.0:9229
+# 直接调用 tsx 二进制，避免 npm 缓冲 stdout（npm 在非 tty 下会缓冲子进程输出）
+CMD ["node", "./node_modules/tsx/dist/cli.mjs", "watch", "src/app.ts", "--clear-screen=false"]

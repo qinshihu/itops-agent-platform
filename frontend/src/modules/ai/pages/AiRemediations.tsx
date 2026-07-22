@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Bot, AlertTriangle, Shield, Clock, CheckCircle, XCircle, Loader2, Terminal, ChevronDown, ChevronRight } from 'lucide-react';
-import api from '../../../lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Modal, Input, message } from 'antd';
+import type { LucideIcon } from 'lucide-react';
+import { Bot, AlertTriangle, Shield, Clock, CheckCircle, XCircle, Loader2, Terminal, ChevronDown, ChevronRight, ThumbsUp, ThumbsDown } from 'lucide-react';
+import aiApi from '../api';
+import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 
 interface AiRemediation {
   id: string;
@@ -19,23 +22,74 @@ interface AiRemediation {
   error_message?: string;
   created_at: string;
   updated_at: string;
+  [key: string]: unknown;
 }
 
 export default function AiRemediations() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // 审批弹窗状态：'approve' | 'reject' | null
+  const [approvalAction, setApprovalAction] = useState<'approve' | 'reject' | null>(null);
+  const [approvalTarget, setApprovalTarget] = useState<AiRemediation | null>(null);
+  const [approvalComment, setApprovalComment] = useState('');
+
+  const queryClient = useQueryClient();
 
   const { data: remediations, isLoading } = useQuery({
     queryKey: ['ai-remediations'],
-    queryFn: async () => {
-      const res = await api.get('/ai-remediations?limit=50');
-      return res.data.data as AiRemediation[];
-    },
+    queryFn: () => aiApi.listAiRemediations({ limit: 50 }) as unknown as Promise<AiRemediation[]>,
     refetchInterval: 5000, // Auto-refresh every 5 seconds
   });
 
+  const approveMutation = useMutation({
+    mutationFn: ({ id, comment }: { id: string; comment?: string }) =>
+      aiApi.approveAiRemediation(id, comment),
+    onSuccess: () => {
+      message.success('已批准 AI 修复方案');
+      queryClient.invalidateQueries({ queryKey: ['ai-remediations'] });
+      setApprovalAction(null);
+      setApprovalTarget(null);
+      setApprovalComment('');
+    },
+    onError: (err: unknown) => {
+      message.error(getAxiosErrorMessage(err, '批准失败'));
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: ({ id, comment }: { id: string; comment?: string }) =>
+      aiApi.rejectAiRemediation(id, comment),
+    onSuccess: () => {
+      message.success('已拒绝 AI 修复方案');
+      queryClient.invalidateQueries({ queryKey: ['ai-remediations'] });
+      setApprovalAction(null);
+      setApprovalTarget(null);
+      setApprovalComment('');
+    },
+    onError: (err: unknown) => {
+      message.error(getAxiosErrorMessage(err, '拒绝失败'));
+    },
+  });
+
+  const openApprovalModal = (rem: AiRemediation, action: 'approve' | 'reject') => {
+    setApprovalTarget(rem);
+    setApprovalAction(action);
+    setApprovalComment('');
+  };
+
+  const submitApproval = () => {
+    if (!approvalTarget || !approvalAction) return;
+    const payload = { id: approvalTarget.id, comment: approvalComment || undefined };
+    if (approvalAction === 'approve') {
+      approveMutation.mutate(payload);
+    } else {
+      rejectMutation.mutate(payload);
+    }
+  };
+
+  const approvalMutation = approvalAction === 'approve' ? approveMutation : rejectMutation;
+
   const getStatusBadge = (status: string) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const badges: Record<string, { icon: any; color: string; label: string }> = {
+    const badges: Record<string, { icon: LucideIcon; color: string; label: string }> = {
       pending: { icon: Clock, color: 'bg-gray-500/10 text-gray-500 border-gray-500/30', label: '待处理' },
       waiting_approval: { icon: Shield, color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30', label: '等待审批' },
       approved: { icon: CheckCircle, color: 'bg-green-500/10 text-green-500 border-green-500/30', label: '已批准' },
@@ -192,24 +246,46 @@ export default function AiRemediations() {
                   )}
 
                   {/* Links */}
-                  <div className="flex items-center gap-4 text-xs">
-                    {rem.task_id && (
-                      <a
-                        href={`/tasks/${rem.task_id}`}
-                        className="text-blue-500 hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        查看任务详情 →
-                      </a>
-                    )}
-                    {rem.alert_id && (
-                      <a
-                        href={`/alerts`}
-                        className="text-blue-500 hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        查看告警 →
-                      </a>
+                  <div className="flex items-center justify-between gap-4 text-xs">
+                    <div className="flex items-center gap-4">
+                      {rem.task_id && (
+                        <a
+                          href={`/tasks/${rem.task_id}`}
+                          className="text-blue-500 hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          查看任务详情 →
+                        </a>
+                      )}
+                      {rem.alert_id && (
+                        <a
+                          href={`/alerts`}
+                          className="text-blue-500 hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          查看告警 →
+                        </a>
+                      )}
+                    </div>
+
+                    {/* 审批按钮：仅 waiting_approval 显示 */}
+                    {rem.status === 'waiting_approval' && (
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => openApprovalModal(rem, 'reject')}
+                          className="px-3 py-1.5 text-xs border border-red-500/30 text-red-500 rounded hover:bg-red-500/10 flex items-center gap-1.5 transition-colors"
+                        >
+                          <ThumbsDown className="w-3.5 h-3.5" />
+                          拒绝
+                        </button>
+                        <button
+                          onClick={() => openApprovalModal(rem, 'approve')}
+                          className="px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1.5 transition-colors"
+                        >
+                          <ThumbsUp className="w-3.5 h-3.5" />
+                          批准
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -218,6 +294,71 @@ export default function AiRemediations() {
           ))}
         </div>
       )}
+
+      {/* 审批确认 Modal */}
+      <Modal
+        title={
+          <div className="flex items-center gap-2">
+            {approvalAction === 'approve' ? (
+              <>
+                <ThumbsUp className="w-5 h-5 text-green-500" />
+                <span>批准 AI 修复方案</span>
+              </>
+            ) : (
+              <>
+                <ThumbsDown className="w-5 h-5 text-red-500" />
+                <span>拒绝 AI 修复方案</span>
+              </>
+            )}
+          </div>
+        }
+        open={approvalAction !== null}
+        onCancel={() => {
+          if (approvalMutation.isPending) return;
+          setApprovalAction(null);
+          setApprovalTarget(null);
+          setApprovalComment('');
+        }}
+        onOk={submitApproval}
+        confirmLoading={approvalMutation.isPending}
+        okText={approvalAction === 'approve' ? '批准' : '拒绝'}
+        cancelText="取消"
+        okButtonProps={{
+          danger: approvalAction === 'reject',
+        }}
+      >
+        {approvalTarget && (
+          <div className="space-y-3 py-2">
+            <div className="text-sm text-text-secondary">
+              <div className="mb-1">
+                <span className="text-text-primary font-medium">设备：</span>
+                {approvalTarget.device_name} ({approvalTarget.device_ip})
+              </div>
+              <div className="mb-1">
+                <span className="text-text-primary font-medium">风险等级：</span>
+                {getRiskBadge(approvalTarget.risk_level)}
+              </div>
+              <div>
+                <span className="text-text-primary font-medium">修复命令：</span>
+                {approvalTarget.remediation_commands?.length || 0} 条
+              </div>
+            </div>
+            <div>
+              <label className="text-sm text-text-primary block mb-1">
+                审批意见 <span className="text-text-secondary">(可选，500 字内)</span>
+              </label>
+              <Input.TextArea
+                rows={3}
+                value={approvalComment}
+                onChange={(e) => setApprovalComment(e.target.value)}
+                placeholder={approvalAction === 'approve' ? '批准理由 / 注意事项...' : '拒绝理由...'}
+                maxLength={500}
+                showCount
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

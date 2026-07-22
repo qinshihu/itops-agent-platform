@@ -4,7 +4,8 @@ import bcrypt from 'bcryptjs';
 import type { SignOptions } from 'jsonwebtoken';
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
-import { userRepository, auditLogRepository } from '../../../repositories';
+import { userCrudService } from '../services/userCrudService';
+import { createAuditLog } from '../../audit/services/auditService';
 import { env } from '../../../utils/env';
 import { tokenBlacklist } from '../services/tokenBlacklist';
 import { logger } from '../../../utils/logger';
@@ -12,7 +13,11 @@ import { validateBody } from '../../../middleware/validation';
 import { authSchemas } from '../../../shared/schemas/apiValidation';
 import { authenticateToken, invalidateUserCache } from '../../../middleware/auth';
 import { validatePassword } from '../../../utils/passwordPolicy';
-import { checkLoginLockout, recordFailedLogin, resetFailedLoginAttempts } from '../services/loginThrottler';
+import {
+  checkLoginLockout,
+  recordFailedLogin,
+  resetFailedLoginAttempts,
+} from '../services/loginThrottler';
 
 const router = Router();
 
@@ -23,26 +28,28 @@ router.post('/login', validateBody(authSchemas.login), async (req: Request, res:
 
     const lockoutStatus = checkLoginLockout(username);
     if (lockoutStatus.locked) {
-      const remainingMinutes = Math.ceil((lockoutStatus.lockoutUntil!.getTime() - new Date().getTime()) / 60000);
+      const remainingMinutes = Math.ceil(
+        (lockoutStatus.lockoutUntil!.getTime() - new Date().getTime()) / 60000,
+      );
       return res.status(423).json({
         success: false,
-        message: `账户已被锁定，请${remainingMinutes}分钟后再试`
+        message: `账户已被锁定，请${remainingMinutes}分钟后再试`,
       });
     }
 
-    const user = userRepository.getForAuth(username);
+    const user = userCrudService.getForAuth(username);
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: '用户名或密码错误'
+        message: '用户名或密码错误',
       });
     }
 
     if (!user.enabled) {
       return res.status(403).json({
         success: false,
-        message: '账户已被禁用'
+        message: '账户已被禁用',
       });
     }
 
@@ -52,12 +59,12 @@ router.post('/login', validateBody(authSchemas.login), async (req: Request, res:
       if (result.locked) {
         return res.status(423).json({
           success: false,
-          message: `密码错误次数过多，账户已被锁定30分钟`
+          message: `密码错误次数过多，账户已被锁定30分钟`,
         });
       }
       return res.status(401).json({
         success: false,
-        message: `用户名或密码错误，剩余${result.remainingAttempts}次尝试机会`
+        message: `用户名或密码错误，剩余${result.remainingAttempts}次尝试机会`,
       });
     }
 
@@ -68,28 +75,25 @@ router.post('/login', validateBody(authSchemas.login), async (req: Request, res:
         id: user.id,
         username: user.username,
         role: user.role,
-        email: user.email
+        email: user.email,
       },
       env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN } as SignOptions
+      { expiresIn: env.JWT_EXPIRES_IN } as SignOptions,
     );
 
-    const refreshToken = jwt.sign(
-      { id: user.id, type: 'refresh' },
-      env.JWT_SECRET,
-      { expiresIn: '7d' } as SignOptions
-    );
+    const refreshToken = jwt.sign({ id: user.id, type: 'refresh' }, env.JWT_SECRET, {
+      expiresIn: '7d',
+    } as SignOptions);
 
-    userRepository.touchLogin(user.id);
+    userCrudService.touchLogin(user.id);
 
-    auditLogRepository.insert({
-      id: randomUUID(),
+    createAuditLog({
       user_id: user.id,
       action: 'login',
       resource_type: 'auth',
       resource_id: 'login',
-      details: JSON.stringify({ username }),
-      ip_address: req.ip
+      details: { username } as any,
+      ip_address: req.ip,
     });
 
     res.json({
@@ -103,15 +107,15 @@ router.post('/login', validateBody(authSchemas.login), async (req: Request, res:
           username: user.username,
           email: user.email,
           role: user.role,
-          passwordMustChange: Boolean(user.password_must_change)
-        }
-      }
+          passwordMustChange: Boolean(user.password_must_change),
+        },
+      },
     });
   } catch (error) {
     logger.error('登录失败', error);
     res.status(500).json({
       success: false,
-      message: '服务器错误'
+      message: '服务器错误',
     });
   }
 });
@@ -124,46 +128,46 @@ router.post('/refresh', async (req: Request, res: Response) => {
     if (!refreshToken) {
       return res.status(400).json({
         success: false,
-        message: '请提供refresh token'
+        message: '请提供refresh token',
       });
     }
 
     if (tokenBlacklist.isBlacklisted(refreshToken)) {
       return res.status(401).json({
         success: false,
-        message: 'Token已失效'
+        message: 'Token已失效',
       });
     }
 
-    const decoded = jwt.verify(refreshToken, env.JWT_SECRET, { algorithms: ['HS256'] }) as jwt.JwtPayload & { id: string; type: string };
+    const decoded = jwt.verify(refreshToken, env.JWT_SECRET, {
+      algorithms: ['HS256'],
+    }) as jwt.JwtPayload & { id: string; type: string };
 
     if (decoded.type !== 'refresh') {
       return res.status(401).json({
         success: false,
-        message: '无效的refresh token'
+        message: '无效的refresh token',
       });
     }
 
-    const user = userRepository.getForWebSocket(decoded.id);
+    const user = userCrudService.getForWebSocket(decoded.id);
 
     if (!user?.enabled) {
       return res.status(401).json({
         success: false,
-        message: '用户不存在或已被禁用'
+        message: '用户不存在或已被禁用',
       });
     }
 
     const newAccessToken = jwt.sign(
       { id: user.id, username: user.username, role: user.role, email: user.email },
       env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN } as SignOptions
+      { expiresIn: env.JWT_EXPIRES_IN } as SignOptions,
     );
 
-    const newRefreshToken = jwt.sign(
-      { id: user.id, type: 'refresh' },
-      env.JWT_SECRET,
-      { expiresIn: '7d' } as SignOptions
-    );
+    const newRefreshToken = jwt.sign({ id: user.id, type: 'refresh' }, env.JWT_SECRET, {
+      expiresIn: '7d',
+    } as SignOptions);
 
     tokenBlacklist.addToBlacklist(refreshToken, 'token-refresh', decoded.id);
 
@@ -171,47 +175,51 @@ router.post('/refresh', async (req: Request, res: Response) => {
       success: true,
       data: {
         token: newAccessToken,
-        refreshToken: newRefreshToken
-      }
+        refreshToken: newRefreshToken,
+      },
     });
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError || error instanceof jwt.JsonWebTokenError) {
       return res.status(401).json({
         success: false,
-        message: 'Refresh token已过期或无效'
+        message: 'Refresh token已过期或无效',
       });
     }
     logger.error('Token刷新失败', error);
     res.status(500).json({
       success: false,
-      message: '服务器错误'
+      message: '服务器错误',
     });
   }
 });
 
 // 获取当前用户信息
-router.get('/me', authenticateToken, async (req: Request & { user?: { id: string } }, res: Response) => {
-  try {
-    const user = userRepository.getProfile(req.user!.id);
+router.get(
+  '/me',
+  authenticateToken,
+  async (req: Request & { user?: { id: string } }, res: Response) => {
+    try {
+      const user = userCrudService.getProfile(req.user!.id);
 
-    if (!user) {
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: '用户不存在',
+        });
+      }
+
+      res.json({
+        success: true,
+        data: user,
+      });
+    } catch {
       return res.status(401).json({
         success: false,
-        message: '用户不存在'
+        message: '无效的token',
       });
     }
-
-    res.json({
-      success: true,
-      data: user
-    });
-  } catch {
-    return res.status(401).json({
-      success: false,
-      message: '无效的token'
-    });
-  }
-});
+  },
+);
 
 // 退出登录
 router.post('/logout', authenticateToken, async (req: Request, res: Response) => {
@@ -221,95 +229,102 @@ router.post('/logout', authenticateToken, async (req: Request, res: Response) =>
       const token = authHeader.substring(7);
 
       // 将token加入黑名单
-      tokenBlacklist.addToBlacklist(token, 'user-logout', (req as { user?: { id: string } }).user?.id);
+      tokenBlacklist.addToBlacklist(
+        token,
+        'user-logout',
+        (req as { user?: { id: string } }).user?.id,
+      );
     }
 
     res.json({
       success: true,
-      message: '退出成功'
+      message: '退出成功',
     });
   } catch (error) {
     logger.error('登出失败', error);
     res.status(500).json({
       success: false,
-      message: '登出过程出现错误'
+      message: '登出过程出现错误',
     });
   }
 });
 
 // 修改密码
-router.post('/change-password', authenticateToken, async (req: Request & { user?: { id: string } }, res: Response) => {
-  try {
-    const { currentPassword, newPassword } = req.body;
+router.post(
+  '/change-password',
+  authenticateToken,
+  async (req: Request & { user?: { id: string } }, res: Response) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
 
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: '请提供当前密码和新密码',
+        });
+      }
+
+      // 查询用户
+      const user = userCrudService.getUserById(req.user!.id);
+
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: '用户不存在',
+        });
+      }
+
+      // 验证当前密码
+      const validPassword = await bcrypt.compare(currentPassword, user.password);
+      if (!validPassword) {
+        return res.status(401).json({
+          success: false,
+          message: '当前密码错误',
+        });
+      }
+
+      // 密码强度检查
+      const passwordCheck = validatePassword(newPassword);
+      if (!passwordCheck.valid) {
+        return res.status(400).json({
+          success: false,
+          message: passwordCheck.message,
+        });
+      }
+
+      // 加密新密码
+      const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+
+      // 更新密码并清除 password_must_change 标志
+      userCrudService.updatePassword(user.id, hashedNewPassword);
+
+      // 清除用户缓存，确保下一次请求获取最新状态
+      invalidateUserCache(user.id);
+
+      // 记录审计日志
+      createAuditLog({
+        user_id: user.id,
+        action: 'change_password',
+        resource_type: 'auth',
+        resource_id: 'password',
+        details: { username: user.username } as any,
+        ip_address: req.ip,
+      });
+
+      logger.info(`用户 ${user.username} 修改了密码`);
+
+      res.json({
+        success: true,
+        message: '密码修改成功',
+      });
+    } catch (error) {
+      logger.error('修改密码失败', error);
+      res.status(500).json({
         success: false,
-        message: '请提供当前密码和新密码'
+        message: '服务器错误',
       });
     }
-
-    // 查询用户
-    const user = userRepository.getById(req.user!.id);
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: '用户不存在'
-      });
-    }
-
-    // 验证当前密码
-    const validPassword = await bcrypt.compare(currentPassword, user.password);
-    if (!validPassword) {
-      return res.status(401).json({
-        success: false,
-        message: '当前密码错误'
-      });
-    }
-
-    // 密码强度检查
-    const passwordCheck = validatePassword(newPassword);
-    if (!passwordCheck.valid) {
-      return res.status(400).json({
-        success: false,
-        message: passwordCheck.message
-      });
-    }
-
-    // 加密新密码
-    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
-
-    // 更新密码并清除 password_must_change 标志
-    userRepository.updatePassword(user.id, hashedNewPassword);
-
-    // 清除用户缓存，确保下一次请求获取最新状态
-    invalidateUserCache(user.id);
-
-    // 记录审计日志
-    auditLogRepository.insert({
-      id: randomUUID(),
-      user_id: user.id,
-      action: 'change_password',
-      resource_type: 'auth',
-      resource_id: 'password',
-      details: JSON.stringify({ username: user.username }),
-      ip_address: req.ip
-    });
-
-    logger.info(`用户 ${user.username} 修改了密码`);
-
-    res.json({
-      success: true,
-      message: '密码修改成功'
-    });
-  } catch (error) {
-    logger.error('修改密码失败', error);
-    res.status(500).json({
-      success: false,
-      message: '服务器错误'
-    });
-  }
-});
+  },
+);
 
 export default router;

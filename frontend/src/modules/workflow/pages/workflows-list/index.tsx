@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -6,7 +5,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../../../lib/api';
-import type { Workflow, Server } from './types';
+import type { Workflow, Server, WorkflowNode } from './types';
 import WorkflowToolbar from './WorkflowToolbar';
 import WorkflowCard from './WorkflowCard';
 import ServerSelectModal from './ServerSelectModal';
@@ -26,16 +25,16 @@ export default function Workflows() {
   const { data: servers } = useQuery({
     queryKey: ['servers'],
     queryFn: async () => {
-      const res = await api.get('/servers');
-      return res.data.data as Server[];
+      const { data } = await api.get('/servers');
+      return data as Server[];
     },
   });
 
   const { data: workflows, isLoading } = useQuery({
     queryKey: ['workflows'],
     queryFn: async () => {
-      const res = await api.get('/workflows');
-      return res.data.data as Workflow[];
+      const { data } = await api.get('/workflows');
+      return data as Workflow[];
     },
   });
 
@@ -51,7 +50,7 @@ export default function Workflows() {
 
   const duplicateMutation = useMutation({
     mutationFn: async (workflow: Workflow) => {
-      const { _id, _created_at, _updated_at, ...cleanWorkflow } = {
+      const { id: _id, created_at: _created_at, updated_at: _updated_at, ...cleanWorkflow } = {
         ...workflow,
         name: `${workflow.name} (副本)`,
         is_template: 0,
@@ -65,13 +64,13 @@ export default function Workflows() {
 
   const executeMutation = useMutation({
     mutationFn: async ({ workflowId, context }: { workflowId: string; context?: Record<string, unknown> }) => {
-      const res = await api.post('/tasks', {
+      const { data } = await api.post('/tasks', {
         workflow_id: workflowId,
         name: 'Task',
         input: '开始执行工作流',
         context
       });
-      return res.data.data;
+      return data;
     },
     onSuccess: (_data) => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -88,7 +87,7 @@ export default function Workflows() {
       '变更执行',
       '服务器'
     ];
-    return workflow.nodes?.some((node: any) =>
+    return workflow.nodes?.some((node: WorkflowNode) =>
       serverAgentNames.some(name => node.data?.label?.includes(name))
     );
   };

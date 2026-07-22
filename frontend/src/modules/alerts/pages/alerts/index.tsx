@@ -27,8 +27,8 @@ export default function Alerts() {
       const params: Record<string, string> = {};
       if (statusFilter !== 'all') params.status = statusFilter;
       if (severityFilter !== 'all') params.severity = severityFilter;
-      const res = await api.get('/alerts', { params });
-      return res.data.data as Alert[];
+      const { data } = await api.get('/alerts', { params });
+      return data as Alert[];
     },
     staleTime: 30000,
   });
@@ -39,8 +39,8 @@ export default function Alerts() {
   const { data: analysisMap = {} } = useQuery({
     queryKey: ['alert-auto-analysis-map'],
     queryFn: async () => {
-      const res = await api.get('/alert-auto-analysis?limit=200');
-      const items = (res.data.data || []) as AnalysisItem[];
+      const { data } = await api.get('/alert-auto-analysis?limit=200');
+      const items = (data || []) as AnalysisItem[];
       const map: Record<string, AnalysisItem> = {};
       items.forEach((item) => { if (item.alert_id && !map[item.alert_id]) map[item.alert_id] = item; });
       return map;
@@ -52,8 +52,8 @@ export default function Alerts() {
     queryKey: ['alert-automation-logs', automationLogAlert?.id],
     enabled: !!automationLogAlert,
     queryFn: async () => {
-      const res = await api.get(`/alerts/${automationLogAlert!.id}/automation-logs`);
-      return (res.data.data || []) as AutomationLog[];
+      const { data } = await api.get(`/alerts/${automationLogAlert!.id}/automation-logs`);
+      return (data || []) as AutomationLog[];
     },
   });
 
@@ -83,8 +83,8 @@ export default function Alerts() {
 
   const processMutation = useMutation({
     mutationFn: async (alertId: string) => {
-      const res = await api.post(`/alerts/${alertId}/process`);
-      return res.data;
+      const { data } = await api.post(`/alerts/${alertId}/process`);
+      return data;
     },
     onSuccess: (data) => {
       if (data?.data) {

@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { remediationService } from '../services/remediationService';
 import { logger } from '../../../utils/logger';
-import { remediationAuditRepository } from '../../../repositories';
+import { remediationExecutionService } from '../services/remediationExecutionService';
 import { authenticateToken as authenticate } from '../../../middleware/auth';
 
 const router = Router();
@@ -121,7 +121,7 @@ router.post('/:id/execute', authenticate, async (req: Request, res: Response) =>
 
 router.post('/:id/rollback', authenticate, async (req: Request, res: Response) => {
   try {
-    const audit = remediationAuditRepository.getById(req.params.id);
+    const audit = remediationExecutionService.getAuditExists(req.params.id);
     if (!audit) {
       return res.status(404).json({
         success: false,

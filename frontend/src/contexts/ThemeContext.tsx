@@ -21,11 +21,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (theme === 'light') {
       root.setAttribute('data-theme', 'light');
       root.classList.remove('dark');
-      document.body.style.background = '#f8fafc';
+      document.body.style.background = '#eef2f7';
     } else {
       root.removeAttribute('data-theme');
       root.classList.add('dark');
-      document.body.style.background = 'linear-gradient(135deg, #0f172a 0%, #020617 100%)';
+      document.body.style.background = 'linear-gradient(135deg, #1a2233 0%, #131c2d 100%)';
     }
     localStorage.setItem('theme', theme);
   }, [theme]);

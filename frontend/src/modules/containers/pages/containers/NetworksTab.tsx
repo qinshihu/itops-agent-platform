@@ -10,7 +10,7 @@ export function NetworksTab({ ctx }: { ctx: Ctx }) {
     networks, networksLoading, networksError,
     showNetCreateModal, setShowNetCreateModal,
     showNetDetailDrawer, setShowNetDetailDrawer,
-    netDetailData: _netDetailData, _setNetDetailData,
+    netDetailData: _netDetailData, setNetDetailData,
     netName, setNetName,
     netDriver, setNetDriver,
     netSubnet, setNetSubnet,

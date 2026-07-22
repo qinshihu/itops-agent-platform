@@ -128,6 +128,7 @@ vi.mock('../../../models/database', () => ({
   initializeDatabase: vi.fn(),
   setIOInstance: vi.fn(),
   getIOInstance: vi.fn(),
+  performMaintenance: vi.fn(),
 }));
 
 vi.mock('../../../utils/logger', () => ({

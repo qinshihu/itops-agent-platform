@@ -19,6 +19,7 @@ export interface NotificationRecord {
   related_alert_id: string | null;
   related_task_id: string | null;
   sent_at: string | null;
+  error_message: string | null;  // 失败原因（2026-07-06 增）
   created_at: string;
 }
 

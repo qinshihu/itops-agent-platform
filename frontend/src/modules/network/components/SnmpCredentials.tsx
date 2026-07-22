@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Plus, _Trash2, Search, Loader2, CheckCircle2, AlertCircle, Play, _Key, Radio,
+  Plus, Trash2, Search, Loader2, CheckCircle2, AlertCircle, Play, Key, Radio,
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../../lib/api';
@@ -52,10 +52,10 @@ export default function SnmpCredentials() {
     }),
     onMutate: () => setTestResult({ host: form.host, status: 'testing' }),
     onSuccess: (res) => {
-      if (res.data.code === 0) {
+      if (res.data?.code === 0) {
         setTestResult({ host: form.host, status: 'success' });
       } else {
-        setTestResult({ host: form.host, status: 'fail', msg: res.data.message || '连接失败' });
+        setTestResult({ host: form.host, status: 'fail', msg: res.data?.message || '连接失败' });
       }
     },
     onError: (err: unknown) => {

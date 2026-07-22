@@ -23,7 +23,7 @@ vi.mock('../models/database', () => {
     close: vi.fn(),
     pragma: vi.fn(),
   };
-  return { default: mockDb, db: mockDb, initializeDatabase: vi.fn(), setIOInstance: vi.fn(), getIOInstance: vi.fn() };
+  return { default: mockDb, db: mockDb, initializeDatabase: vi.fn(), setIOInstance: vi.fn(), getIOInstance: vi.fn(), performMaintenance: vi.fn() };
 });
 
 vi.mock('../utils/logger', () => ({

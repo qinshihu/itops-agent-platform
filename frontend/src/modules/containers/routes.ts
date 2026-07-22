@@ -9,6 +9,7 @@ const Volumes = lazy(() => import('./pages/Volumes'));
 const ComposeEditor = lazy(() => import('./pages/ComposeEditor'));
 const SnapshotPolicies = lazy(() => import('./pages/SnapshotPolicies'));
 const ImageRegistry = lazy(() => import('./pages/ImageRegistry'));
+const VMMigrations = lazy(() => import('./pages/VMMigrations'));
 
 export const containerRoutes = [
   { path: 'containers', element: Containers },
@@ -20,4 +21,5 @@ export const containerRoutes = [
   { path: 'compose', element: ComposeEditor },
   { path: 'snapshot-policies', element: SnapshotPolicies },
   { path: 'image-registry', element: ImageRegistry },
+  { path: 'vm-migrations', element: VMMigrations },
 ];

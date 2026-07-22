@@ -144,22 +144,46 @@ class ConfigTemplateService {
         applied_at: now,
       });
 
-      // TODO: 实际执行配置应用（通过 SSH 服务）
-      // 这里需要集成 sshService 来执行：
-      // 1. 备份现有配置（如果 backup_before_apply = 1）
-      // 2. 写入新配置到 target_path
-      // 3. 执行 restart_command
-      // 4. 执行 validation_command 验证
-
-      // 模拟成功（实际实现需要 SSH 集成）
-      const success = true;
-      const backupPath = template.backup_before_apply ? `${template.target_path}.bak.${Date.now()}` : null;
+      // 真实化应用流程（v3 报告 P1-7）：
+      // 1. 通过 sshService.executeCommand() 在 serverId 上执行 shell 命令
+      // 2. 步骤：备份(可选) → 写入新配置 → 重启(可选) → 验证(可选)
+      // 3. 失败时返回失败状态而非静默成功
+      if (!template.target_path) {
+        throw new Error(`Template ${templateId} has no target_path configured`);
+      }
+      const { executeCommand } = await import('../../servers/services/sshService');
+      let success = false;
+      let backupPath: string | null = null;
+      let errorMessage: string | null = null;
+      try {
+        // 1) 备份（如需）
+        if (template.backup_before_apply) {
+          backupPath = `${template.target_path}.bak.${Date.now()}`;
+          await executeCommand(serverId, `cp -p ${template.target_path} ${backupPath}`, { logHistory: false });
+        }
+        // 2) 写入新配置（heredoc 原子写）
+        const rendered = this.renderTemplate(templateId, variables);
+        const writeCmd = `cat > ${template.target_path} << 'IT_OPS_EOF'\n${rendered}\nIT_OPS_EOF`;
+        await executeCommand(serverId, writeCmd, { logHistory: false });
+        // 3) 重启命令（可选）
+        if (template.restart_command) {
+          await executeCommand(serverId, template.restart_command, { logHistory: false });
+        }
+        // 4) 验证命令（可选，失败不阻塞）
+        if (template.validation_command) {
+          await executeCommand(serverId, template.validation_command, { logHistory: false });
+        }
+        success = true;
+      } catch (err) {
+        errorMessage = err instanceof Error ? err.message : String(err);
+        logger.error(`Failed to apply config template ${templateId} on server ${serverId}: ${errorMessage}`);
+      }
 
       configTemplateHistoryRepo.updateStatus(
         historyId,
         success ? 'success' : 'failed',
         backupPath,
-        success ? 'Configuration applied successfully' : 'Failed to apply configuration',
+        success ? 'Configuration applied successfully' : (errorMessage || 'Failed to apply configuration'),
         now
       );
 

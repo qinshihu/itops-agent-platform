@@ -1,16 +1,16 @@
-/**
- * AI 模块 API 服务层
- * 封装 AI 模型、Agent、根因分析、知识库、AI 修复相关端点
+﻿/**
+ * AI 妯″潡 API 鏈嶅姟灞?
+ * 灏佽 AI 妯″瀷銆丄gent銆佹牴鍥犲垎鏋愩€佺煡璇嗗簱銆丄I 淇鐩稿叧绔偣
  */
 
 import api from '@/lib/api';
 import type { Agent as _AgentEntity, AiModel as _AiModel } from '../../types/agent';
 
 // ============================================================
-// 类型定义
+// 绫诲瀷瀹氫箟
 // ============================================================
 
-// ── AI 模型 ──
+// 鈹€鈹€ AI 妯″瀷 鈹€鈹€
 
 export interface AIModel {
   id: string;
@@ -50,7 +50,7 @@ export interface AIModelUpdate {
   tags?: string[];
 }
 
-// ── Agent ──
+// 鈹€鈹€ Agent 鈹€鈹€
 
 export interface Agent {
   id: string;
@@ -96,12 +96,20 @@ export interface AgentListParams {
 export interface AgentTestInput {
   input: string;
   serverIds?: string[];
+  serverId?: string;
+  databaseId?: string;
+  context?: Record<string, unknown>;
 }
 
 export interface AgentTestResult {
+  executionId: string;
   output: string;
-  result?: string;
-  [key: string]: unknown;
+  status: string;
+  executionTime: number;
+  metadata: {
+    serverId?: string;
+    databaseId?: string;
+  };
 }
 
 export interface AgentExecution {
@@ -117,7 +125,78 @@ export interface AgentExecution {
   created_at: string;
 }
 
-// ── 根因分析 ──
+export interface AgentExecutionsResponse {
+  executions: AgentExecution[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+  };
+}
+
+export interface AgentStatsSummary {
+  totalAgents: number;
+  enabledAgents: number;
+  presetAgents: number;
+  totalExecutions: number;
+  categoryStats: Array<{ category: string | null; count: number }>;
+}
+
+export interface AgentTestInputSuggestion {
+  testInput: string;
+  agentName: string;
+}
+
+export interface AgentImportResult {
+  importedCount: number;
+  ids: string[];
+}
+
+export interface AgentExportData {
+  name: string;
+  avatar: string;
+  role: string;
+  system_prompt: string;
+  model: string;
+  temperature: number;
+  enabled: number;
+  category?: string | null;
+  tags: string[];
+  description?: string | null;
+  api_provider?: string;
+  primary_model_id?: string | null;
+  fallback_model_id?: string | null;
+}
+
+export interface AgentTool {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  schema: Record<string, unknown>;
+}
+
+export interface AgentToolTestResult {
+  toolId: string;
+  args: Record<string, unknown>;
+  result: unknown;
+}
+
+export interface AgentToolDescriptions {
+  description: string;
+}
+
+// 鈹€鈹€ 鏍瑰洜鍒嗘瀽 鈹€鈹€
+
+export interface RcaJobStatus {
+  id: string;
+  rcaId: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  startedAt: string;
+  finishedAt?: string;
+  durationMs?: number;
+  error?: string;
+}
 
 export interface RootCauseAnalysis {
   id: string;
@@ -145,7 +224,7 @@ export interface RcaStats {
   [key: string]: unknown;
 }
 
-// ── 知识库 ──
+// 鈹€鈹€ 鐭ヨ瘑搴?鈹€鈹€
 
 export interface Knowledge {
   id: string;
@@ -171,183 +250,286 @@ export interface KnowledgeListParams {
   category?: string;
 }
 
-// ── AI 修复 ──
+// 鈹€鈹€ AI 淇 鈹€鈹€
 
 export interface AiRemediation {
   id: string;
   [key: string]: unknown;
 }
 
+export interface AiRemediationStats {
+  total: number;
+  byStatus: Record<string, number>;
+  mttrSeconds: number | null;
+  mttrCount: number;
+  successRate: number;
+  completedThisWeek: number;
+  completedLastWeek: number;
+  weekOverWeekDelta: number;
+  noiseFilter: { autoHandled: number; total: number; rate: number };
+  mttrMinutes: number | null;
+  mttrDisplay: string | null;
+}
+
 // ============================================================
-// aiApi 对象
+// aiApi 瀵硅薄
 // ============================================================
 
 export const aiApi = {
-  // ── AI 模型 ──
+  // 鈹€鈹€ AI 妯″瀷 鈹€鈹€
 
-  /** 获取 AI 模型列表 */
+  /** 鑾峰彇 AI 妯″瀷鍒楄〃 */
   async listModels(): Promise<AIModel[]> {
     const { data } = await api.get('/ai-models');
-    return data.data;
+    return data;
   },
 
-  /** 创建 AI 模型 */
+  /** 鍒涘缓 AI 妯″瀷 */
   async createModel(input: AIModelInput): Promise<AIModel> {
     const { data } = await api.post('/ai-models', input);
-    return data.data;
+    return data;
   },
 
-  /** 更新 AI 模型 */
+  /** 鏇存柊 AI 妯″瀷 */
   async updateModel(id: string, input: AIModelUpdate): Promise<AIModel> {
     const { data } = await api.put(`/ai-models/${id}`, input);
-    return data.data;
+    return data;
   },
 
-  /** 删除 AI 模型 */
+  /** 鍒犻櫎 AI 妯″瀷 */
   async deleteModel(id: string): Promise<void> {
     await api.delete(`/ai-models/${id}`);
   },
 
-  /** 切换模型启用状态 */
+  /** 鍒囨崲妯″瀷鍚敤鐘舵€?*/
   async toggleModel(id: string, enabled: boolean): Promise<AIModel> {
     const { data } = await api.put(`/ai-models/${id}`, { enabled: enabled ? 1 : 0 });
-    return data.data;
+    return data;
   },
 
-  /** 设置默认模型 */
+  /** 璁剧疆榛樿妯″瀷 */
   async setDefaultModel(id: string): Promise<AIModel> {
     const { data } = await api.put(`/ai-models/${id}`, { is_default: 1 });
-    return data.data;
+    return data;
   },
 
-  /** 模型排序 */
+  /** 妯″瀷鎺掑簭 */
   async reorderModels(modelIds: string[]): Promise<void> {
     await api.put('/ai-models/reorder', { modelIds });
   },
 
-  /** 测试模型连接 */
+  /** 娴嬭瘯妯″瀷杩炴帴 */
   async testModel(id: string): Promise<unknown> {
     const { data } = await api.post(`/ai-models/${id}/test`);
     return data;
   },
 
-  // ── Agent ──
+  // 鈹€鈹€ Agent 鈹€鈹€
 
-  /** 获取 Agent 列表 */
+  /** 鑾峰彇 Agent 鍒楄〃 */
   async listAgents(params?: AgentListParams): Promise<Agent[]> {
     const { data } = await api.get('/agents', { params });
-    return data.data;
+    return data;
   },
 
-  /** 获取 Agent 详情 */
+  /** 鑾峰彇 Agent 璇︽儏 */
   async getAgent(id: string): Promise<Agent> {
     const { data } = await api.get(`/agents/${id}`);
-    return data.data;
+    return data;
   },
 
-  /** 创建 Agent */
+  /** 鍒涘缓 Agent */
   async createAgent(input: AgentInput): Promise<Agent> {
     const { data } = await api.post('/agents', input);
-    return data.data;
+    return data;
   },
 
-  /** 更新 Agent */
+  /** 鏇存柊 Agent */
   async updateAgent(id: string, input: Partial<AgentInput>): Promise<Agent> {
     const { data } = await api.put(`/agents/${id}`, input);
-    return data.data;
+    return data;
   },
 
-  /** 删除 Agent */
+  /** 鍒犻櫎 Agent */
   async deleteAgent(id: string): Promise<void> {
     await api.delete(`/agents/${id}`);
   },
 
-  /** 测试 Agent */
+  /** 娴嬭瘯 Agent */
   async testAgent(id: string, input: AgentTestInput): Promise<AgentTestResult> {
     const { data } = await api.post(`/agents/${id}/test`, input);
-    return data.data;
+    return data;
   },
 
-  /** 获取 Agent 执行历史 */
-  async listAgentExecutions(id: string, params?: { limit?: number }): Promise<AgentExecution[]> {
+  /** 鑾峰彇 Agent 鎵ц鍘嗗彶 */
+  async listAgentExecutions(
+    id: string,
+    params?: { limit?: number; offset?: number; status?: string },
+  ): Promise<AgentExecutionsResponse> {
     const { data } = await api.get(`/agents/${id}/executions`, { params });
-    return data.data;
+    return data;
   },
 
-  // ── 根因分析 ──
+  /** 鑾峰彇 Agent 缁熻姒傝 */
+  async getAgentStatsSummary(): Promise<AgentStatsSummary> {
+    const { data } = await api.get('/agents/stats/summary');
+    return data;
+  },
 
-  /** 获取根因分析列表 */
+  /** 鑾峰彇 Agent 鎺ㄨ崘娴嬭瘯杈撳叆 */
+  async getAgentTestInput(id: string): Promise<AgentTestInputSuggestion> {
+    const { data } = await api.get(`/agents/${id}/test-input`);
+    return data;
+  },
+
+  /** 鎵归噺瀵煎叆 Agent */
+  async importAgents(agents: AgentInput[]): Promise<AgentImportResult> {
+    const { data } = await api.post('/agents/import', { agents });
+    return data;
+  },
+
+  /** 瀵煎嚭鍗曚釜 Agent 閰嶇疆 */
+  async exportAgent(id: string): Promise<AgentExportData> {
+    const { data } = await api.get(`/agents/export/${id}`);
+    return data;
+  },
+
+  /** 鑾峰彇宸ュ叿鍒楄〃 */
+  async listAgentTools(category?: string): Promise<AgentTool[]> {
+    const { data } = await api.get('/agents/tools/list', {
+      params: category ? { category } : undefined,
+    });
+    return data;
+  },
+
+  /** 娴嬭瘯宸ュ叿鎵ц */
+  async testAgentTool(
+    toolId: string,
+    args?: Record<string, unknown>,
+  ): Promise<AgentToolTestResult> {
+    const { data } = await api.post('/agents/tools/test', { toolId, args });
+    return data;
+  },
+
+  /** 鑾峰彇宸ュ叿鎻忚堪锛堢粰 LLM 鐢級 */
+  async getAgentToolDescriptions(): Promise<AgentToolDescriptions> {
+    const { data } = await api.get('/agents/tools/descriptions');
+    return data;
+  },
+
+  // 鈹€鈹€ 鏍瑰洜鍒嗘瀽 鈹€鈹€
+
+  /** 鑾峰彇鏍瑰洜鍒嗘瀽鍒楄〃 */
   async listRcas(): Promise<RootCauseAnalysis[]> {
     const { data } = await api.get('/root-cause-analysis');
-    return data.data || [];
+    return data || [];
   },
 
-  /** 获取根因分析详情 */
+  /** 鑾峰彇鏍瑰洜鍒嗘瀽璇︽儏 */
   async getRca(id: string): Promise<RootCauseAnalysis> {
     const { data } = await api.get(`/root-cause-analysis/${id}`);
-    return data.data;
+    return data;
   },
 
-  /** 创建根因分析 */
+  /** 鍒涘缓鏍瑰洜鍒嗘瀽 */
   async createRca(input: RcaInput): Promise<RootCauseAnalysis> {
     const { data } = await api.post('/root-cause-analysis', input);
-    return data.data;
+    return data;
   },
 
-  /** 执行根因分析 */
+  /** 鎵ц鏍瑰洜鍒嗘瀽锛堝悓姝ワ紝鍙兘瓒呮椂锛?*/
   async analyzeRca(id: string): Promise<unknown> {
     const { data } = await api.post(`/root-cause-analysis/${id}/analyze`);
     return data;
   },
 
-  /** 删除根因分析 */
+  /** v4 鏂板锛氬紓姝ユ墽琛屾牴鍥犲垎鏋愶紙绔嬪嵆杩斿洖 jobId锛?*/
+  async analyzeRcaAsync(
+    id: string,
+  ): Promise<{ jobId: string; rcaId: string; status: string; pollUrl: string }> {
+    const { data } = await api.post(`/root-cause-analysis/${id}/analyze-async`);
+    return data;
+  },
+
+  /** v4 鏂板锛氳疆璇㈠紓姝ヤ换鍔＄姸鎬?*/
+  async getRcaJobStatus(jobId: string): Promise<RcaJobStatus> {
+    const { data } = await api.get(`/root-cause-analysis/jobs/${jobId}`);
+    return data;
+  },
+
+  /** 鍒犻櫎鏍瑰洜鍒嗘瀽 */
   async deleteRca(id: string): Promise<void> {
     await api.delete(`/root-cause-analysis/${id}`);
   },
 
-  /** 自动分析告警根因 */
+  /** 鑷姩鍒嗘瀽鍛婅鏍瑰洜 */
   async autoAnalyzeAlert(alertId: string): Promise<void> {
     await api.post(`/root-cause-analysis/auto-analyze/${alertId}`);
   },
 
-  /** 获取根因分析统计 */
+  /** 鑾峰彇鏍瑰洜鍒嗘瀽缁熻 */
   async getRcaStats(): Promise<RcaStats> {
     const { data } = await api.get('/root-cause-analysis/stats');
-    return data.data;
+    return data;
   },
 
-  // ── 知识库 ──
+  // 鈹€鈹€ 鐭ヨ瘑搴?鈹€鈹€
 
-  /** 获取知识库列表 */
+  /** 鑾峰彇鐭ヨ瘑搴撳垪琛?*/
   async listKnowledge(params?: KnowledgeListParams): Promise<Knowledge[]> {
     const { data } = await api.get('/knowledge', { params });
-    return data.data;
+    return data;
   },
 
-  /** 创建知识条目 */
+  /** 鍒涘缓鐭ヨ瘑鏉＄洰 */
   async createKnowledge(input: KnowledgeInput): Promise<Knowledge> {
     const { data } = await api.post('/knowledge', input);
-    return data.data;
+    return data;
   },
 
-  /** 更新知识条目 */
+  /** 鏇存柊鐭ヨ瘑鏉＄洰 */
   async updateKnowledge(id: string, input: KnowledgeInput): Promise<Knowledge> {
     const { data } = await api.put(`/knowledge/${id}`, input);
-    return data.data;
+    return data;
   },
 
-  /** 删除知识条目 */
+  /** 鍒犻櫎鐭ヨ瘑鏉＄洰 */
   async deleteKnowledge(id: string): Promise<void> {
     await api.delete(`/knowledge/${id}`);
   },
 
-  // ── AI 修复 ──
+  // 鈹€鈹€ AI 淇 鈹€鈹€
 
-  /** 获取 AI 修复列表 */
+  /** AI 淇鐪熷疄缁熻锛圡TTR / 鎴愬姛鐜?/ 闄嶅櫔鐜?/ 瓒嬪娍锛?*/
+  async getAiRemediationStats(): Promise<AiRemediationStats> {
+    const { data } = await api.get('/ai-remediations/stats');
+    return data;
+  },
+
+  /** 鑾峰彇 AI 淇鍒楄〃 */
   async listAiRemediations(params?: { limit?: number }): Promise<AiRemediation[]> {
     const { data } = await api.get('/ai-remediations', { params });
-    return data.data || [];
+    return data || [];
+  },
+
+  /** 鑾峰彇 AI 淇璇︽儏 */
+  async getAiRemediation(id: string): Promise<AiRemediation> {
+    const { data } = await api.get(`/ai-remediations/${id}`);
+    return data;
+  },
+
+  /** 鎵瑰噯 AI 淇锛堜粎 waiting_approval 鐘舵€佸彲鐢級 */
+  async approveAiRemediation(id: string, comment?: string): Promise<AiRemediation> {
+    const { data } = await api.post(`/ai-remediations/${id}/approve`, { comment });
+    return data;
+  },
+
+  /** 鎷掔粷 AI 淇锛堜粎 waiting_approval 鐘舵€佸彲鐢級 */
+  async rejectAiRemediation(id: string, comment?: string): Promise<AiRemediation> {
+    const { data } = await api.post(`/ai-remediations/${id}/reject`, { comment });
+    return data;
   },
 };
 
 export default aiApi;
+

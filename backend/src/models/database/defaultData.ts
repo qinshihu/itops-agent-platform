@@ -5,7 +5,6 @@ import { db } from './core';
 import { initializePresetAgents } from '../presets/initAgents';
 import { initializePresetWorkflows } from '../presets/initWorkflows';
 import { initializePresetReportTemplates } from '../presets/initReports';
-import { initializePresetKnowledge } from '../presets/initKnowledge';
 import { initializePresetScripts } from '../presets/initScripts';
 import { initializeAlertMappings } from '../presets/initAlertMappings';
 import { initializePresetScheduledTasks } from '../presets/initScheduledTasks';
@@ -112,13 +111,7 @@ export function initializeDefaultData(): void {
     initializePresetReportTemplates();
   }
 
-  // 预设知识库
-  logger.info('🔄 Initializing preset configurations');
-  
-  const knowledgeCount = db.prepare('SELECT COUNT(*) as count FROM knowledge_base').get() as { count: number };
-  if (knowledgeCount.count === 0) {
-    initializePresetKnowledge();
-  }
+  // 知识库不再预置数据，由用户自行添加
 
   // 预设脚本
   const scriptsCount = db.prepare('SELECT COUNT(*) as count FROM scripts').get() as { count: number };
@@ -142,6 +135,20 @@ export function initializeDefaultData(): void {
   }
   // 关联策略 → 工作流（智能匹配，创建额外高级策略）
   linkRemediationWorkflows();
+
+  // 一次性清理：删除因历史 bug（randomUUID 导致重复插入）产生的旧 preset workflow 副本
+  // 仅删除 is_template=1 且 id 不以 'preset-wf-' 开头的记录 — 安全不影响用户自定义工作流
+  const legacyPresets = db.prepare(`
+    SELECT COUNT(*) as count FROM workflows
+    WHERE is_template = 1 AND id NOT LIKE 'preset-wf-%'
+  `).get() as { count: number };
+  if (legacyPresets.count > 0) {
+    const delResult = db.prepare(`
+      DELETE FROM workflows
+      WHERE is_template = 1 AND id NOT LIKE 'preset-wf-%'
+    `).run();
+    logger.info(`🧹 清理历史重复 preset workflow: 删除 ${delResult.changes} 条`);
+  }
 
   // 预设配置模板
   const configTemplateCount = db.prepare('SELECT COUNT(*) as count FROM config_templates').get() as { count: number };
@@ -168,7 +175,7 @@ function initializeDefaultUsers() {
   }
 
   const customPassword = process.env.ADMIN_INITIAL_PASSWORD;
-  const initialPassword = customPassword || generateRandomPassword();
+  const initialPassword = customPassword || 'admin';
   const hashedPassword = bcrypt.hashSync(initialPassword, 12);
   const id = randomUUID();
   db.prepare(`
@@ -176,14 +183,8 @@ function initializeDefaultUsers() {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(id, 'admin', hashedPassword, 'admin@example.com', 'admin', 1, 1);
 
-  if (customPassword) {
-    logger.info('✅ Default admin user created with password from ADMIN_INITIAL_PASSWORD env var');
-    logger.warn('⚠️ Please change the password after first login.');
-  } else {
-    logger.warn('========================================================');
-    logger.warn('🔐 AUTO-GENERATED ADMIN PASSWORD (save & change after login):');
-    logger.warn(`   ${initialPassword}`);
-    logger.warn('⚠️ This password is shown only once. Set ADMIN_INITIAL_PASSWORD env var to customize.');
-    logger.warn('========================================================');
+  logger.info(`✅ Default admin user created. Username: admin, Password: ${customPassword ? '(from ADMIN_INITIAL_PASSWORD)' : 'admin'}`);
+  if (!customPassword) {
+    logger.warn('⚠️ Default password is "admin". Change it after first login or set ADMIN_INITIAL_PASSWORD env var.');
   }
 }

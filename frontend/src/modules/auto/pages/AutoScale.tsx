@@ -1,45 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, Table, Tabs, Row, Col, Tag, Button, Modal, Input, Select, InputNumber, Switch, Space, message, Spin, Empty, DatePicker, Statistic } from 'antd';
 import { ReloadOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { TrendingUp, _Activity, ArrowUpRight, ArrowDownRight, Server, Zap, Play as _Play, Pause as _Pause } from 'lucide-react';
+import { TrendingUp, Activity, ArrowUpRight, ArrowDownRight, Server, Zap } from 'lucide-react';
 import api from '../../../lib/api';
+import type { ScaleRule, ScaleHistory, ScaleSummary } from '../api';
 
-// ==================== 类型定义 ====================
-interface ScaleRule {
+interface ScaleTarget {
   id: string;
   name: string;
-  targetType: 'container' | 'vm';
-  targetId: string;
-  targetName: string;
-  metricType: 'cpu' | 'memory' | 'pod_count';
-  threshold: number;
-  targetValue: number;
-  minInstances: number;
-  maxInstances: number;
-  scaleUpCooldown: number;
-  scaleDownCooldown: number;
-  enabled: boolean;
-  createdAt?: string;
-}
-
-interface ScaleHistory {
-  id: string;
-  time: string;
-  ruleName: string;
-  target: string;
-  action: 'scale_up' | 'scale_down';
-  beforeCount: number;
-  afterCount: number;
-  metricValue: number;
-  result: 'success' | 'failed';
-  reason: string;
-}
-
-interface ScaleSummary {
-  activeRules: number;
-  todayScaleUp: number;
-  todayScaleDown: number;
-  totalManagedInstances: number;
+  // 容器：仅 id/name
+  // VM：额外有 platformId / platformName
+  platformId?: string;
+  platformName?: string;
+  // k8s_deployment：额外有 namespace / contextId / contextName
+  namespace?: string;
+  contextId?: string;
+  contextName?: string;
 }
 
 // ==================== 主组件 ====================
@@ -52,6 +29,23 @@ export default function AutoScale() {
   const [ruleModalVisible, setRuleModalVisible] = useState(false);
   const [editingRule, setEditingRule] = useState<ScaleRule | null>(null);
   const [ruleForm, setRuleForm] = useState<Partial<ScaleRule>>({});
+
+  // 可选目标列表（依赖 targetType）
+  const { data: targets = [], isLoading: targetsLoading } = useQuery<ScaleTarget[]>({
+    queryKey: ['scale-targets', ruleForm.targetType],
+    queryFn: async () => {
+      if (!ruleForm.targetType) return [];
+      const { data } = await api.get('/auto-scale/targets', { params: { type: ruleForm.targetType } });
+      return (data?.data || data || []) as ScaleTarget[];
+    },
+    enabled: !!ruleForm.targetType,
+  });
+
+  const targetLabel = (t: ScaleTarget): string => {
+    if (t.platformName) return `${t.platformName} / ${t.name}`;
+    if (t.contextName) return `${t.contextName} / ${t.namespace} / ${t.name}`;
+    return t.name;
+  };
 
   // 历史
   const [history, setHistory] = useState<ScaleHistory[]>([]);
@@ -69,8 +63,8 @@ export default function AutoScale() {
   const fetchRules = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get('/auto-scale/rules');
-      setRules(res.data.data || []);
+      const { data } = await api.get('/auto-scale/rules');
+      setRules(data || []);
     } catch { message.error('获取规则列表失败'); }
     finally { setLoading(false); }
   }, []);
@@ -83,17 +77,17 @@ export default function AutoScale() {
         params.startTime = timeRange[0];
         params.endTime = timeRange[1];
       }
-      const res = await api.get('/auto-scale/history', { params });
-      setHistory(res.data.data || []);
-      setHistoryTotal(res.data.total || 0);
+      const { data } = await api.get('/auto-scale/history', { params });
+      setHistory(data || []);
+      setHistoryTotal(data.total || 0);
     } catch { message.error('获取伸缩历史失败'); }
     finally { setLoading(false); }
   }, [historyPage, historyPageSize, timeRange]);
 
   const fetchSummary = useCallback(async () => {
     try {
-      const res = await api.get('/auto-scale/summary');
-      setSummary(res.data.data || { activeRules: 0, todayScaleUp: 0, todayScaleDown: 0, totalManagedInstances: 0 });
+      const { data } = await api.get('/auto-scale/summary');
+      setSummary(data || { activeRules: 0, todayScaleUp: 0, todayScaleDown: 0, totalManagedInstances: 0 });
     } catch { /* ignore */ }
   }, []);
 
@@ -174,11 +168,21 @@ export default function AutoScale() {
   // ==================== 表格列 ====================
   const ruleColumns = [
     { title: '名称', dataIndex: 'name', key: 'name', ellipsis: true },
-    { title: '目标类型', dataIndex: 'targetType', key: 'targetType', width: 90,
-      render: (t: string) => <Tag color={t === 'container' ? 'blue' : 'purple'}>{t === 'container' ? '容器' : 'VM'}</Tag> },
+    { title: '目标类型', dataIndex: 'targetType', key: 'targetType', width: 110,
+      render: (t: string) => {
+        const cfg: Record<string, { color: string; label: string }> = {
+          container: { color: 'blue', label: '容器' },
+          vm: { color: 'purple', label: 'VM' },
+          k8s_deployment: { color: 'cyan', label: 'K8s Deployment' },
+        };
+        const c = cfg[t] || { color: 'default', label: t };
+        return <Tag color={c.color}>{c.label}</Tag>;
+      } },
     { title: '目标标识', dataIndex: 'targetName', key: 'targetName', width: 120, ellipsis: true },
-    { title: '指标类型', dataIndex: 'metricType', key: 'metricType', width: 90,
-      render: (t: string) => ({ cpu: 'CPU', memory: '内存', pod_count: 'Pod数' }[t] || t) },
+    { title: '指标类型', dataIndex: 'metricType', key: 'metricType', width: 110,
+      render: (t: string) => ({
+        cpu: 'CPU', memory: '内存', pod_count: 'Pod 数', request_count: '请求数',
+      }[t] || t) },
     { title: '阈值', dataIndex: 'threshold', key: 'threshold', width: 70,
       render: (v: number) => `${v}%` },
     { title: '目标值', dataIndex: 'targetValue', key: 'targetValue', width: 70,
@@ -386,17 +390,34 @@ export default function AutoScale() {
               options={[
                 { label: '容器', value: 'container' },
                 { label: 'VM', value: 'vm' },
+                { label: 'K8s Deployment', value: 'k8s_deployment' },
               ]}
-              style={{ width: 160 }}
+              style={{ width: 200 }}
             />
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="text-slate-300 w-24 text-right text-sm">目标名称：</span>
-            <Input
-              value={ruleForm.targetName}
-              onChange={(e) => setRuleForm({ ...ruleForm, targetName: e.target.value })}
-              placeholder="输入目标标识或名称"
+            <span className="text-slate-300 w-24 text-right text-sm">目标：</span>
+            <Select
+              value={ruleForm.targetId || undefined}
+              loading={targetsLoading}
+              placeholder={
+                !ruleForm.targetType
+                  ? '请先选择目标类型'
+                  : targetsLoading
+                  ? '加载中…'
+                  : targets.length === 0
+                  ? '暂无可用目标'
+                  : '选择伸缩目标'
+              }
+              showSearch
+              optionFilterProp="label"
+              disabled={!ruleForm.targetType || targetsLoading || targets.length === 0}
+              onChange={(v, option) => {
+                const o = option as { id: string; name: string; label: string };
+                setRuleForm({ ...ruleForm, targetId: o.id, targetName: o.name });
+              }}
+              options={targets.map(t => ({ value: t.id, label: targetLabel(t), ...t }))}
               style={{ flex: 1 }}
             />
           </div>
@@ -410,8 +431,9 @@ export default function AutoScale() {
                 { label: 'CPU', value: 'cpu' },
                 { label: '内存', value: 'memory' },
                 { label: 'Pod 数量', value: 'pod_count' },
+                { label: '请求数（QPS）', value: 'request_count' },
               ]}
-              style={{ width: 160 }}
+              style={{ width: 200 }}
             />
           </div>
 

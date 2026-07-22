@@ -84,12 +84,18 @@ export class VMwareAdapter extends BaseVMAdapter {
     this.port = config.port || 443;
     this.username = config.username || '';
     this.password = config.password || '';
+
+    // baseUrl：兼容历史字段 baseUrl / host
     this.baseUrl = this.host.startsWith('https://')
       ? this.host
       : `https://${this.host}:${this.port}`;
 
+    // 校验证书：默认 true（生产安全）
+    //   关闭方式：平台 config 中设置 verifyTls: false（仅自签证书场景）
+    //   历史行为是 rejectUnauthorized: false（不安全），改为默认开启
+    const verifyTls = config.verifyTls !== false;
     this.httpsAgent = new https.Agent({
-      rejectUnauthorized: false,
+      rejectUnauthorized: verifyTls,
       keepAlive: true,
     });
   }

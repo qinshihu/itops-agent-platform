@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { Rack3D } from './types';
@@ -15,6 +15,17 @@ interface SceneProps {
   heatmapData?: Record<string, number>;
   viewMode: ViewMode;
 }
+
+/** Three.js 对象的 userData 扩展属性 */
+interface RackUserData {
+  rackId?: string;
+  isRackDoor?: boolean;
+  isStatusLed?: boolean;
+  isGlow?: boolean;
+  targetRotation?: number;
+}
+
+type ThreeObject = THREE.Object3D & { isMesh?: boolean; material?: THREE.Material & { opacity?: number }; userData: RackUserData };
 
 // ── 纹理缓存 ──
 const texCache: Record<string, THREE.CanvasTexture> = {};
@@ -125,26 +136,33 @@ function createRack(rack: Rack3D): THREE.Group {
     f.position.set(fx, 0.05, fz); g.add(f);
   });
 
-  const doorPivot = new THREE.Group();
-  doorPivot.position.set(0, 0, RD / 2);
-  doorPivot.userData = { isRackDoor: true };
-
-  const glass = new THREE.Mesh(new THREE.BoxGeometry(RW - 0.1, RH - 0.1, 0.02), mats.glass);
-  glass.position.set(0, RH / 2, 0); doorPivot.add(glass);
-
+  // 单开门：铰链在机柜右前侧，整扇门绕此铰链向左侧外开
   const ft = 0.04;
   const fm = mats.frame;
-  const lf = new THREE.Mesh(new THREE.BoxGeometry(ft, RH, ft), fm);
-  lf.position.set(-RW / 2 + ft / 2, RH / 2, 0); doorPivot.add(lf);
-  const rf = new THREE.Mesh(new THREE.BoxGeometry(ft, RH, ft), fm);
-  rf.position.set(RW / 2 - ft / 2, RH / 2, 0); doorPivot.add(rf);
-  const tf = new THREE.Mesh(new THREE.BoxGeometry(RW, ft, ft), fm);
-  tf.position.set(0, RH + ft / 2, 0); doorPivot.add(tf);
-  const bf = new THREE.Mesh(new THREE.BoxGeometry(RW, ft, ft), fm);
-  bf.position.set(0, ft / 2, 0); doorPivot.add(bf);
+  const doorWidth = RW - 0.1;
 
+  const doorPivot = new THREE.Group();
+  // 铰链放在右前侧（现实服务器机柜单开门多为右铰链）
+  doorPivot.position.set(RW / 2 - ft / 2, 0, RD / 2);
+  doorPivot.userData = { isRackDoor: true, side: 'right' };
+
+  // 玻璃面中心相对 pivot 向左偏移半门宽
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, RH - 0.1, 0.02), mats.glass);
+  glass.position.set(-doorWidth / 2, RH / 2, 0); doorPivot.add(glass);
+
+  // 边框：顶/底/左（铰链侧不需外框）
+  const tf = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, ft, ft), fm);
+  tf.position.set(-doorWidth / 2, RH + ft / 2, 0); doorPivot.add(tf);
+  const bf = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, ft, ft), fm);
+  bf.position.set(-doorWidth / 2, ft / 2, 0); doorPivot.add(bf);
+  const of = new THREE.Mesh(new THREE.BoxGeometry(ft, RH - 0.1, ft), fm);
+  // 外侧边框（门的左边缘，远离铰链一侧）
+  of.position.set(-doorWidth, RH / 2, 0); doorPivot.add(of);
+
+  // 把手在门的内侧左侧（远离铰链，便于开门）
   const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.2, 0.06), fm);
-  handle.position.set(RW / 2 - 0.06, RH / 2, 0.04); doorPivot.add(handle);
+  handle.position.set(-doorWidth + 0.2, RH / 2, 0.04); doorPivot.add(handle);
+
   g.add(doorPivot);
 
   const usedU = Math.min(rack.usedU, rack.totalU);
@@ -201,14 +219,24 @@ function createEnv(scene: THREE.Scene) {
 }
 
 // 视图相机目标
+// 机柜布局：col*4.5 沿 X 方向（-16..+15.5），row*10 沿 Z 方向（A=row0 → Z=-5，B=row1 → Z=+5）
+// 机柜底部 FLOOR_OFFSET=3.5（地板在 y=0，机柜底高于地板 3.5）
+// 设计原则：相机 Y 取机柜中点附近（不站太高），target Y 取机柜中点，Z 拉远保证视野宽度
+// 这样地板永远在视野底部，机柜站在地板上，符合"地面感"
+const FLOOR_OFFSET = 3.5;
+const TGT_Y = FLOOR_OFFSET + RH / 2; // = 6.25，机柜中点 Y（RH 在文件顶部已声明）
 const VIEW_TARGETS: Record<ViewMode, { pos: THREE.Vector3; target: THREE.Vector3 }> = {
-  overview: { pos: new THREE.Vector3(25, 18, 25), target: new THREE.Vector3(0, 3, 0) },
-  zoneA: { pos: new THREE.Vector3(-10, 10, 20), target: new THREE.Vector3(-10, 3, 0) },
-  zoneB: { pos: new THREE.Vector3(10, 10, 20), target: new THREE.Vector3(10, 3, 0) },
+  // 总览：俯角 ~20°，相机 Y 抬高确保地板占视野底部 1/3、机柜在中上部
+  overview: { pos: new THREE.Vector3(0, TGT_Y + 18, 48), target: new THREE.Vector3(0, TGT_Y, 0) },
+  // zoneA：从 A 区南侧远处斜俯视 A 区（俯角 ~16°），地板在下、机柜立面朝相机
+  zoneA:    { pos: new THREE.Vector3(0, TGT_Y + 15, -50), target: new THREE.Vector3(0, TGT_Y, -5) },
+  // zoneB：从 B 区北侧远处斜俯视 B 区
+  zoneB:    { pos: new THREE.Vector3(0, TGT_Y + 15, 50),  target: new THREE.Vector3(0, TGT_Y, 5) },
 };
 
 export default function Scene({ racks, onRackClick, selectedRackId, hoveredRackId, onHoverChange, heatmapData, viewMode }: SceneProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const debugRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
@@ -218,6 +246,8 @@ export default function Scene({ racks, onRackClick, selectedRackId, hoveredRackI
   const mouse = useRef(new THREE.Vector2());
   const anim = useRef<{ doors: THREE.Group[]; leds: THREE.Mesh[]; glows: THREE.Mesh[] }>({ doors: [], leds: [], glows: [] });
   const viewModeRef = useRef(viewMode);
+  // 视图切换 tween 锁：期间 raf loop 跳过 controls.update()，避免 OrbitControls 用旧 spherical 覆盖相机位置
+  const isTweeningView = useRef(false);
 
   useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
 
@@ -290,11 +320,11 @@ export default function Scene({ racks, onRackClick, selectedRackId, hoveredRackI
       mouse.current.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       ray.current.setFromCamera(mouse.current, camera);
       const hits = ray.current.intersectObjects(
-        Array.from(rackMap.current.values()).flatMap(g => { const a: THREE.Object3D[] = []; g.traverse(c => { if ((c as any).isMesh) a.push(c); }); return a; }),
+        Array.from(rackMap.current.values()).flatMap(g => { const a: THREE.Object3D[] = []; g.traverse(c => { if ((c as ThreeObject).isMesh) a.push(c); }); return a; }),
         false
       );
       let hid: string | null = null;
-      if (hits.length > 0) { let c: any = hits[0].object; while (c && !c.userData?.rackId) c = c.parent; if (c) hid = c.userData.rackId; }
+      if (hits.length > 0) { let c: THREE.Object3D | null = hits[0].object; while (c && !(c as ThreeObject).userData?.rackId) c = c.parent; if (c) hid = (c as ThreeObject).userData.rackId ?? null; }
       onHoverChange?.(hid);
     };
     const onUp = (e: PointerEvent) => {
@@ -305,10 +335,10 @@ export default function Scene({ racks, onRackClick, selectedRackId, hoveredRackI
       mouse.current.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       ray.current.setFromCamera(mouse.current, camera);
       const hits = ray.current.intersectObjects(
-        Array.from(rackMap.current.values()).flatMap(g => { const a: THREE.Object3D[] = []; g.traverse(c => { if ((c as any).isMesh) a.push(c); }); return a; }),
+        Array.from(rackMap.current.values()).flatMap(g => { const a: THREE.Object3D[] = []; g.traverse(c => { if ((c as ThreeObject).isMesh) a.push(c); }); return a; }),
         false
       );
-      if (hits.length > 0) { let c: any = hits[0].object; while (c && !c.userData?.rackId) c = c.parent; if (c) onRackClick(c.userData.rackId); }
+      if (hits.length > 0) { let c: THREE.Object3D | null = hits[0].object; while (c && !(c as ThreeObject).userData?.rackId) c = c.parent; if (c) onRackClick((c as ThreeObject).userData.rackId!); }
     };
     cv.addEventListener('pointerdown', onDown);
 
@@ -320,20 +350,31 @@ export default function Scene({ racks, onRackClick, selectedRackId, hoveredRackI
     window.addEventListener('resize', onResize);
 
     let aid: number;
+    let lastDebugUpdate = 0;
     const loop = () => {
       aid = requestAnimationFrame(loop);
-      controls.update();
+      // 视图 tween 期间不调用 controls.update()，否则 OrbitControls 会用旧 spherical 反算 camera.position 覆盖 tween
+      if (!isTweeningView.current) controls.update();
       const t = Date.now() * 0.001;
+
+      // 调试面板：每 100ms 更新一次相机/目标坐标（节流）
+      if (debugRef.current && t - lastDebugUpdate > 0.1) {
+        lastDebugUpdate = t;
+        debugRef.current.textContent =
+          `viewMode: ${viewModeRef.current}\n` +
+          `camera pos: (${camera.position.x.toFixed(2)}, ${camera.position.y.toFixed(2)}, ${camera.position.z.toFixed(2)})\n` +
+          `target:     (${controls.target.x.toFixed(2)}, ${controls.target.y.toFixed(2)}, ${controls.target.z.toFixed(2)})`;
+      }
       anim.current.doors.forEach(d => {
-        const tg = (d.userData as any).targetRotation || 0;
+        const tg = (d.userData as RackUserData).targetRotation || 0;
         const df = tg - d.rotation.y;
         if (Math.abs(df) > 0.001) d.rotation.y += df * 0.1;
         else d.rotation.y = tg;
       });
-      anim.current.leds.forEach(l => { (l.material as any).opacity = 0.4 + 0.6 * Math.sin(t * 3); });
+      anim.current.leds.forEach(l => { ((l as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.4 + 0.6 * Math.sin(t * 3); });
       anim.current.glows.forEach(g => {
         g.scale.setScalar(0.7 + 0.5 * Math.sin(t * 3));
-        (g.material as any).opacity = 0.15 + 0.3 * Math.sin(t * 3);
+        ((g as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.15 + 0.3 * Math.sin(t * 3);
       });
       renderer.render(scene, camera);
     };
@@ -355,7 +396,8 @@ export default function Scene({ racks, onRackClick, selectedRackId, hoveredRackI
     const controls = controlsRef.current;
     if (!camera || !controls) return;
     const vt = VIEW_TARGETS[viewMode];
-    // 平滑动画
+    // 平滑动画：用 tween 锁让 raf loop 跳过 controls.update()，否则 OrbitControls 会用旧 spherical 反算 camera.position
+    isTweeningView.current = true;
     const startPos = camera.position.clone();
     const startTarget = controls.target.clone();
     const endPos = vt.pos;
@@ -363,13 +405,33 @@ export default function Scene({ racks, onRackClick, selectedRackId, hoveredRackI
     const startTime = Date.now();
     const duration = 800;
 
+    // eslint-disable-next-line no-console
+    console.log(
+      `[viewTween] START viewMode=${viewMode} | startPos=(${startPos.x.toFixed(2)},${startPos.y.toFixed(2)},${startPos.z.toFixed(2)}) startTarget=(${startTarget.x.toFixed(2)},${startTarget.y.toFixed(2)},${startTarget.z.toFixed(2)}) -> endPos=(${endPos.x.toFixed(2)},${endPos.y.toFixed(2)},${endPos.z.toFixed(2)}) endTarget=(${endTarget.x.toFixed(2)},${endTarget.y.toFixed(2)},${endTarget.z.toFixed(2)})`
+    );
+
     const animView = () => {
       const elapsed = Date.now() - startTime;
       const t = Math.min(elapsed / duration, 1);
       const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // easeInOutQuad
       camera.position.lerpVectors(startPos, endPos, ease);
       controls.target.lerpVectors(startTarget, endTarget, ease);
-      if (t < 1) requestAnimationFrame(animView);
+      camera.lookAt(controls.target);
+      // eslint-disable-next-line no-console
+      console.log(
+        `[viewTween] FRAME t=${t.toFixed(3)} viewMode=${viewMode} | pos=(${camera.position.x.toFixed(2)},${camera.position.y.toFixed(2)},${camera.position.z.toFixed(2)}) target=(${controls.target.x.toFixed(2)},${controls.target.y.toFixed(2)},${controls.target.z.toFixed(2)})`
+      );
+      if (t < 1) {
+        requestAnimationFrame(animView);
+      } else {
+        // 动画结束：让 OrbitControls 用新的 camera/target 重新构建内部 spherical 状态
+        controls.update();
+        isTweeningView.current = false;
+        // eslint-disable-next-line no-console
+        console.log(
+          `[viewTween] END viewMode=${viewMode} | finalPos=(${camera.position.x.toFixed(2)},${camera.position.y.toFixed(2)},${camera.position.z.toFixed(2)}) finalTarget=(${controls.target.x.toFixed(2)},${controls.target.y.toFixed(2)},${controls.target.z.toFixed(2)})`
+        );
+      }
     };
     animView();
   }, [viewMode]);
@@ -382,16 +444,17 @@ export default function Scene({ racks, onRackClick, selectedRackId, hoveredRackI
     anim.current = { doors: [], leds: [], glows: [] };
 
     const spacing = 4.5;
+    const FLOOR_OFFSET = 3.5; // 抬高机柜底部，让地板在视野中相对下沉
     racks.forEach((rack, i) => {
       const g = createRack(rack);
       const col = i % 8, row = Math.floor(i / 8);
-      g.position.set(-16 + col * spacing, 0, -5 + row * 10);
+      g.position.set(-16 + col * spacing, FLOOR_OFFSET, -5 + row * 10);
       scene.add(g);
       rackMap.current.set(rack.id, g);
       g.traverse(o => {
-        if ((o as any).userData?.isRackDoor) anim.current.doors.push(o as THREE.Group);
-        if ((o as any).userData?.isStatusLed) anim.current.leds.push(o as THREE.Mesh);
-        if ((o as any).userData?.isGlow) anim.current.glows.push(o as THREE.Mesh);
+        if ((o as ThreeObject).userData?.isRackDoor) anim.current.doors.push(o as THREE.Group);
+        if ((o as ThreeObject).userData?.isStatusLed) anim.current.leds.push(o as THREE.Mesh);
+        if ((o as ThreeObject).userData?.isGlow) anim.current.glows.push(o as THREE.Mesh);
       });
     });
   }, [racks, heatmapData]);
@@ -402,12 +465,42 @@ export default function Scene({ racks, onRackClick, selectedRackId, hoveredRackI
       const sel = id === selectedRackId, hov = id === hoveredRackId;
       g.scale.setScalar(sel || hov ? 1.03 : 1);
       g.traverse(o => {
-        if ((o as any).userData?.isRackDoor) {
-          (o as any).userData.targetRotation = sel ? -Math.PI / 2.2 : 0;
+        if ((o as ThreeObject).userData?.isRackDoor) {
+          // 单开门：铰链在右，门向左侧外开约 110°（绕 Y 逆时针 = 正角度）
+          (o as ThreeObject).userData.targetRotation = sel ? Math.PI * (110 / 180) : 0;
         }
       });
     });
   }, [selectedRackId, hoveredRackId]);
 
-  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing" />;
+  const [debugHost] = useState(() => {
+    if (typeof document === 'undefined') return null;
+    const el = document.createElement('div');
+    el.id = 'scene-debug-overlay-host';
+    el.style.cssText = 'position:fixed;top:12px;left:12px;z-index:2147483647;pointer-events:none;';
+    document.body.appendChild(el);
+    return el;
+  });
+  useEffect(() => {
+    return () => { debugHost?.remove(); };
+  }, [debugHost]);
+
+  return (
+    <>
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing" />
+      {debugHost && createPortal(
+        <div
+          data-debug-camera
+          ref={debugRef}
+          style={{
+            padding: '10px 14px', background: '#000', color: '#00ff88',
+            font: 'bold 14px/1.6 ui-monospace,Consolas,monospace', border: '2px solid #00ff88', borderRadius: 6,
+            whiteSpace: 'pre', minWidth: 240,
+          }}>
+          {`viewMode: ${viewMode}\nracks: ${racks.length}\ncamera pos: (--, --, --)\ntarget:     (--, --, --)`}
+        </div>,
+        debugHost
+      )}
+    </>
+  );
 }

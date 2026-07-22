@@ -1,7 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import db from '../database';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { logger } from '../../utils/logger';
+
+/** 为 preset workflow 生成稳定 ID（基于 name 哈希）— 避免每次启动生成新 UUID 导致重复插入 */
+function presetWorkflowId(name: string): string {
+  return 'preset-wf-' + createHash('sha1').update(`workflow:${name}`).digest('hex').slice(0, 32);
+}
 
 /**
  * 初始化增强型工作流模板
@@ -359,7 +364,7 @@ export function initializeEnhancedWorkflows() {
   // 插入预设工作流
   const enhancedWorkflows = [
     {
-      id: randomUUID(),
+      id: presetWorkflowId('智能告警分级修复'),
       name: '智能告警分级修复',
       description: '根据告警级别自动选择修复策略：P0/P1紧急修复需人工确认，P2自动修复，P3/P4仅记录日志',
       nodes: smartAlertNodes,
@@ -367,7 +372,7 @@ export function initializeEnhancedWorkflows() {
       is_template: 1
     },
     {
-      id: randomUUID(),
+      id: presetWorkflowId('批量服务器配置巡检'),
       name: '批量服务器配置巡检',
       description: '遍历服务器列表，并行检查CPU、内存、磁盘，汇总生成巡检报告',
       nodes: batchAuditNodes,
@@ -375,7 +380,7 @@ export function initializeEnhancedWorkflows() {
       is_template: 1
     },
     {
-      id: randomUUID(),
+      id: presetWorkflowId('配置文件模板化修复'),
       name: '配置文件模板化修复',
       description: '读取配置模板 → 渲染变量 → 下发配置 → 验证 → 失败则回滚',
       nodes: configRemediationNodes,
@@ -383,7 +388,7 @@ export function initializeEnhancedWorkflows() {
       is_template: 1
     },
     {
-      id: randomUUID(),
+      id: presetWorkflowId('服务健康检查与自愈'),
       name: '服务健康检查与自愈',
       description: '检查服务状态 → 异常则自动重启 → 通知运维 → 重启失败则人工介入',
       nodes: serviceHealingNodes,
@@ -391,7 +396,7 @@ export function initializeEnhancedWorkflows() {
       is_template: 1
     },
     {
-      id: randomUUID(),
+      id: presetWorkflowId('AARS 全闭环工作流'),
       name: 'AARS 全闭环工作流',
       description: '完整10步闭环：告警处理→AI诊断→修复命令生成→风险评估→智能决策(自动/审批/升级)→SSH执行→5级验证→自动回滚→知识沉淀→文档生成',
       nodes: aarsFullFlowNodes,

@@ -56,17 +56,15 @@ desktop.ini
 .cache/
 *.tsbuildinfo
 
-# Documentation and examples (not needed in production image)
+# Documentation (not needed in production image)
 blog/
 docs/
-examples/
 assets/
 *.md
 !README.md
 wechaterweima.png
 
 # CI/CD configurations
-.github/
 .gitlab-ci.yml
 .travis.yml
 Jenkinsfile

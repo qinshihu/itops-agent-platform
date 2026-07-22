@@ -27,10 +27,10 @@ export function ImageSection({ endpointId }: ImageSectionProps) {
   const { data: images = [], isLoading: imagesLoading, error: imagesError } = useQuery<ImageItem[]>({
     queryKey: imagesQueryKey,
     queryFn: async () => {
-      const res = await api.get('/containers/images/list', {
+      const { data } = await api.get('/containers/images/list', {
         params: { endpointId: endpointId !== 'local' ? endpointId : undefined },
       });
-      return res.data.data || [];
+      return data || [];
     },
   });
 

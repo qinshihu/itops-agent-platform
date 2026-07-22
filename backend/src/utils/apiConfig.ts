@@ -34,9 +34,9 @@ function isPlaceholder(value: string): boolean {
 }
 
 /**
- * Get API key from encrypted credential store first, then env vars, then settings table
+ * Get API key from encrypted credential store first, then settings table
  */
-export function getApiKey(keyName: string, envName: string): string | undefined {
+export function getApiKey(keyName: string): string | undefined {
   // 1. Try credential service first (encrypted storage)
   try {
     const provider = settingKeyToProvider(keyName);
@@ -50,13 +50,7 @@ export function getApiKey(keyName: string, envName: string): string | undefined 
     // Credential service not available, fall through
   }
 
-  // 2. Try environment variable
-  const envValue = process.env[envName];
-  if (envValue && !isPlaceholder(envValue)) {
-    return envValue;
-  }
-
-  // 3. Fall back to settings table (plaintext, backwards compatibility)
+  // 2. Fall back to settings table (plaintext, backwards compatibility)
   try {
     const value = settingsRepository.getValue(keyName);
     if (value && !isPlaceholder(value)) {
@@ -66,43 +60,37 @@ export function getApiKey(keyName: string, envName: string): string | undefined 
     // Ignore database errors
   }
 
-  // 4. Try any env var with case-insensitive match (unlikely but safe)
-  const altEnvValue = process.env[keyName];
-  if (altEnvValue && !isPlaceholder(altEnvValue)) {
-    return altEnvValue;
-  }
-
   return undefined;
 }
 
 /**
- * Get model ID (prefer database, fall back to env vars)
+ * Get model ID from settings table
  */
-export function getModelId(keyName: string, envName: string, defaultValue: string): string {
+export function getModelId(keyName: string, defaultValue: string): string {
   try {
     const value = settingsRepository.getValue(keyName);
     if (value) {
       return value;
     }
   } catch {
-    // Ignore database errors, fall back to environment variable
+    // Ignore database errors
   }
-  return process.env[envName] || defaultValue;
+  return defaultValue;
 }
 
 /**
- * Get API base URL (prefer database, fall back to env vars)
+ * Get API base URL from settings table
  */
-export function getApiBase(keyName: string, envName: string, defaultValue: string): string {
+export function getApiBase(keyName: string, defaultValue: string): string {
   try {
     const value = settingsRepository.getValue(keyName);
     if (value) {
       return value;
     }
   } catch {
-    // Ignore database errors, fall back to environment variable
+    // Ignore database errors
   }
-  return process.env[envName] || defaultValue;
+  return defaultValue;
 }
 
 /**

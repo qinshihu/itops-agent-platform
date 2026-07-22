@@ -25,6 +25,9 @@ const options: swaggerJsdoc.Options = {
   apis: [
     './src/modules/*/routes.ts',
     './src/modules/*/routes/*.ts',
+    // 旧版聚合路由（dc 仍保留在 src/routes/dc/，未迁入 modules/dc/routes/）
+    './src/routes/*.ts',
+    './src/routes/**/*.ts',
   ],
 };
 

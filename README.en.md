@@ -1,10 +1,29 @@
-[English](README.en.md) | [中文](README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [Deutsch](README.de.md) | [Français](README.fr.md)
+[English](README.en.md) | [中文](README.md) | [繁體中文](README.tw.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [Deutsch](README.de.md) | [Français](README.fr.md)
+
+***
+
+**The project is undergoing a comprehensive refactoring based on the 4A architecture framework and DDD (Domain-Driven Design). This refactoring aims to completely decouple business logic from technical implementation, reshape architectural rationality, and endow the system with stronger elastic scalability while improving code maintainability and standardization.**
+
+**⚠️ The refactoring workload is huge and is currently in a progressive replacement phase. Recent Docker images are transitional builds with unvalidated dependency chaos and are not recommended for direct pull-and-use. Regular users are advised to wait for a stable release; developers with source code debugging capabilities can build from source first, and assistance in fixing temporary issues is welcome.**
+
+```bash
+# Linux/Mac One-Click Deployment (Recommended)
+curl -sL https://gitee.com/IT_Oline/itops-agent-platform/raw/main/deploy.sh -o deploy.sh && chmod +x deploy.sh && ./deploy.sh
+```
 
 ***
 
 **Important License Change Notice (2026-05-27)**
 
-Effective May 27, 2026, all new code contributions to this project are licensed under the **Mozilla Public License 2.0 (MPL-2.0)**. This project prohibits closed-source secondary development, repackaging for sale, SaaS commercialization, and other commercial uses. Permanently open source. This project belongs to the thousands of engineers who embrace the open-source spirit, not to a single corporation.
+All code submitted before May 27, 2026 remains under the MIT license and may be freely used, modified, and commercially distributed under the terms of the MIT license.
+
+Effective May 27, 2026, all new and modified code in this project is uniformly licensed under **Mozilla Public License 2.0 (MPL-2.0)**. Users must strictly comply with the official MPL-2.0 agreement:
+
+- If you externally distribute binary packages, images, or deployment programs containing modified code from this project, you must open-source all modified source files, while fully retaining the original project's copyright and license notices. You may not erase the origin or impersonate a self-developed product.
+- Private deployment within an enterprise and internal secondary modification for internal use are permitted. Providing paid services such as deployment consulting, technical consulting, and custom development based on this project is permitted.
+- It is strictly forbidden to simply encapsulate the source code of this project and then sell it as a closed-source independent commercial software or image product. It is strictly forbidden to directly build similar competing SaaS platforms for commercial operation based on this project.
+
+This project will be permanently open source, belonging to the entire open-source technology community, and will not be exclusively bought out by any commercial company. We encourage technical exchanges, secondary iterations, and industry implementation under compliance premises, jointly maintaining a healthy open-source ecosystem.
 
 ***
 
@@ -40,9 +59,13 @@ Effective May 27, 2026, all new code contributions to this project are licensed 
   <img src="https://img.shields.io/badge/Node.js-22-339933?logo=nodedotjs" alt="Node.js">
   <img src="https://img.shields.io/badge/Docker-🐳-2496ED?logo=docker" alt="Docker">
   <br/>
-  <a href="https://star-history.com/#qinshihu/itops-agent-platform&Date">
-    <img src="https://api.star-history.com/svg?repos=qinshihu/itops-agent-platform&type=Date" alt="Star History Chart" width="480" />
-  </a>
+  <a href="https://www.star-history.com/?repos=qinshihu%2Fitops-agent-platform&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=qinshihu/itops-agent-platform&type=date&theme=dark&legend=top-left&sealed_token=rQRuWRuFdnghn-fItLfTVzIeeiesXsTLZCgxyEHMLGH9rOu_cYVM3wNb9IDr8sccAXuQX04teT-Gc5htFu3P_BJYe5sKScWSyTsABQmGoKH0XrMcktAicA" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=qinshihu/itops-agent-platform&type=date&legend=top-left&sealed_token=rQRuWRuFdnghn-fItLfTVzIeeiesXsTLZCgxyEHMLGH9rOu_cYVM3wNb9IDr8sccAXuQX04teT-Gc5htFu3P_BJYe5sKScWSyTsABQmGoKH0XrMcktAicA" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=qinshihu/itops-agent-platform&type=date&legend=top-left&sealed_token=rQRuWRuFdnghn-fItLfTVzIeeiesXsTLZCgxyEHMLGH9rOu_cYVM3wNb9IDr8sccAXuQX04teT-Gc5htFu3P_BJYe5sKScWSyTsABQmGoKH0XrMcktAicA" />
+ </picture>
+</a>
 </p>
 
 🎮 [Live Demo](https://agentdemo-0mwug01t6.maozi.io/) &emsp;|&emsp; 📝[Vision & Community](项目愿景与社区共建.md) &emsp;|&emsp; 📝[AI Coding Skill](SKILL.md) &emsp;|&emsp; 📝[Documentation Book](https://aiopsdoc-0mwug01t6.maozi.io/book/) &emsp;|&emsp; 📖[Project Docs](https://aiopsdoc-0mwug01t6.maozi.io/) &emsp;|&emsp; ✍️[Author's Note](https://mp.weixin.qq.com/s/NDqYrfqR0RZEvSESyVD2hg)
@@ -432,7 +455,6 @@ curl -sL https://gitee.com/IT_Oline/itops-agent-platform/raw/main/deploy.sh -o d
 ### Option 2: Docker Compose
 
 ```bash
-cp .env.example .env
 docker compose up -d --build
 # Frontend: http://localhost:8080
 # Health check: http://localhost:3001/health

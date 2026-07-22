@@ -49,17 +49,15 @@ export default function DataRoom3D() {
     return `${days}天${hours}小时${mins}分`;
   }, [startTime, timeStr]);
 
-  // 按视图模式过滤机柜
+  // 按视图模式过滤机柜（注意：Scene 内部按数组顺序算 col/row，过滤后位置会重排，因此 zoneA/zoneB 不再做区域过滤，由相机视角区分区域）
   const filteredRacks = useMemo(() => {
     let result = racks;
-    if (viewMode === 'zoneA') result = result.filter(r => r.roomLabel === 'A' || r.roomName?.startsWith('A'));
-    if (viewMode === 'zoneB') result = result.filter(r => r.roomLabel === 'B' || r.roomName?.startsWith('B'));
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(r => r.name.toLowerCase().includes(q) || r.roomName?.toLowerCase().includes(q));
     }
     return result;
-  }, [racks, searchQuery, viewMode]);
+  }, [racks, searchQuery]);
 
   const handleRackClick = useCallback((rackId: string) => {
     const rack = racks.find(r => r.id === rackId);

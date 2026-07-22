@@ -137,6 +137,7 @@ import {
   impl_getContainerStats,
   impl_pauseContainer,
   impl_unpauseContainer,
+  impl_runContainer,
 } from './containerOps';
 
 import {
@@ -234,6 +235,19 @@ export class DockerServiceClass {
 
   async unpauseContainer(id: string): Promise<void> {
     return impl_unpauseContainer(this, id);
+  }
+
+  async runContainer(
+    image: string,
+    name?: string,
+    options: {
+      env?: string[];
+      ports?: Array<string | { hostPort: number; containerPort: number }>;
+      restartPolicy?: string;
+      labels?: Record<string, string>;
+    } = {}
+  ): Promise<{ id: string; name: string }> {
+    return impl_runContainer(this, image, name, options);
   }
 
   // ==================== 镜像管理（委托给 imageOps.ts） ====================

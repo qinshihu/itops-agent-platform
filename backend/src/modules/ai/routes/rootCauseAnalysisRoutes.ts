@@ -1,5 +1,7 @@
 import express from 'express';
 import { rootCauseAnalysisService } from '../services/rca/rootCauseAnalysisService';
+import { rcaJobManager } from '../services/rca/rcaJobManager';
+import { logger } from '../../../utils/logger';
 
 const router = express.Router();
 
@@ -123,6 +125,45 @@ router.put('/:id', (req, res) => {
       return res.status(404).json({ success: false, message: '根因分析不存在' });
     }
     res.json({ success: true, data: updatedRca });
+  } catch (error) {
+    res.status(500).json({ success: false, message: (error as Error).message });
+  }
+});
+
+// 执行根因分析（v4 新增：异步版本，立即返回 202 + jobId）
+router.post('/:id/analyze-async', (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = rootCauseAnalysisService.get(id);
+    if (!existing) {
+      return res.status(404).json({ success: false, message: '根因分析不存在' });
+    }
+    const jobId = rcaJobManager.analyzeAsync(id);
+    res.status(202).json({
+      success: true,
+      data: {
+        jobId,
+        rcaId: id,
+        status: 'pending',
+        pollUrl: `/root-cause-analysis/jobs/${jobId}`,
+      },
+      message: '分析任务已提交，请轮询 /jobs/:jobId 查询结果',
+    });
+  } catch (error) {
+    logger.error('Failed to start async RCA job:', error);
+    res.status(500).json({ success: false, message: (error as Error).message });
+  }
+});
+
+// v4 新增：查询异步任务状态（前端轮询）
+router.get('/jobs/:jobId', (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const job = rcaJobManager.getJob(jobId);
+    if (!job) {
+      return res.status(404).json({ success: false, message: '任务不存在或已过期' });
+    }
+    res.json({ success: true, data: job });
   } catch (error) {
     res.status(500).json({ success: false, message: (error as Error).message });
   }

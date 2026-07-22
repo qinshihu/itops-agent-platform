@@ -149,11 +149,11 @@ class SnmpPollingService {
         snmpService.getSystemInfo(
           host, port, version,
           version !== 'v3' ? community : undefined
-        ).catch(() => null),
+        ).catch((err) => { logger.warn('SNMP getSystemInfo failed for device poll:', err); return null; }),
         snmpService.getInterfaces(
           host, port, version,
           version !== 'v3' ? community : undefined
-        ).catch(() => [])
+        ).catch((err) => { logger.warn('SNMP getInterfaces failed for device poll:', err); return []; })
       ]);
 
       if (!sysInfo && interfaces.length === 0) {
@@ -316,7 +316,7 @@ class SnmpPollingService {
         });
         // 设备间留 200ms 间隔，避免 SNMP 拥塞
         await new Promise(r => setTimeout(r, 200));
-      } catch (_err) {
+      } catch (_err) { // eslint-disable-line @typescript-eslint/no-unused-vars
         results.push({ device: device.name, ip: device.ip_address, ok: false });
       }
     }

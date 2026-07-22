@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Send, Bot, User, Trash2, MessageSquare, Loader2, X, MinusCircle, AlertCircle } from 'lucide-react';
 import api from '../../../lib/api';
@@ -35,8 +35,8 @@ export default function ChatWidget() {
     queryKey: ['copilot-suggestions'],
     queryFn: async () => {
       try {
-        const res = await api.get('/copilot/suggestions');
-        return res.data.data || [];
+        const { data } = await api.get('/copilot/suggestions');
+        return data || [];
       } catch {
         return ['查看当前告警状态', '服务器状态怎么样', '最近执行了哪些任务'];
       }
@@ -47,8 +47,8 @@ export default function ChatWidget() {
     queryKey: ['copilot-conversations'],
     queryFn: async () => {
       try {
-        const res = await api.get('/copilot/conversations');
-        return res.data.data || [];
+        const { data } = await api.get('/copilot/conversations');
+        return data || [];
       } catch {
         return [];
       }
@@ -64,11 +64,11 @@ export default function ChatWidget() {
 
   const sendMessageMutation = useMutation({
     mutationFn: async ({ conversationId, message }: { conversationId?: string, message: string }) => {
-      const res = await api.post('/copilot/chat', {
+      const { data } = await api.post('/copilot/chat', {
         conversationId,
         message
       });
-      return res.data;
+      return data;
     },
     onMutate: async ({ conversationId, message }) => {
       await queryClient.cancelQueries({ queryKey: ['copilot-conversations'] });
@@ -105,8 +105,8 @@ export default function ChatWidget() {
 
   const createConversationMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/copilot/conversations');
-      return res.data;
+      const { data } = await api.post('/copilot/conversations');
+      return data;
     },
     onSuccess: (data) => {
       if (data.success) {
@@ -131,9 +131,15 @@ export default function ChatWidget() {
     },
   });
 
+  // v4 修复：只在消息数量增加时滚动（避免 invalidateQueries 重新拉数据时触发抖动）
+  const prevMessageCountRef = useRef<number>(0);
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [currentConversation?.messages, sendMessageMutation.isPending]);
+    const count = currentConversation?.messages?.length ?? 0;
+    if (count > prevMessageCountRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+    prevMessageCountRef.current = count;
+  }, [currentConversation?.messages?.length]);  // 只依赖长度，不依赖引用
 
   const handleSend = async (msg?: string) => {
     const message = msg || inputValue;

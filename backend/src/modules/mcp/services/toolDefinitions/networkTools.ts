@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from 'zod';
 import { type RegisteredTool } from '../types';
 import { textResult, jsonResult, READONLY } from './shared';
+import { networkDeviceRepository } from '../../../../repositories';
 
 export const networkTools: RegisteredTool[] = [
   {
@@ -18,16 +18,13 @@ export const networkTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        // eslint-disable-next-line no-restricted-imports
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT * FROM network_devices WHERE 1=1';
-        const params: any[] = [];
-        if (args.deviceType) { query += ' AND device_type = ?'; params.push(args.deviceType); }
-        if (args.vendor) { query += ' AND manufacturer = ?'; params.push(args.vendor); }
-        if (args.status) { query += ' AND status = ?'; params.push(args.status); }
-        query += ` LIMIT ${args.limit || 50}`;
-        const devices = db.prepare(query).all(...params);
-        return jsonResult(devices, `找到 ${(devices as any[])?.length || 0} 台网络设备`);
+        const devices = networkDeviceRepository.listWithFilters({
+          deviceType: args.deviceType,
+          vendor: args.vendor,
+          status: args.status,
+          limit: args.limit || 50,
+        });
+        return jsonResult(devices, `找到 ${(devices as unknown[])?.length || 0} 台网络设备`);
       } catch (err) {
         return textResult(`查询网络设备失败: ${(err as Error).message}`, true);
       }

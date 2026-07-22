@@ -26,6 +26,7 @@ import { DellAdapter } from './dell';
 import { TplinkAdapter } from './tplink';
 import { F5Adapter } from './f5';
 import { RuijieEgAdapter } from './ruijie_eg';
+import { PanabitAdapter } from './panabit';
 
 import type { VendorType, VendorAdapter, InspectionType } from './types';
 
@@ -50,6 +51,7 @@ const adapterRegistry: Record<VendorType, new () => VendorAdapter> = {
   tplink: TplinkAdapter,
   f5: F5Adapter,
   ruijie_eg: RuijieEgAdapter,
+  panabit: PanabitAdapter,
 };
 
 export function createVendorAdapter(vendor: VendorType): VendorAdapter {

@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
-import { knowledgeRepository } from '../../../repositories';
 import { authenticateToken } from '../../../middleware/auth';
+import { knowledgeCrudService } from '../services/knowledgeCrudService';
 
 const router = Router();
 
@@ -20,7 +21,7 @@ function parseKnowledgeJson<T extends { tags?: string | null; solutions?: string
 router.get('/', (req: Request, res: Response) => {
   try {
     const { category, search } = req.query;
-    const knowledge = knowledgeRepository.list({
+    const knowledge = knowledgeCrudService.listKnowledge({
       category: category as string | undefined,
       search: search as string | undefined,
     });
@@ -36,7 +37,7 @@ router.post('/', (req: Request, res: Response) => {
     const { title, category, tags, content, solutions, related_alerts } = req.body;
     const id = randomUUID();
 
-    knowledgeRepository.createFromRest({
+    knowledgeCrudService.createKnowledge({
       id,
       title,
       category,
@@ -46,7 +47,7 @@ router.post('/', (req: Request, res: Response) => {
       related_alerts: JSON.stringify(related_alerts || []),
     });
 
-    const knowledge = knowledgeRepository.getById(id);
+    const knowledge = knowledgeCrudService.getKnowledgeById(id);
     res.status(201).json({ success: true, data: knowledge });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -57,7 +58,7 @@ router.put('/:id', (req: Request, res: Response) => {
   try {
     const { title, category, tags, content, solutions, related_alerts } = req.body;
 
-    knowledgeRepository.updateFromRest(req.params.id, {
+    knowledgeCrudService.updateKnowledge(req.params.id, {
       title,
       category,
       tags: JSON.stringify(tags || []),
@@ -66,7 +67,7 @@ router.put('/:id', (req: Request, res: Response) => {
       related_alerts: JSON.stringify(related_alerts || []),
     });
 
-    const knowledge = knowledgeRepository.getById(req.params.id);
+    const knowledge = knowledgeCrudService.getKnowledgeById(req.params.id);
     res.json({ success: true, data: knowledge });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -75,7 +76,7 @@ router.put('/:id', (req: Request, res: Response) => {
 
 router.delete('/:id', (req: Request, res: Response) => {
   try {
-    knowledgeRepository.delete(req.params.id);
+    knowledgeCrudService.deleteKnowledge(req.params.id);
     res.json({ success: true, message: 'Knowledge entry deleted' });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -89,7 +90,7 @@ router.get('/search', (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Search query required' });
     }
 
-    const knowledge = knowledgeRepository.search(q as string);
+    const knowledge = knowledgeCrudService.searchKnowledge(q as string);
     const parsed = knowledge.map(parseKnowledgeJson);
 
     res.json({ success: true, data: parsed });

@@ -4,8 +4,7 @@
  * 调用 dbskiter 执行数据库诊断/监控/安全/锁分析
  */
 
-// eslint-disable-next-line no-restricted-imports
-import db from '../../../../models/database';
+import { dbConnectionRepository } from '../../../../repositories';
 import { logger } from '../../../../utils/logger';
 import { executeAgentWithLLM } from '../llm/llmService';
 import { decrypt } from '../../../auth/services/encryptionService';
@@ -39,17 +38,7 @@ export async function executeDatabaseAdminAgent(
   }
 
   // 查询数据库连接信息
-  const dbConn = db.prepare('SELECT * FROM databases WHERE id = ?').get(databaseId) as {
-    id: string;
-    name: string;
-    db_type: string;
-    host: string;
-    port: number;
-    username: string;
-    password: string;
-    database: string;
-    enabled: number;
-  } | undefined;
+  const dbConn = dbConnectionRepository.getById(databaseId);
 
   if (!dbConn) {
     return '## 数据库运维执行失败\n\n**错误**: 找不到指定的数据库连接。请检查数据库连接 ID 是否正确。';

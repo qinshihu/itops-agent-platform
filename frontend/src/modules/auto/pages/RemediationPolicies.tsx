@@ -1,19 +1,31 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Play, 
-  Pause, 
-  Settings, 
-  Plus, 
-  Search, 
+import {
+  Play,
+  Pause,
+  Settings,
+  Plus,
+  Search,
   AlertTriangle,
   CheckCircle,
   XCircle,
   Filter
 } from 'lucide-react';
+
+export interface RemediationPolicy {
+  id: string;
+  name: string;
+  description?: string;
+  enabled: number;
+  execution_mode: 'auto' | 'approval' | 'suggestion';
+  alert_source: string;
+  alert_severity?: string;
+  max_executions_per_hour: number;
+  cooldown_seconds: number;
+  [key: string]: unknown;
+}
 
 export default function RemediationPolicies() {
   const navigate = useNavigate();
@@ -30,8 +42,8 @@ export default function RemediationPolicies() {
       if (enabledFilter !== 'all') {
         params.enabled = enabledFilter === 'enabled' ? 'true' : 'false';
       }
-      const res = await api.get('/remediation-policies', { params });
-      return res.data.data;
+      const { data } = await api.get('/remediation-policies', { params });
+      return data;
     }
   });
 
@@ -53,7 +65,7 @@ export default function RemediationPolicies() {
     }
   });
 
-  const policies = (data?.policies || []).filter((p: any) => 
+  const policies = (data?.policies || []).filter((p: RemediationPolicy) =>
     !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -152,7 +164,7 @@ export default function RemediationPolicies() {
                 </tr>
               </thead>
               <tbody>
-                {policies.map((policy: any) => (
+                {policies.map((policy: RemediationPolicy) => (
                   <tr key={policy.id} className="border-b border-border/30 hover:bg-slate-700/20 transition-colors">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">

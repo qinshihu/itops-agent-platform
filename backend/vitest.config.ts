@@ -9,10 +9,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      // 渐进式提升计划：每月 +5%，目标 50%/80%/55%/50%
+      // 渐进式提升计划：每月 +3pp，目标开源社区底线 50%/80%/55%/50%
+      // 2026-07-21 ADR-020 v2.2：本轮**保持 25/60/30/25 不变**
+      // - 当前实际 baseline: branches 17%, functions 57%, lines 22%, statements 17%
+      // - 阈值与 baseline 留 ~10pp 余量，避免 PR 频繁 build 红
+      // - 注释说明为何本轮不提升：很多新功能模块尚未补测试，下个月统一补一批后再 +3pp
       thresholds: {
-        // 当前覆盖率: branches 17%, functions 57%, lines 22%, statements 17%
-        // 目标: 逐月提升 5%，最终达到 60%
         global: {
           branches: 25,
           functions: 60,

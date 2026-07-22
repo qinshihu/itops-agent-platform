@@ -14,6 +14,7 @@ vi.mock('../../../models/database', () => {
     default: {
       prepare: vi.fn(() => stmt),
     },
+    performMaintenance: vi.fn(),
   };
 });
 
@@ -46,6 +47,7 @@ vi.mock('axios', () => ({
 }));
 
 import axios from 'axios';
+// eslint-disable-next-line no-restricted-imports -- test file: vi.mock hoists above imports, must import db for mock verification
 import db from '../../../models/database';
 import { registryService } from './registryService';
 import { credentialService } from '../../auth/services/credentialService';
@@ -178,11 +180,13 @@ describe('RegistryService', () => {
         'new-registry',
         'dockerhub',
         'https://hub.docker.com',
-        null,
-        null,
-        null,
-        expect.any(String), // now
-        expect.any(String), // now
+        null, // username
+        null, // encrypted_password
+        null, // encrypted_password_iv
+        'unknown', // status default
+        null, // error_message
+        0, // project_count default
+        0, // repo_count default
       );
       expect(result).not.toBeNull();
       expect(result.name).toBe('test-harbor');
@@ -342,7 +346,9 @@ describe('RegistryService', () => {
       expect(result.success).toBe(false);
       expect(result.message).toBe('Connection refused');
       // Should update the registry status to error
+      // 2026-07-21 修正：updateStatus 实际参数顺序是 [status, error_message, id]
       expect(stmt.run).toHaveBeenCalledWith(
+        'error',
         'Connection refused',
         'reg-001'
       );

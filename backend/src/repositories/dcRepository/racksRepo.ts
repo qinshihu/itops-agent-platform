@@ -6,6 +6,7 @@ export interface RackListFilters {
   roomId?: string;
   status?: string;
   search?: string;
+  limit?: number;
 }
 
 export const racksRepo = {
@@ -28,6 +29,7 @@ export const racksRepo = {
     if (filters.status) { query += ' AND r.status = ?'; params.push(filters.status); }
     if (filters.search) { query += ' AND r.name LIKE ?'; params.push(`%${filters.search}%`); }
     query += ' ORDER BY r.sort_order ASC, r.name ASC';
+    if (filters.limit) { query += ' LIMIT ?'; params.push(filters.limit); }
     return db.prepare(query).all(...params) as DcRack[];
   },
 

@@ -57,6 +57,18 @@ export const dbConnectionRepository = {
     return db.prepare('SELECT * FROM databases ORDER BY created_at DESC').all() as DbConnectionRecord[];
   },
 
+  /**
+   * MCP 工具查询（支持 dbType 过滤 + limit）
+   * 对应：toolDefinitions database.list
+   */
+  listWithFilters(filters: { dbType?: string; limit?: number }): DbConnectionRecord[] {
+    let query = 'SELECT id, name, db_type, host, port, status, version FROM databases WHERE 1=1';
+    const params: unknown[] = [];
+    if (filters.dbType) { query += ' AND db_type = ?'; params.push(filters.dbType); }
+    query += ` LIMIT ${filters.limit || 20}`;
+    return db.prepare(query).all(...params) as DbConnectionRecord[];
+  },
+
   /** 按 ID 查询 */
   getById(id: string): DbConnectionRecord | undefined {
     return db.prepare('SELECT * FROM databases WHERE id = ?').get(id) as DbConnectionRecord | undefined;

@@ -18,7 +18,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
 
@@ -44,7 +44,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -60,6 +60,25 @@ jobs:
         working-directory: ./frontend
         run: npm run lint --if-present
 
+      # ADR-020 v2.2（2026-07-21）：新文件行数检查（软警告，不阻断）
+      # 仅扫描本次 PR 中变更的 .ts/.tsx 新文件
+      - name: Check new file line counts (soft warning)
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "## 新文件行数检查" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          WARN=false
+          git diff --name-only --diff-filter=A origin/${{ github.base_ref }}...HEAD | \
+            grep -E '\.(ts|tsx)$' | grep -vE '(\.test\.|\.spec\.|node_modules)' | while read f; do
+            if [ -f "$f" ]; then
+              LINES=$(wc -l < "$f")
+              if [ "$LINES" -gt 500 ]; then
+                echo "::warning file=$f::新文件 $LINES 行，超过 500 行阈值（参考 ADR-020 v2.2）" >&2
+              fi
+            fi
+          done
+          echo "✅ 检查完成（超 500 行的会在上面以 warning 标记）" >> $GITHUB_STEP_SUMMARY
+
   architecture-check:
     name: Architecture Check
     runs-on: ubuntu-latest
@@ -70,7 +89,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
@@ -95,7 +114,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
 
@@ -121,7 +140,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -144,7 +163,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 

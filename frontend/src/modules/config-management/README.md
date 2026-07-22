@@ -15,3 +15,6 @@ config-management/
 
 ## 对应后端
 `backend/src/modules/config-management/`
+
+## 刷新记录
+- **2026-07-22**：核对结构与路由

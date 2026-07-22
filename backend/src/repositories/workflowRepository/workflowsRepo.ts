@@ -13,6 +13,18 @@ export const workflowsRepo = {
   },
 
   /**
+   * MCP 工具查询（支持 status 过滤 + limit）
+   * 对应：toolDefinitions workflow.list
+   */
+  listWithFilters(filters: { status?: string; limit?: number }): WorkflowRecord[] {
+    let query = 'SELECT id, name, description, status, trigger_type, created_at, updated_at FROM workflows WHERE 1=1';
+    const params: unknown[] = [];
+    if (filters.status) { query += ' AND status = ?'; params.push(filters.status); }
+    query += ` LIMIT ${filters.limit || 20}`;
+    return db.prepare(query).all(...params) as WorkflowRecord[];
+  },
+
+  /**
    * 按 id 获取完整工作流
    * 对应 workflowRoutes.ts W-SELECT-2
    */

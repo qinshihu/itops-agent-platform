@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import {
   Server, Terminal, CheckCircle2, AlertCircle, ShieldCheck, Wifi, History, Clock, FolderTree,
-  Upload, RefreshCw, _Plus, Edit, Trash2, Cpu, HardDrive, MemoryStick, Monitor,
+  Upload, RefreshCw, Plus, Edit, Trash2, Cpu, HardDrive, MemoryStick, Monitor,
   MonitorPlay, Sparkles, FolderPlus,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -43,7 +43,7 @@ interface ServerListSectionProps {
 }
 
 export function ServerListSection({
-  _servers,
+  servers: _servers,
   isLoading,
   groupsData,
   allTags,

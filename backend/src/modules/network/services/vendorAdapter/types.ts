@@ -21,6 +21,7 @@ export type VendorType =
   | 'tplink'         // TP-Link JetStream 交换机
   | 'f5'             // F5 BIG-IP 负载均衡
   | 'ruijie_eg'      // 锐捷 EG 出口网关（命令集不同）
+  | 'panabit'        //  Panabit 流控网关（国产流控设备）
   ;
 
 export type DeviceType =

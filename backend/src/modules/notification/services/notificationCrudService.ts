@@ -1,0 +1,99 @@
+/**
+ * notificationCrudService — 通知 CRUD service
+ *
+ * 提供通知列表、标记发送、删除、统计等 CRUD 操作。
+ * 把 routes 直接调用 notificationsRepo 的模式改为 routes → service → repository。
+ *
+ * 调用方：
+ *   - modules/notification/routes/notificationRoutes.ts
+ */
+
+import { notificationsRepo } from '../../../repositories';
+import type {
+  NotificationRecord,
+  NotificationStats,
+} from '../../../repositories/infraRepository/types';
+
+export interface ListNotificationsParams {
+  type?: string;
+  status?: string;
+  start_date?: string;
+  end_date?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface ListNotificationsResult {
+  notifications: NotificationRecord[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+/**
+ * 分页查询通知列表。
+ */
+export function listNotifications(params: ListNotificationsParams = {}): ListNotificationsResult {
+  const page = params.page ?? 1;
+  const limit = params.limit ?? 50;
+  const filters = {
+    type: params.type,
+    status: params.status,
+    start_date: params.start_date,
+    end_date: params.end_date,
+    limit,
+    offset: (page - 1) * limit,
+  };
+
+  const notifications = notificationsRepo.list(filters);
+  const total = notificationsRepo.count({
+    type: params.type,
+    status: params.status,
+    start_date: params.start_date,
+    end_date: params.end_date,
+  });
+
+  return { notifications, total, page, limit };
+}
+
+/**
+ * 获取单条通知。
+ */
+export function getNotificationById(id: string): NotificationRecord | undefined {
+  return notificationsRepo.getById(id);
+}
+
+/**
+ * 标记通知为已发送。
+ */
+export function markNotificationSent(id: string): boolean {
+  const existing = notificationsRepo.getById(id);
+  if (!existing) return false;
+  notificationsRepo.markSent(id);
+  return true;
+}
+
+/**
+ * 删除通知。返回是否实际删除（false = 不存在）。
+ */
+export function deleteNotification(id: string): boolean {
+  const changes = notificationsRepo.delete(id);
+  return changes > 0;
+}
+
+/**
+ * 获取通知统计（按 type/status 分组 + 待发送数 + 今日已发送数）。
+ */
+export function getNotificationStats(): NotificationStats {
+  return notificationsRepo.getStats();
+}
+
+export const notificationCrudService = {
+  listNotifications,
+  getNotificationById,
+  markNotificationSent,
+  deleteNotification,
+  getNotificationStats,
+};
+
+export default notificationCrudService;

@@ -2,7 +2,7 @@
 import Docker from 'dockerode';
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
-import { dockerEndpointRepository } from '../../../../repositories';
+import { dockerEndpointRepository } from '../../../repositories';
 import { getErrorMessage } from '../../../utils/errorHelpers';
 
 interface DockerEndpoint {
@@ -173,12 +173,12 @@ class MultiHostDockerService {
   getEndpoint(endpointId: string): DockerEndpoint | null {
     const row = dockerEndpointRepository.getById(endpointId);
     if (!row) return null;
-    return this.rowToEndpoint(row);
+    return this.rowToEndpoint(row as unknown as DockerEndpointRow);
   }
 
   listEndpoints(): DockerEndpoint[] {
     const rows = dockerEndpointRepository.list();
-    return rows.map((r) => this.rowToEndpoint(r));
+    return rows.map((r) => this.rowToEndpoint(r as unknown as DockerEndpointRow));
   }
 
   private rowToEndpoint(row: DockerEndpointRow): DockerEndpoint {

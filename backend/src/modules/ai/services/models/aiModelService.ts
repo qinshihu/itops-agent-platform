@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { aiModelRepository, settingsRepository, agentRepository } from '../../../../repositories';
 import { logger } from '../../../../utils/logger';
-import { getApiBase, buildApiEndpoint } from '../../../../utils/apiConfig';
+import { getApiBase, getApiKey, buildApiEndpoint } from '../../../../utils/apiConfig';
 import axios from 'axios';
 
 export interface AIModel {
@@ -42,10 +42,27 @@ export interface UpdateAIModelDTO {
 }
 
 export function getEffectiveApiKey(model: AIModel): string | null {
+  // 1. 优先使用模型自身配置的 API Key
   if (model.api_key && model.api_key.trim() !== '') {
     return model.api_key;
   }
-  
+
+  // 2. Fallback 到全局 settings 表（避免迁移期配置丢失）
+  const providerToSettingKey: Record<string, string> = {
+    volcengine: 'DOUBAO_API_KEY',
+    doubao: 'DOUBAO_API_KEY',
+    openai: 'OPENAI_API_KEY',
+    aliyun: 'ALIYUN_API_KEY',
+    deepseek: 'DEEPSEEK_API_KEY',
+    zhipu: 'ZHIPU_API_KEY',
+    local: 'LOCAL_AI_API_KEY',
+  };
+  const settingKey = providerToSettingKey[model.provider_type];
+  if (settingKey) {
+    const fallback = getApiKey(settingKey);
+    if (fallback) return fallback;
+  }
+
   return null;
 }
 
@@ -54,41 +71,35 @@ export function getEffectiveApiBase(model: AIModel): string {
     return model.api_base;
   }
   
-  const providerBaseMap: Record<string, { setting: string; env: string; default: string }> = {
+  const providerBaseMap: Record<string, { setting: string; default: string }> = {
     volcengine: {
       setting: 'VOLCENGINE_API_BASE',
-      env: 'VOLCENGINE_API_BASE',
       default: 'https://ark.cn-beijing.volces.com/api/v3'
     },
     deepseek: {
       setting: 'DEEPSEEK_API_BASE',
-      env: 'DEEPSEEK_API_BASE',
       default: 'https://api.deepseek.com/v1'
     },
     aliyun: {
       setting: 'ALIYUN_API_BASE',
-      env: 'ALIYUN_API_BASE',
       default: 'https://dashscope.aliyuncs.com/compatible-mode/v1'
     },
     zhipu: {
       setting: 'ZHIPU_API_BASE',
-      env: 'ZHIPU_API_BASE',
       default: 'https://open.bigmodel.cn/api/paas/v4'
     },
     openai: {
       setting: 'OPENAI_API_BASE',
-      env: 'OPENAI_API_BASE',
       default: 'https://api.openai.com/v1'
     },
     local: {
       setting: 'LOCAL_AI_API_BASE',
-      env: 'LOCAL_AI_API_BASE',
       default: 'http://host.docker.internal:11434/v1'
     }
   };
-  
+
   const config = providerBaseMap[model.provider_type];
-  return getApiBase(config.setting, config.env, config.default);
+  return getApiBase(config.setting, config.default);
 }
 
 interface RawAIModel {
@@ -249,11 +260,18 @@ export async function testModelConnectivity(modelId: string): Promise<{
   
   const apiKey = getEffectiveApiKey(model);
   const apiBase = getEffectiveApiBase(model);
-  
+
   if (!apiKey && model.provider_type !== 'local') {
     return {
       success: false,
       message: 'API Key 未配置，请在模型配置或全局设置中配置'
+    };
+  }
+  // 防止 TS strict null 检查报错
+  if (!apiKey) {
+    return {
+      success: false,
+      message: 'API Key 未配置'
     };
   }
   
@@ -362,34 +380,14 @@ export function migrateOldConfigToAIModels(): void {
   }
   
   if (getAllModels().length === 0) {
-    logger.info('No old configuration found, creating default VolcEngine model');
-    createModel({
-      name: '火山引擎 (默认)',
-      provider_type: 'volcengine',
-      model_id: 'doubao-1-5-lite-32k-250115',
-      tags: ['默认配置']
-    });
+    logger.info('No old configuration found, no AI models will be auto-created. Please add models via /ai-models page.');
   }
 }
 
 export function migrateOldAgents(): void {
   logger.info('Migrating old agents to use primary_model_id...');
   
-  // db.exec is a bulk operation, keep it as-is for now since it's a migration script
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, no-restricted-imports
-  const db = require('../../../../models/database').default;
-  db.exec(`
-    UPDATE agents 
-    SET primary_model_id = (
-      SELECT id FROM ai_models 
-      WHERE (
-        (agents.api_provider = 'doubao' AND provider_type = 'volcengine') OR
-        (agents.api_provider = provider_type)
-      ) AND is_default = 1
-      LIMIT 1
-    )
-    WHERE primary_model_id IS NULL AND api_provider IS NOT NULL;
-  `);
+  agentRepository.migratePrimaryModelIds();
   
   logger.info('Old agents migration completed');
 }

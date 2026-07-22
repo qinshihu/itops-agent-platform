@@ -1,0 +1,18 @@
+{
+  "name": "eslint-plugin-local-rules",
+  "version": "1.0.0",
+  "description": "ITops Agent 内部 ESLint 规则（2026-07-21 P1-#17）",
+  "main": "index.js",
+  "private": true,
+  "files": [
+    "index.js",
+    "rules/"
+  ],
+  "scripts": {},
+  "keywords": [
+    "eslint",
+    "eslint-plugin",
+    "local-rules"
+  ],
+  "license": "MIT"
+}

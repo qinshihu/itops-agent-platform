@@ -152,4 +152,18 @@ export const auditLogRepository = {
       WHERE created_at >= datetime('now', 'start of day')
     `).get() as { count: number }).count;
   },
+
+  /**
+   * 导出审计日志（JOIN users 获取用户名，限 10000 条，供 importExportService 使用）
+   */
+  listAllWithUsernameForExport(): Array<Record<string, unknown>> {
+    return db.prepare(`
+      SELECT al.id, u.username, al.action, al.resource_type, al.resource_id, 
+             al.details, al.ip_address, al.created_at
+      FROM audit_logs al
+      LEFT JOIN users u ON al.user_id = u.id
+      ORDER BY al.created_at DESC
+      LIMIT 10000
+    `).all() as Array<Record<string, unknown>>;
+  },
 };

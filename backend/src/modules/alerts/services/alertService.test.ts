@@ -31,6 +31,7 @@ vi.mock('../../../models/database', () => {
     initializeDatabase: vi.fn().mockResolvedValue(undefined),
     setIOInstance: vi.fn(),
     getIOInstance: vi.fn(() => null),
+    performMaintenance: vi.fn(),
   };
 });
 

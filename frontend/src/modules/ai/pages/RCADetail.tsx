@@ -2,28 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Search, Clock, AlertTriangle, Lightbulb } from 'lucide-react';
 import clsx from 'clsx';
-import api from '../../../lib/api';
-
-interface TimelineEvent {
-  time: string;
-  event: string;
-}
-
-interface RCADetail {
-  id: string;
-  alert_id?: string;
-  title: string;
-  description?: string;
-  status: 'pending' | 'analyzing' | 'completed' | 'failed';
-  root_cause?: string;
-  symptoms: string[];
-  timeline: TimelineEvent[];
-  evidence: string[];
-  recommendations: string[];
-  created_at: string;
-  updated_at: string;
-  completed_at?: string;
-}
+import aiApi from '../api';
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-700',
@@ -45,10 +24,7 @@ export default function RCADetail() {
 
   const { data: detail, isLoading } = useQuery({
     queryKey: ['root-cause-analysis', id],
-    queryFn: async () => {
-      const res = await api.get(`/root-cause-analysis/${id}`);
-      return res.data.data as RCADetail;
-    },
+    queryFn: () => aiApi.getRca(id!),
     enabled: !!id,
   });
 

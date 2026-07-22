@@ -1,0 +1,173 @@
+# Dependabot 配置（2026-07-21 启用）
+#
+# 设计原则：
+#   1. 每周一次，周一 09:00（Asia/Shanghai）扫描，避免周末刷屏
+#   2. 按 ecosystem 分组（npm / GitHub Actions / Docker），PR 不互串
+#   3. 单组内 PR 上限 5 个，避免月度 Dependabot PR 风暴
+#   4. 全部走 GitHub 原生 CI 防线（lint + test + build + depcruise），无需额外 token
+#   5. 标签 `dependencies` + `automated` 便于筛选
+#
+# 详见：[.trae/rules/top-rules.md §十 Dependabot 已启用 + CodeQL 豁免](../trae/rules/top-rules.md)
+#      [docs/开源治理与架构健壮性最终报告_v2.md §8.2 任务 2](../docs/开源治理与架构健壮性最终报告_v2.md)
+
+version: 2
+
+# ===== npm 生态（根 + backend + frontend）=====
+updates:
+  # 根 package.json（monorepo scripts + devDependencies）
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "automated"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    groups:
+      root-major:
+        applies-to: version-updates
+        update-types:
+          - "major"
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "*security*"
+      root-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
+
+  # backend package.json（24 deps + 29 devDeps）
+  - package-ecosystem: "npm"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "automated"
+      - "backend"
+    commit-message:
+      prefix: "chore(backend-deps)"
+      include: "scope"
+    # 分组策略：native 模块（better-sqlite3 / net-snmp / dockerode / ssh2）单独一组
+    # 原因：native 模块升级需要重新编译，可能引入 Node 20 兼容性回归
+    groups:
+      backend-native-modules:
+        patterns:
+          - "better-sqlite3"
+          - "net-snmp"
+          - "dockerode"
+          - "ssh2"
+          - "@types/better-sqlite3"
+          - "@types/dockerode"
+          - "@types/ssh2"
+      backend-major:
+        applies-to: version-updates
+        update-types:
+          - "major"
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "better-sqlite3"
+          - "net-snmp"
+          - "dockerode"
+          - "ssh2"
+      backend-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
+
+  # frontend package.json（21 deps + 23 devDeps）
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "automated"
+      - "frontend"
+    commit-message:
+      prefix: "chore(frontend-deps)"
+      include: "scope"
+    groups:
+      frontend-major:
+        applies-to: version-updates
+        update-types:
+          - "major"
+        patterns:
+          - "*"
+      frontend-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
+
+  # ===== GitHub Actions 生态 =====
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "automated"
+      - "github-actions"
+    commit-message:
+      prefix: "ci(actions)"
+      include: "scope"
+    groups:
+      actions-major:
+        applies-to: version-updates
+        update-types:
+          - "major"
+        patterns:
+          - "*"
+      actions-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
+
+  # ===== Docker 生态（生产 Dockerfile）=====
+  - package-ecosystem: "docker"
+    directory: "/docker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "automated"
+      - "docker"
+    commit-message:
+      prefix: "chore(docker-base)"
+      include: "scope"

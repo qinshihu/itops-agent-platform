@@ -20,6 +20,11 @@ interface VNCConfig {
   vnc_password?: string;
 }
 
+interface VNCError {
+  message: string;
+  [key: string]: unknown;
+}
+
 export default function RemoteDesktop() {
   const { serverId } = useParams<{ serverId: string }>();
   const navigate = useNavigate();
@@ -28,10 +33,10 @@ export default function RemoteDesktop() {
   const [selectedServer, setSelectedServer] = useState<string | undefined>(serverId);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [_vncConfig, _setVncConfig] = useState<VNCConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
+  const rfbRef = useRef<any>(null); // RFB 客户端引用（noVNC 集成时使用）
 
   // 加载服务器列表
   useEffect(() => {
@@ -68,12 +73,11 @@ export default function RemoteDesktop() {
       });
       const result = await res.json();
       if (result.success) {
-        setVncConfig(result.data);
-        return result.data;
+        return result.data as VNCConfig;
       }
       return null;
     } catch (err) {
-      console.error('Failed to load VNC config:', err);
+      logger.error('Failed to load VNC config:', err);
       return null;
     }
   };
@@ -102,7 +106,8 @@ export default function RemoteDesktop() {
         socket.emit('vnc:connect', {
           serverId: id,
           vncHost: config.hostname,
-          vncPort: config.vnc_port
+          vncPort: config.vnc_port,
+          password: config.vnc_password
         });
       });
 
@@ -110,8 +115,7 @@ export default function RemoteDesktop() {
         setIsConnected(true);
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      socket.on('vnc:error', (data: any) => {
+      socket.on('vnc:error', (data: VNCError) => {
         setError(data.message);
         setIsConnected(false);
       });
@@ -120,17 +124,45 @@ export default function RemoteDesktop() {
         setIsConnected(false);
       });
 
-      if (containerRef.current) {
+      // RFB 握手诊断：收集后端转发来的原始字节流
+      const rfbLog: string[] = [];
+      let rfbBytes = 0;
+      const MAX_LOG = 20;
+      const renderRfbStatus = () => {
+        if (!containerRef.current) return;
+        const rfbVer = (rfbLog.find(l => l.startsWith('RFB ')) || '').slice(0, 32);
+        const lastBytes = rfbBytes;
         containerRef.current.innerHTML = `
-          <div class="w-full h-full flex items-center justify-center bg-gray-900 text-gray-300">
-            <div class="text-center">
-              <p class="mb-2 text-lg">VNC 连接已建立</p>
-              <p class="text-sm text-text-tertiary mb-4">服务器: ${config.hostname}:${config.vnc_port}</p>
-              <p class="text-xs text-text-tertiary">完整 noVNC 集成需要安装 @novnc/novnc 包</p>
+          <div class="w-full h-full flex flex-col items-center justify-center bg-gray-900 text-gray-300 p-6 overflow-auto">
+            <p class="mb-2 text-lg text-green-400">VNC 握手已建立（TCP 通道）</p>
+            <p class="text-sm text-text-tertiary mb-1">服务器: ${config.hostname}:${config.vnc_port}</p>
+            <p class="text-xs text-text-tertiary mb-4">已接收 ${lastBytes} 字节 RFB 数据 · 版本: <code class="text-blue-300">${rfbVer || '解析中...'}</code></p>
+            <div class="text-left text-xs text-text-tertiary bg-gray-800 p-3 rounded max-w-2xl w-full">
+              <p class="text-yellow-300 mb-2">⚠ 完整 noVNC 客户端尚未集成</p>
+              <p class="mb-2">当前模式：仅诊断 RFB 握手状态。后续集成方案：</p>
+              <ul class="list-disc list-inside space-y-1">
+                <li>安装 <code class="bg-gray-700 px-1">@novnc/novnc</code> 包</li>
+                <li>订阅 <code class="bg-gray-700 px-1">vnc:data</code> 事件喂给 RFB 客户端</li>
+                <li>canvas 鼠标/键盘事件通过 <code class="bg-gray-700 px-1">vnc:client-data</code> 发回</li>
+              </ul>
             </div>
           </div>
         `;
-      }
+      };
+
+      socket.on('vnc:data', (chunk: ArrayBuffer | Uint8Array) => {
+        rfbBytes += chunk.byteLength;
+        if (rfbLog.length < MAX_LOG) {
+          // 提取前 12 字节 ASCII 用于显示 RFB 版本
+          const view = new Uint8Array(chunk instanceof ArrayBuffer ? chunk : (chunk as Uint8Array).buffer);
+          const head = Array.from(view.slice(0, 12)).map(b => (b >= 32 && b < 127) ? String.fromCharCode(b) : '.').join('');
+          rfbLog.push(`[${rfbBytes}B] ${head}`);
+        }
+        // 通知后端已接收（可选，用于流控）
+        if (rfbBytes <= 4096) renderRfbStatus();
+      });
+
+      renderRfbStatus();
 
     } catch (err) {
       logger.error('Failed to connect:', err);
@@ -142,8 +174,12 @@ export default function RemoteDesktop() {
 
   // 断开连接
   const handleDisconnect = () => {
-    if (socketRef.current) {
-      socketRef.current.disconnect();
+    const socket = socketRef.current;
+    if (socket) {
+      // 先通知后端清理 session
+      socket.emit('vnc:disconnect');
+      // 再关闭 socket
+      socket.disconnect();
     }
     setIsConnected(false);
   };

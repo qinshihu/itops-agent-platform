@@ -1,9 +1,15 @@
-[English](README.en.md) | [中文](README.md) | [繁體中文](README.TW.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [Deutsch](README.de.md) | [Français](README.fr.md)
+[English](README.en.md) | [中文](README.md) | [繁體中文](README.tw.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [Deutsch](README.de.md) | [Français](README.fr.md)
 
 ***
 **⚠️重要公告（2026-07-01）**
 
 项目正基于 4A 架构框架与 DDD 领域驱动设计进行全面重构。本次重构旨在彻底解耦业务逻辑与技术实现，重塑架构合理性，在提升代码可维护性与规范性的同时，赋予系统更强的弹性扩展能力。重构工作量巨大，目前处于渐进式替换阶段。近期推送的代码和构建的 Docker 镜像为过渡态，未经验证依赖混乱，不建议直接拉取使用。建议普通用户等待稳定版本发布；具备源码调试修改能力的开发者可先行基于源码修改二开，并欢迎协助修复临时性缺陷。
+
+```
+# Linux/Mac 一键脚本部署（推荐）
+curl -sL https://gitee.com/IT_Oline/itops-agent-platform/raw/main/deploy.sh -o deploy.sh && chmod +x deploy.sh && ./deploy.sh
+
+```
 
 ***
 
@@ -448,7 +454,6 @@ curl -sL https://gitee.com/IT_Oline/itops-agent-platform/raw/main/deploy.sh -o d
 ### 方式二：Docker Compose
 
 ```bash
-cp .env.example .env
 docker compose up -d --build
 # 前端: http://localhost:8080
 # 健康检查: http://localhost:3001/health

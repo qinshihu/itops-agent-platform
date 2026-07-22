@@ -1,18 +1,32 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
-import { 
-  CheckCircle, 
-  XCircle, 
+import {
+  CheckCircle,
+  XCircle,
   Play,
   RefreshCw,
   Clock,
-  AlertTriangle as _AlertTriangle,
   Eye,
   RotateCcw,
   Shield
 } from 'lucide-react';
+
+export interface RemediationAudit {
+  id: string;
+  status: 'pending' | 'approved' | 'rejected' | 'executing' | 'success' | 'failed' | 'completed';
+  created_at?: string;
+  approved_at?: string;
+  rca_title?: string;
+  rca_id?: string;
+  policy_name?: string;
+  policy_id?: string;
+  risk_level?: 'low' | 'medium' | 'high';
+  is_rollback?: number;
+  recommendations?: string | unknown;
+  execution_log?: string | unknown;
+  [key: string]: unknown;
+}
 
 export default function RemediationWorkbench() {
   const queryClient = useQueryClient();
@@ -24,10 +38,10 @@ export default function RemediationWorkbench() {
   const { data, isLoading } = useQuery({
     queryKey: ['remediation-audits', page],
     queryFn: async () => {
-      const res = await api.get('/remediation-audits', {
+      const { data } = await api.get('/remediation-audits', {
         params: { page: String(page), limit: String(limit) }
       });
-      return res.data.data;
+      return data;
     }
   });
 
@@ -80,8 +94,8 @@ export default function RemediationWorkbench() {
     queryKey: ['remediation-audit-detail', selectedAuditId],
     queryFn: async () => {
       if (!selectedAuditId) return null;
-      const res = await api.get(`/remediation-audits/${selectedAuditId}`);
-      return res.data.data;
+      const { data } = await api.get(`/remediation-audits/${selectedAuditId}`);
+      return data;
     },
     enabled: !!selectedAuditId
   });
@@ -132,25 +146,25 @@ export default function RemediationWorkbench() {
     return map[status] || 'bg-slate-500/10 text-text-secondary border-slate-500/20';
   };
 
-  const getRiskLevelColor = (level: string) => {
+  const getRiskLevelColor = (level?: string) => {
     const map: Record<string, string> = {
       'low': 'bg-green-500/10 text-green-400',
       'medium': 'bg-yellow-500/10 text-yellow-400',
       'high': 'bg-red-500/10 text-red-400'
     };
-    return map[level] || 'bg-slate-500/10 text-text-secondary';
+    return map[level ?? ''] || 'bg-slate-500/10 text-text-secondary';
   };
 
-  const getRiskLevelText = (level: string) => {
+  const getRiskLevelText = (level?: string) => {
     const map: Record<string, string> = {
       'low': '低',
       'medium': '中',
       'high': '高'
     };
-    return map[level] || level;
+    return map[level ?? ''] || level || '-';
   };
 
-  const formatTime = (timeStr: string) => {
+  const formatTime = (timeStr?: string) => {
     if (!timeStr) return '-';
     const date = new Date(timeStr);
     return date.toLocaleString('zh-CN', { 
@@ -161,8 +175,8 @@ export default function RemediationWorkbench() {
     });
   };
 
-  const pendingAudits = data?.audits?.filter((a: any) => a.status === 'pending') || [];
-  const _recentExecutions = data?.audits?.filter((a: any) => a.status !== 'pending') || [];
+  const pendingAudits = (data?.audits || []).filter((a: RemediationAudit) => a.status === 'pending');
+  const _recentExecutions = (data?.audits || []).filter((a: RemediationAudit) => a.status !== 'pending');
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -189,7 +203,7 @@ export default function RemediationWorkbench() {
               <span className="ml-auto text-sm font-normal text-text-secondary">{pendingAudits.length} 项</span>
             </h3>
             <div className="grid gap-4">
-              {pendingAudits.map((audit: any) => (
+              {pendingAudits.map((audit: RemediationAudit) => (
                 <div key={audit.id} className="bg-surface/30 border border-border rounded-xl p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -261,7 +275,7 @@ export default function RemediationWorkbench() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.audits.map((audit: any) => (
+                  {data.audits.map((audit: RemediationAudit) => (
                     <tr key={audit.id} className="border-b border-border/30 hover:bg-slate-700/20 transition-colors">
                       <td className="py-3 px-4 text-sm text-text-primary">{formatTime(audit.created_at)}</td>
                       <td className="py-3 px-4">

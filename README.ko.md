@@ -1,4 +1,13 @@
-[English](README.en.md) | [中文](README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [Deutsch](README.de.md) | [Français](README.fr.md)
+[English](README.en.md) | [中文](README.md) | [繁體中文](README.tw.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [Deutsch](README.de.md) | [Français](README.fr.md)
+
+***
+
+**⚠️ IMPORTANT: The project is undergoing a comprehensive refactoring based on the 4A architecture framework and DDD (Domain-Driven Design). Recent Docker images are transitional builds and not recommended for direct use. Please refer to the [English README](README.en.md) or [Chinese README](README.md) for the latest information.**
+
+```bash
+# Linux/Mac One-Click Deployment
+curl -sL https://gitee.com/IT_Oline/itops-agent-platform/raw/main/deploy.sh -o deploy.sh && chmod +x deploy.sh && ./deploy.sh
+```
 
 ***
 
@@ -432,7 +441,6 @@ curl -sL https://gitee.com/IT_Oline/itops-agent-platform/raw/main/deploy.sh -o d
 ### 방법 2: Docker Compose
 
 ```bash
-cp .env.example .env
 docker compose up -d --build
 # 프론트엔드: http://localhost:8080
 # 상태 확인: http://localhost:3001/health
