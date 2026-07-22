@@ -157,6 +157,7 @@ docs/       # 项目报告
 - **追加 §8.4 条目时 `old_str` 必须含首字符 `- `（L1 自纠错）**：在有序列表追加条目，`new_str` 中新增条目的首字符 `- ` 必须显式写出，不能省略；改完必须立刻 Read 复核，不能只看工具返回的 diff（diff 只显示「有变化」，不显示「符号对不对」）
 - **大文件精简后必 grep 全文检查失效交叉引用（L1）**：精简大文件（删章节/重命名）后，必须对所有引用方文件 grep `已删章节号|已删文件名` 全文扫描，不能用「我以为改对了」蒙混过关。**精简 = 重新编号，必须把「引用方文件」作为精简验收清单的一部分**
 - **「拟新增 ADR」超过 3 天未落地应立即合并或删除（L2）**：「拟新增」是 placeholder，不是永久状态——3 天内必须落地（合并到现有 ADR 或新建），否则按 [lessons-learned.md §三.4](./.trae/rules/lessons-learned.md)「占位规则清理」流程删除或合并到 AGENTS.md §8
+- **改 package.json 必须同步 lockfile（L1）**：任何修改 `package.json`（包括 `npm install <pkg>` / `npm install <pkg>@<ver>` / 手动增删依赖）的提交，**必须**同时运行 `npm install --package-lock-only` 同步 `package-lock.json` 后一并提交；否则 CI `npm ci` 会因 lockfile 与 package.json 不一致报 EUSAGE 错误中断（2026-07-23 真实案例：commit `804a2bf` 添加 `@vitest/coverage-v8` 时漏同步 lockfile，导致 GitHub Actions 全军覆没）。**检查清单**：`git status` 必须看到 `package.json` 和 `package-lock.json` 同时出现在变更列表，缺一不可
 
 ### 8.5 全局规则文件（不重复维护）
 
