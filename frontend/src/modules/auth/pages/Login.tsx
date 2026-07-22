@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, AlertCircle, Globe, Lock, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
-import api from '../../../lib/api';
+import { authApi } from '../api';
 import { getAxiosErrorMessage } from '@/lib/errorHandler';
 
 export default function Login() {
@@ -19,22 +19,17 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await api.post('/auth/login', { username, password });
+      const result = await authApi.login({ username, password });
 
-      if (response.data.success) {
-        login(response.data.data.token, response.data.data.user, response.data.data.refreshToken);
-        
-        // 检查是否需要强制修改密码
-        if (response.data.data.user.passwordMustChange) {
-          navigate('/force-password-change', { replace: true });
-        } else {
-          navigate('/dashboard');
-        }
+      login(result.token, result.user, result.refreshToken);
+
+      if (result.user.passwordMustChange) {
+        navigate('/force-password-change', { replace: true });
       } else {
-        setError(response.data.error || response.data.message || '登录失败，请检查用户名和密码');
+        navigate('/dashboard');
       }
     } catch (err: unknown) {
-      setError(getAxiosErrorMessage(err, '网络错误，请稍后重试'));
+      setError(getAxiosErrorMessage(err, '登录失败，请检查用户名和密码'));
     } finally {
       setLoading(false);
     }
@@ -45,8 +40,14 @@ export default function Login() {
       {/* 背景效果 */}
       <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900">
         <div className="absolute top-0 left-0 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl translate-x-1/2 translate-y-1/2 animate-pulse" style={{ animationDelay: '1s' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-cyan-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }} />
+        <div
+          className="absolute bottom-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl translate-x-1/2 translate-y-1/2 animate-pulse"
+          style={{ animationDelay: '1s' }}
+        />
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-cyan-500/10 rounded-full blur-3xl animate-pulse"
+          style={{ animationDelay: '2s' }}
+        />
       </div>
 
       {/* 主内容 */}
@@ -59,18 +60,14 @@ export default function Login() {
               <img src="/logo.jpg" alt="Logo" className="w-full h-full object-contain" />
             </div>
             <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">
-              ITOps Agent 平台
+              AIOps Agent Platform
             </h1>
-            <p className="text-slate-300 text-sm tracking-wide">
-              多Agent自动化平台
-            </p>
+            <p className="text-slate-300 text-sm tracking-wide">多Agent自动化平台</p>
           </div>
 
           {/* 登录卡片 */}
           <div className="bg-white/5 backdrop-blur-2xl rounded-3xl p-10 border border-white/10 shadow-2xl">
-            <h2 className="text-2xl font-semibold text-white mb-8 text-center">
-              用户登录
-            </h2>
+            <h2 className="text-2xl font-semibold text-white mb-8 text-center">用户登录</h2>
 
             {/* 错误提示 */}
             {error && (
@@ -83,9 +80,7 @@ export default function Login() {
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* 用户名 */}
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-3 ml-1">
-                  用户名
-                </label>
+                <label className="block text-sm font-medium text-slate-200 mb-3 ml-1">用户名</label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <User className="w-5 h-5 text-slate-400 group-focus-within:text-blue-400 transition-colors" />
@@ -103,9 +98,7 @@ export default function Login() {
 
               {/* 密码 */}
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-3 ml-1">
-                  密码
-                </label>
+                <label className="block text-sm font-medium text-slate-200 mb-3 ml-1">密码</label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Lock className="w-5 h-5 text-slate-400 group-focus-within:text-blue-400 transition-colors" />
@@ -130,8 +123,20 @@ export default function Login() {
                 {loading ? (
                   <>
                     <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
                     </svg>
                     登录中...
                   </>
@@ -159,9 +164,7 @@ export default function Login() {
               <span className="text-sm">www.zjzwfw.cloud</span>
             </a>
             <span className="text-slate-500 text-sm">•</span>
-            <p className="text-slate-400 text-sm">
-              © 2026 ITOps Agent 平台
-            </p>
+            <p className="text-slate-400 text-sm">© 2026 AIOps Agent Platform</p>
           </div>
         </div>
       </div>

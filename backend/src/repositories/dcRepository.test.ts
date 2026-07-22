@@ -24,11 +24,13 @@ const { mockDb } = vi.hoisted(() => {
       all: vi.fn(() => []),
     })),
     exec: vi.fn(),
+    // 模拟 better-sqlite3 transaction(fn) → 返回同步函数，立即执行 fn 并返回结果
+    transaction: vi.fn((fn: (...args: unknown[]) => unknown) => (...args: unknown[]) => fn(...args)),
   };
   return { mockDb };
 });
 
-vi.mock('../models/database', () => ({ default: mockDb }));
+vi.mock('../models/database', () => ({ default: mockDb, performMaintenance: vi.fn() }));
 
 import { dcRepository } from './dcRepository';
 import { container } from '../core/serviceContainer';
@@ -88,9 +90,10 @@ describe('dcRepository', () => {
       });
 
       dcRepository.rooms.delete('r1');
+      // 2026-07-21 修正：实际只有 3 条 SQL，slot 通过 FK CASCADE 自动级联（参考 roomsRepo.ts:88-111 注释）
       expect(mockDb.prepare).toHaveBeenCalledTimes(3);
       const sqls = (mockDb.prepare as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => c[0] as string);
-      expect(sqls[0]).toContain('DELETE FROM dc_rack_slots');
+      expect(sqls[0]).toContain('UPDATE dc_pdus SET rack_id = NULL');
       expect(sqls[1]).toContain('DELETE FROM dc_racks');
       expect(sqls[2]).toContain('DELETE FROM dc_rooms');
       expect(runSpy).toHaveBeenLastCalledWith('r1');

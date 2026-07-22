@@ -6,8 +6,8 @@
  */
 
 import { randomUUID } from 'crypto';
-// eslint-disable-next-line no-restricted-imports
-import db from '../../../../models/database';
+import { aiRemediationRepository, tasksRepo, workflowsRepo } from '../../../../repositories';
+import type { AiRemediationCreateInput } from '../../../../repositories';
 import { logger } from '../../../../utils/logger';
 import { executeWorkflow } from '../../../workflow/services/workflowExecutor';
 import type { AiRemediationInput, AiRemediationRecord } from './aiRemediationService';
@@ -28,32 +28,25 @@ export async function impl_createAndExecute(
   service: any,
   input: AiRemediationInput
 ): Promise<AiRemediationRecord | null> {
-  const id = randomUUID();
-  const now = new Date().toISOString();
-
-  const record: AiRemediationRecord = {
-    id,
-    alert_id: input.alertId,
-    device_id: input.deviceId,
-    device_name: input.deviceName,
-    device_ip: input.deviceIp,
-    task_id: null,
-    workflow_id: null,
-    diagnosis: input.diagnosis,
-    remediation_commands: input.remediationCommands,
-    risk_level: input.riskLevel,
-    status: 'pending',
-    created_at: now,
-    updated_at: now,
-  };
+  let record: AiRemediationRecord | undefined;
 
   try {
-    // 1. 保存修复记录
-    impl_saveRecord(record);
-    logger.info(`🔧 [AI Remediation] Created record ${id} for alert ${input.alertId}`);
+    // 1. 创建修复记录（由 repository 生成 id）
+    const created = aiRemediationRepository.create({
+      alert_id: input.alertId,
+      device_id: input.deviceId,
+      device_name: input.deviceName,
+      device_ip: input.deviceIp,
+      diagnosis: input.diagnosis,
+      remediation_commands: input.remediationCommands,
+      risk_level: input.riskLevel,
+    });
+
+    record = created as unknown as AiRemediationRecord;
+    logger.info(`🔧 [AI Remediation] Created record ${record.id} for alert ${input.alertId}`);
 
     // 2. 生成修复工作流
-    const { workflow, workflowParsed } = service.generateRemediationWorkflow(input, id);
+    const { workflow, workflowParsed } = service.generateRemediationWorkflow(input, record.id);
 
     // 3. 保存工作流到数据库
     const workflowId = impl_saveWorkflow(workflow);
@@ -62,26 +55,23 @@ export async function impl_createAndExecute(
 
     // 4. 创建任务
     const taskId = randomUUID();
-    db.prepare(`
-      INSERT INTO tasks (id, workflow_id, name, status, context, created_at)
-      VALUES (?, ?, ?, 'pending', ?, datetime('now','localtime'))
-    `).run(
-      taskId,
-      workflowId,
-      `AI 修复: ${input.alertTitle}`,
-      JSON.stringify({
+    tasksRepo.createPendingWithContext({
+      id: taskId,
+      workflow_id: workflowId,
+      name: `AI 修复: ${input.alertTitle}`,
+      context: JSON.stringify({
         alert_id: input.alertId,
         device_id: input.deviceId,
         device_ip: input.deviceIp,
-        remediation_id: id,
+        remediation_id: record.id,
         risk_level: input.riskLevel,
-      })
-    );
+      }),
+    });
     record.task_id = taskId;
 
     // 5. 更新记录状态
     record.status = 'waiting_approval';
-    impl_updateRecord(record);
+    aiRemediationRepository.update(record as any);
 
     // 6. 异步执行工作流（会在审批节点暂停）
     setImmediate(async () => {
@@ -90,14 +80,14 @@ export async function impl_createAndExecute(
           alert_id: input.alertId,
           device_id: input.deviceId,
           device_ip: input.deviceIp,
-          remediation_id: id,
+          remediation_id: record!.id,
           risk_level: input.riskLevel,
         });
       } catch (err) {
         logger.error(`[AI Remediation] Workflow execution failed:`, err);
-        record.status = 'failed';
-        record.error_message = err instanceof Error ? err.message : String(err);
-        impl_updateRecord(record);
+        record!.status = 'failed';
+        record!.error_message = err instanceof Error ? err.message : String(err);
+        aiRemediationRepository.update(record! as any);
       }
     });
 
@@ -106,84 +96,56 @@ export async function impl_createAndExecute(
 
   } catch (err) {
     logger.error(`[AI Remediation] Failed to create remediation:`, err);
-    record.status = 'failed';
-    record.error_message = err instanceof Error ? err.message : String(err);
-    impl_updateRecord(record);
-    return record;
+    if (record) {
+      record.status = 'failed';
+      record.error_message = err instanceof Error ? err.message : String(err);
+      aiRemediationRepository.update(record as any);
+    }
+    return record ?? null;
   }
 }
 
 /** 保存工作流到数据库 */
 export function impl_saveWorkflow(workflow: Record<string, unknown>): string {
-  db.prepare(`
-    INSERT INTO workflows (id, name, description, nodes, edges, agent_configs, is_template, created_at, updated_at)
-    VALUES (@id, @name, @description, @nodes, @edges, @agent_configs, @is_template, @created_at, @updated_at)
-  `).run(workflow);
+  workflowsRepo.createWithTimestamps(workflow as any);
   return workflow.id as string;
 }
 
 /** 保存修复记录 */
 export function impl_saveRecord(record: AiRemediationRecord): void {
-  db.prepare(`
-    INSERT INTO ai_remediations (
-      id, alert_id, device_id, device_name, device_ip, task_id, workflow_id,
-      diagnosis, remediation_commands, risk_level, status, execution_result,
-      error_message, created_at, updated_at
-    ) VALUES (
-      @id, @alert_id, @device_id, @device_name, @device_ip, @task_id, @workflow_id,
-      @diagnosis, @remediation_commands, @risk_level, @status, @execution_result,
-      @error_message, @created_at, @updated_at
-    )
-  `).run({
-    ...record,
-    remediation_commands: JSON.stringify(record.remediation_commands),
-  });
+  const input: AiRemediationCreateInput = {
+    alert_id: record.alert_id,
+    device_id: record.device_id,
+    device_name: record.device_name,
+    device_ip: record.device_ip,
+    diagnosis: record.diagnosis,
+    remediation_commands: record.remediation_commands,
+    risk_level: record.risk_level,
+  };
+  aiRemediationRepository.create(input);
 }
 
 /** 更新修复记录 */
 export function impl_updateRecord(record: AiRemediationRecord): void {
-  db.prepare(`
-    UPDATE ai_remediations SET
-      task_id = @task_id,
-      workflow_id = @workflow_id,
-      status = @status,
-      execution_result = @execution_result,
-      error_message = @error_message,
-      updated_at = @updated_at
-    WHERE id = @id
-  `).run({
-    ...record,
-    remediation_commands: JSON.stringify(record.remediation_commands),
-  });
+  aiRemediationRepository.update(record as any);
 }
 
 /** 获取修复记录 */
 export function impl_getRecord(id: string): AiRemediationRecord | null {
-  const row = db.prepare('SELECT * FROM ai_remediations WHERE id = ?').get(id) as any;
-  if (!row) return null;
-  return {
-    ...row,
-    remediation_commands: JSON.parse(row.remediation_commands || '[]'),
-  };
+  const result = aiRemediationRepository.getById(id);
+  return result as unknown as AiRemediationRecord | null;
 }
 
 /** 根据告警 ID 获取修复记录 */
 export function impl_getByAlertId(alertId: string): AiRemediationRecord | null {
-  const row = db.prepare('SELECT * FROM ai_remediations WHERE alert_id = ? ORDER BY created_at DESC LIMIT 1').get(alertId) as any;
-  if (!row) return null;
-  return {
-    ...row,
-    remediation_commands: JSON.parse(row.remediation_commands || '[]'),
-  };
+  const result = aiRemediationRepository.getByAlertId(alertId);
+  return result as unknown as AiRemediationRecord | null;
 }
 
 /** 获取所有修复记录 */
 export function impl_listRecords(limit = 50): AiRemediationRecord[] {
-  const rows = db.prepare('SELECT * FROM ai_remediations ORDER BY created_at DESC LIMIT ?').all(limit) as any[];
-  return rows.map(row => ({
-    ...row,
-    remediation_commands: JSON.parse(row.remediation_commands || '[]'),
-  }));
+  const results = aiRemediationRepository.list(limit);
+  return results as unknown as AiRemediationRecord[];
 }
 
 /** 更新修复状态（由工作流执行器调用） */
@@ -198,5 +160,5 @@ export function impl_updateStatus(
   record.status = status;
   if (result) record.execution_result = result;
   record.updated_at = new Date().toISOString();
-  impl_updateRecord(record);
+  aiRemediationRepository.update(record as any);
 }

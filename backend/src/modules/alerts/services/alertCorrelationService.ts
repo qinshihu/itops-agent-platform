@@ -12,8 +12,10 @@
  */
 
 import { randomUUID } from 'crypto';
-import { alertRepository, networkDeviceRepository, serversRepo } from '../../../repositories';
+import { alertRepository } from '../../../repositories';
 import type { AlertCorrelationGroupRecord } from '../../../repositories';
+import { networkDeviceService } from '../../network/services/networkDeviceService';
+import { serverCrudService } from '../../servers/services/serverCrudService';
 import { logger } from '../../../utils/logger';
 
 // ====================== 接口定义 ======================
@@ -349,10 +351,10 @@ class AlertCorrelationService {
     let deviceName = '';
     const rawDeviceId = root.device_id || (companions.find(c => c.device_id)?.device_id) || '';
     if (rawDeviceId) {
-      // 取设备友号名称
-      const ndName = networkDeviceRepository.getName(rawDeviceId);
-      const svName = !ndName ? serversRepo.getById(rawDeviceId)?.name : undefined;
-      deviceName = ndName || svName || rawDeviceId.slice(0, 12);
+      // 取设备友好名称（通过对应模块的 service 层访问，符合 DDD 边界）
+      const nd = networkDeviceService.getDeviceById(rawDeviceId);
+      const sv = !nd ? serverCrudService.getServerById(rawDeviceId) : undefined;
+      deviceName = nd?.name || (sv?.name as string | undefined) || rawDeviceId.slice(0, 12);
     }
     const deviceLabel = deviceName ? ` [${deviceName}]` : '';
 

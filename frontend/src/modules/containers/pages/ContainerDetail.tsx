@@ -4,6 +4,32 @@ import { Eye, FileText as _FileText, Activity, Terminal, X } from 'lucide-react'
 import api from '../../../lib/api';
 import { formatBytes, statusBadge, withEndpointParams } from './types';
 
+// ── Docker API 响应类型 ────────────────────────────────
+
+interface DockerCPUStats {
+  cpu_usage?: { total_usage?: number; percpu_usage?: number[] };
+  system_cpu_usage?: number;
+  online_cpus?: number;
+}
+
+interface DockerStats {
+  cpu_stats?: DockerCPUStats;
+  precpu_stats?: DockerCPUStats;
+  memory_stats?: { usage?: number; limit?: number };
+  networks?: Record<string, { rx_bytes: number; tx_bytes: number; rx_packets: number; tx_packets: number }>;
+}
+
+interface DockerContainerDetail {
+  Id?: string;
+  Name?: string;
+  State?: { Status?: string };
+  Config?: { Image?: string; WorkingDir?: string; Cmd?: string[] };
+  Created?: string;
+  Platform?: string;
+  Os?: string;
+  Architecture?: string;
+}
+
 // ── Props ──────────────────────────────────────────────
 
 interface ContainerDetailProps {
@@ -36,10 +62,10 @@ export function ContainerDetail({
   const { data: logsData, isLoading: logsLoading } = useQuery({
     queryKey: ['container-logs', selectedContainerId],
     queryFn: async () => {
-      const res = await api.get(`/containers/logs/${selectedContainerId}`, {
+      const { data } = await api.get(`/containers/logs/${selectedContainerId}`, {
         params: withEndpointParams(endpointId, { tail: 200 }),
       });
-      return res.data.data as string;
+      return data as string;
     },
     enabled: showLogsDrawer && !!selectedContainerId,
   });
@@ -47,10 +73,10 @@ export function ContainerDetail({
   const { data: statsData, isLoading: statsLoading } = useQuery({
     queryKey: ['container-stats', selectedContainerId],
     queryFn: async () => {
-      const res = await api.get(`/containers/stats/${selectedContainerId}`, {
+      const { data } = await api.get(`/containers/stats/${selectedContainerId}`, {
         params: withEndpointParams(endpointId),
       });
-      return res.data.data as Record<string, unknown>;
+      return data as DockerStats;
     },
     enabled: showStatsDrawer && !!selectedContainerId,
   });
@@ -58,10 +84,10 @@ export function ContainerDetail({
   const { data: detailData, isLoading: detailLoading } = useQuery({
     queryKey: ['container-detail', selectedContainerId],
     queryFn: async () => {
-      const res = await api.get(`/containers/${selectedContainerId}`, {
+      const { data } = await api.get(`/containers/${selectedContainerId}`, {
         params: withEndpointParams(endpointId),
       });
-      return res.data.data as Record<string, unknown>;
+      return data as DockerContainerDetail;
     },
     enabled: showDetailDrawer && !!selectedContainerId,
   });
@@ -115,16 +141,16 @@ export function ContainerDetail({
                   <div className="bg-background rounded-lg p-4 border border-border">
                     <h4 className="text-sm font-medium text-text-secondary mb-3">CPU</h4>
                     {(() => {
-                      const cpu = statsData?.cpu_stats as Record<string, unknown> | undefined;
-                      const pre = statsData?.precpu_stats as Record<string, unknown> | undefined;
-                      const cpuUsage = (cpu?.cpu_usage as Record<string, unknown> | undefined);
-                      const preCpuUsage = (pre?.cpu_usage as Record<string, unknown> | undefined);
-                      const sys = (cpu?.system_cpu_usage as number) || 0;
-                      const preSys = (pre?.system_cpu_usage as number) || 0;
-                      const usage = (cpuUsage?.total_usage as number) || 0;
-                      const preUsage = (preCpuUsage?.total_usage as number) || 0;
-                      const percpu = (cpuUsage?.percpu_usage as number[]) || [];
-                      const online = (cpu?.online_cpus as number) || percpu.length || 1;
+                      const cpu = statsData.cpu_stats;
+                      const pre = statsData.precpu_stats;
+                      const cpuUsage = cpu?.cpu_usage;
+                      const preCpuUsage = pre?.cpu_usage;
+                      const sys = cpu?.system_cpu_usage ?? 0;
+                      const preSys = pre?.system_cpu_usage ?? 0;
+                      const usage = cpuUsage?.total_usage ?? 0;
+                      const preUsage = preCpuUsage?.total_usage ?? 0;
+                      const percpu = cpuUsage?.percpu_usage ?? [];
+                      const online = cpu?.online_cpus ?? (percpu.length || 1);
                       const delta = usage - preUsage;
                       const sysDelta = sys - preSys || delta;
                       const pct = sysDelta > 0 ? (delta / sysDelta * online * 100).toFixed(1) : '0.0';
@@ -144,9 +170,9 @@ export function ContainerDetail({
                   <div className="bg-background rounded-lg p-4 border border-border">
                     <h4 className="text-sm font-medium text-text-secondary mb-3">内存</h4>
                     {(() => {
-                      const mem = statsData?.memory_stats as Record<string, unknown> | undefined;
-                      const used = (mem?.usage as number) || 0;
-                      const limit = (mem?.limit as number) || 1;
+                      const mem = statsData.memory_stats;
+                      const used = mem?.usage ?? 0;
+                      const limit = mem?.limit ?? 1;
                       const pct = (used / limit * 100).toFixed(1);
                       return (
                         <>
@@ -165,7 +191,7 @@ export function ContainerDetail({
                   <div className="bg-background rounded-lg p-4 border border-border">
                     <h4 className="text-sm font-medium text-text-secondary mb-3">网络</h4>
                     {(() => {
-                      const nets = statsData?.networks as Record<string, { rx_bytes: number; tx_bytes: number; rx_packets: number; tx_packets: number }> | undefined;
+                      const nets = statsData.networks;
                       if (!nets) return <div className="text-xs text-text-tertiary">无网络数据</div>;
                       return Object.entries(nets).map(([name, data]) => (
                         <div key={name} className="mb-3 last:mb-0">
@@ -204,19 +230,19 @@ export function ContainerDetail({
                 <div className="text-text-tertiary text-sm">加载中...</div>
               ) : detailData ? (
                 <div className="space-y-3">
-                  {[
-                    ['名称', (detailData.Name as string) || selectedContainerName],
-                    ['ID', (detailData.Id as string) || '-'],
-                    ['状态', (() => { const s = (detailData.State as Record<string, unknown>)?.Status as string || ''; const b = statusBadge(s); return <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${b.bg} ${b.text}`}><span className={`w-1.5 h-1.5 rounded-full ${b.dot}`} />{s || 'unknown'}</span>; })() as ReactNode],
-                    ['镜像', ((detailData.Config as Record<string, unknown>)?.Image as string) || '-'],
-                    ['工作目录', ((detailData.Config as Record<string, unknown>)?.WorkingDir as string) || '-'],
-                    ['命令', (((detailData.Config as Record<string, unknown>)?.Cmd as string[])?.join(' ')) || '-'],
-                    ['创建时间', ((detailData.Created as string) ? new Date(detailData.Created as string).toLocaleString('zh-CN') : '-')],
-                    ['平台', ((detailData.Platform as string) || (detailData.Os as string) ? `${detailData.Os || ''}/${detailData.Architecture || ''}` : '-')],
-                  ].map(([label, value]) => (
-                    <div key={label as string} className="flex">
+                  {([
+                    ['名称', detailData.Name || selectedContainerName],
+                    ['ID', detailData.Id || '-'],
+                    ['状态', (() => { const s = detailData.State?.Status || ''; const b = statusBadge(s); return <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${b.bg} ${b.text}`}><span className={`w-1.5 h-1.5 rounded-full ${b.dot}`} />{s || 'unknown'}</span>; })() as ReactNode],
+                    ['镜像', detailData.Config?.Image || '-'],
+                    ['工作目录', detailData.Config?.WorkingDir || '-'],
+                    ['命令', (detailData.Config?.Cmd?.join(' ')) || '-'],
+                    ['创建时间', (detailData.Created ? new Date(detailData.Created).toLocaleString('zh-CN') : '-')],
+                    ['平台', (detailData.Platform || detailData.Os ? `${detailData.Os || ''}/${detailData.Architecture || ''}` : '-')],
+                  ] as const).map(([label, value]) => (
+                    <div key={label} className="flex">
                       <span className="text-xs text-text-tertiary w-20 flex-shrink-0">{label}</span>
-                      <span className="text-sm text-text-primary break-all">{value}</span>
+                      <span className="text-sm text-text-primary break-all">{value as ReactNode}</span>
                     </div>
                   ))}
                 </div>

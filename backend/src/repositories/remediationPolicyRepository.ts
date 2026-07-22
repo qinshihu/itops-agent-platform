@@ -66,7 +66,7 @@ export interface RemediationPolicyCreateInput {
   workflow_params?: string | null;
   max_executions_per_hour?: number;
   cooldown_seconds?: number;
-  require_confirmation?: number;
+  require_confirmation?: number | null;
   enable_verification?: number;
   verification_workflow_id?: string | null;
   verification_params?: string | null;

@@ -251,7 +251,7 @@ class EnhancedRAGService {
       try {
         knowledgeRepository.incrementUsageCount(result.item.id);
       } catch (error) {
-        console.error('Failed to update usage count:', error);
+        logger.warn('Failed to update usage count:', error);
       }
     }
 

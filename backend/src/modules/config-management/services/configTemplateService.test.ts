@@ -11,7 +11,10 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../../../models/database', () => ({ default: mocks.db }));
+vi.mock('../../../models/database', () => ({
+  default: mocks.db,
+  performMaintenance: vi.fn(),
+}));
 
 vi.mock('../../../utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

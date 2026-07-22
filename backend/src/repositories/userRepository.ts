@@ -98,6 +98,19 @@ export const userRepository = {
     `).all() as UserListItem[];
   },
 
+  /**
+   * MCP 工具查询（支持 role/status 过滤 + limit）
+   * 对应：toolDefinitions auth.user.list
+   */
+  listWithFilters(filters: { role?: string; status?: string; limit?: number }): UserListItem[] {
+    let query = 'SELECT id, username, display_name, role, email, status, created_at FROM users WHERE 1=1';
+    const params: unknown[] = [];
+    if (filters.role) { query += ' AND role = ?'; params.push(filters.role); }
+    if (filters.status) { query += ' AND status = ?'; params.push(filters.status); }
+    query += ` LIMIT ${filters.limit || 20}`;
+    return db.prepare(query).all(...params) as UserListItem[];
+  },
+
   // ── SELECT：单条查询 ──
 
   /**

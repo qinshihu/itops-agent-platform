@@ -11,6 +11,20 @@ export const serversRepo = {
     return db.prepare('SELECT * FROM servers ORDER BY created_at DESC').all() as ServerRecord[];
   },
 
+  /**
+   * MCP 工具查询（支持 groupId/status/search 过滤 + limit）
+   * 对应：toolDefinitions server.list
+   */
+  listWithFilters(filters: { groupId?: string; status?: string; search?: string; limit?: number }): ServerRecord[] {
+    let query = 'SELECT id, name, hostname, port, status, group_id, os, cpu_cores, memory_gb, last_checked FROM servers WHERE 1=1';
+    const params: unknown[] = [];
+    if (filters.groupId) { query += ' AND group_id = ?'; params.push(filters.groupId); }
+    if (filters.status) { query += ' AND status = ?'; params.push(filters.status); }
+    if (filters.search) { query += ' AND (name LIKE ? OR hostname LIKE ?)'; params.push(`%${filters.search}%`, `%${filters.search}%`); }
+    query += ` LIMIT ${filters.limit || 50}`;
+    return db.prepare(query).all(...params) as ServerRecord[];
+  },
+
   /** 列出启用的服务器 */
   listEnabled(): ServerRecord[] {
     return db.prepare('SELECT * FROM servers WHERE enabled = 1 ORDER BY created_at DESC').all() as ServerRecord[];
@@ -310,6 +324,39 @@ export const serversRepo = {
   checkDuplicateByHostnameAndPort(hostname: string, port: number): { id: string } | undefined {
     return db.prepare('SELECT id FROM servers WHERE hostname = ? AND port = ?')
       .get(hostname, port) as { id: string } | undefined;
+  },
+
+  /** 按 hostname + name 检查重复（导入用） */
+  existsByHostnameAndName(hostname: string, name: string): boolean {
+    const row = db.prepare('SELECT id FROM servers WHERE hostname = ? AND name = ?').get(hostname, name);
+    return !!row;
+  },
+
+  /** 批量创建服务器（事务内，导入用） */
+  bulkCreate(rows: Array<Record<string, unknown>>): void {
+    const stmt = db.prepare(`
+      INSERT INTO servers (id, name, hostname, port, username, password, private_key, use_ssh_key, description, tags, enabled)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const txn = db.transaction((rws: unknown[]) => {
+      for (const row of rws) {
+        const r = row as Record<string, unknown>;
+        stmt.run(r.id, r.name, r.hostname, r.port || 22, r.username,
+          r.password ?? null, r.private_key ?? null, r.use_ssh_key ? 1 : 0,
+          r.description ?? null, r.tags ?? null, r.enabled !== undefined ? r.enabled : 1);
+      }
+    });
+    txn(rows as unknown[]);
+  },
+
+  /** 导出全部服务器（含系统信息字段） */
+  listAllForExport(): Array<Record<string, unknown>> {
+    return db.prepare(`
+      SELECT id, name, hostname, port, username, description, tags, enabled, 
+             os, cpu_cores, memory_gb, disk_gb, ip_address, created_at
+      FROM servers 
+      ORDER BY created_at DESC
+    `).all() as Array<Record<string, unknown>>;
   },
 
   /** 导入服务器（完整 INSERT，含加密后的 password/private_key） */

@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from 'zod';
 import { type RegisteredTool, RiskLevel } from '../types';
 import { textResult, jsonResult, READONLY } from './shared';
+import { alertConfigsRepo } from '../../../../repositories';
 
 export const monitorTools: RegisteredTool[] = [
   {
@@ -18,15 +18,13 @@ export const monitorTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT * FROM alert_notifications WHERE 1=1';
-        const params: any[] = [];
-        if (args.severity) { query += ' AND severity = ?'; params.push(args.severity); }
-        if (args.status) { query += ' AND status = ?'; params.push(args.status); }
-        query += ' ORDER BY timestamp DESC';
-        query += ` LIMIT ${args.limit || 20} OFFSET ${args.offset || 0}`;
-        const alerts = db.prepare(query).all(...params);
-        return jsonResult(alerts, `找到 ${(alerts as any[])?.length || 0} 条告警`);
+        const alerts = alertConfigsRepo.listNotifications({
+          level: args.severity,
+          status: args.status,
+          limit: args.limit || 20,
+          offset: args.offset || 0,
+        });
+        return jsonResult(alerts, `找到 ${alerts?.length || 0} 条告警`);
       } catch (err) {
         return textResult(`查询告警失败: ${(err as Error).message}`, true);
       }
@@ -123,8 +121,6 @@ export const monitorTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        // eslint-disable-next-line no-restricted-imports
-        const { default: _db } = await import('../../../../models/database');
         const { selfMonitorService } = await import(
           '../../../../modules/monitor/services/selfMonitorService'
         );

@@ -39,3 +39,6 @@ dc/
 
 ## 对应后端
 `backend/src/modules/dc/`
+
+## 刷新记录
+- **2026-07-22**：核对 13 Tab + DataRoom3D 子模块

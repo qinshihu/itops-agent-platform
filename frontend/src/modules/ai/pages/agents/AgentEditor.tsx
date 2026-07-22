@@ -22,8 +22,8 @@ export default function AgentEditor({ agent, onClose }: AgentEditorProps) {
   const { data: aiModels } = useQuery({
     queryKey: ['aiModels'],
     queryFn: async () => {
-      const res = await api.get('/ai-models');
-      return res.data.data as AIModel[];
+      const { data } = await api.get('/ai-models');
+      return data as AIModel[];
     }
   });
 
@@ -43,15 +43,30 @@ export default function AgentEditor({ agent, onClose }: AgentEditorProps) {
 
   const mutation = useMutation({
     mutationFn: async (data: typeof formData & { tags?: string[] }) => {
+      // 后端 schema 对 UUID 字段不接受空串，转换为 null（约定：null = 不更新/不设置）
+      const payload = {
+        ...data,
+        primary_model_id: data.primary_model_id || null,
+        fallback_model_id: data.fallback_model_id || null,
+      };
       if (agent) {
-        await api.put(`/agents/${agent.id}`, data);
+        await api.put(`/agents/${agent.id}`, payload);
       } else {
-        await api.post('/agents', data);
+        await api.post('/agents', payload);
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agents'] });
       onClose();
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string; error?: string } }; message?: string })
+        ?.response?.data?.message
+        || (err as { response?: { data?: { message?: string; error?: string } }; message?: string })
+        ?.response?.data?.error
+        || (err as { message?: string })?.message
+        || '保存失败';
+      alert(`保存失败：${msg}`);
     },
   });
 
@@ -74,11 +89,11 @@ export default function AgentEditor({ agent, onClose }: AgentEditorProps) {
         id: agent?.id || 'test'
       };
 
-      const res = await api.post(`/agents/${testAgent.id}/test`, {
+      const { data } = await api.post(`/agents/${testAgent.id}/test`, {
         input: testInput
       });
 
-      setTestResult(res.data.data.result || '测试完成，无返回结果');
+      setTestResult(data.result || '测试完成，无返回结果');
     } catch (error: unknown) {
       const err = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
       setTestResult(`测试失败: ${err.response?.data?.error || err.response?.data?.message || err.message}`);

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { logger } from '../../../utils/logger';
 import { randomUUID } from 'crypto';
-import { vmMigrationRepository, virtualMachineRepository } from '../../../../repositories';
+import { vmMigrationRepository, virtualMachineRepository } from '../../../repositories';
 import { vmManagementService } from '../../containers/services/vmManagement';
 
 interface MigrationTask {
@@ -22,6 +22,9 @@ interface MigrationTask {
 
 class VmMigrationService {
   private activeMigrations: Map<string, MigrationTask> = new Map();
+  /** 实际发起的迁移任务（用于取消） */
+  private pendingRequests: Map<string, AbortController> = new Map();
+  /** 进度轮询 interval（hypervisor API 进度） */
   private progressIntervals: Map<string, NodeJS.Timeout> = new Map();
 
   constructor() {
@@ -57,7 +60,11 @@ class VmMigrationService {
 
       this.activeMigrations.set(task.id, task);
 
-      this.simulateMigration(task);
+      // 真实迁移（异步执行，立即返回 task）
+      void this.runRealMigration(task).catch(err => {
+        logger.error('Migration task crashed:', err);
+        this.markFailed(task.id, err instanceof Error ? err.message : String(err));
+      });
 
       return task;
     } catch (err) {
@@ -66,39 +73,81 @@ class VmMigrationService {
     }
   }
 
-  private simulateMigration(task: MigrationTask) {
-    let progress = 0;
+  /**
+   * 真实执行迁移：
+   *   1) 调用 hypervisor 的 migrateVM
+   *   2) 后台进度轮询（hypervisor 自身可能不支持进度查询，则走"乐观进度"）
+   *   3) 成功后更新 SQLite 中的 host 字段
+   */
+  private async runRealMigration(task: MigrationTask): Promise<void> {
     task.status = 'running';
+    const abort = new AbortController();
+    this.pendingRequests.set(task.id, abort);
 
-    const interval = setInterval(async () => {
-      progress += Math.floor(Math.random() * 15) + 5;
-      if (progress >= 100) {
-        progress = 100;
-        task.status = 'completed';
-        task.progress = 100;
-        task.completedAt = new Date().toISOString();
-        this.activeMigrations.delete(task.id);
-        clearInterval(interval);
-        this.progressIntervals.delete(task.id);
+    // 立即给个基础进度，让 UI 有反馈
+    vmMigrationRepository.updateProgress(task.id, 5);
 
-        vmMigrationRepository.updateStatus(task.id, 'completed');
-        vmMigrationRepository.updateProgress(task.id, 100);
+    let optimisticInterval: NodeJS.Timeout | null = null;
 
-        virtualMachineRepository.update(task.vmId, { host: task.targetHost });
+    try {
+      // 启乐观进度：每 2s 推进 5~10%，最多 90%（剩余 10% 等真实结果）
+      let optimistic = 5;
+      optimisticInterval = setInterval(() => {
+        if (abort.signal.aborted) return;
+        optimistic = Math.min(optimistic + Math.floor(Math.random() * 6) + 5, 90);
+        task.progress = optimistic;
+        vmMigrationRepository.updateProgress(task.id, optimistic);
+      }, 2000);
+      this.progressIntervals.set(task.id, optimisticInterval);
 
-        logger.info(`✅ VM migration completed: ${task.vmName} → ${task.targetHost}`);
-      }
+      await vmManagementService.migrateVM(task.platformId, {
+        vmId: task.vmId,
+        targetHostId: task.targetHost,
+        priority: 'defaultPriority',
+      });
 
-      task.progress = progress;
-      vmMigrationRepository.updateProgress(task.id, progress);
-    }, 2000);
+      // hypervisor API 已成功返回
+      task.status = 'completed';
+      task.progress = 100;
+      task.completedAt = new Date().toISOString();
+      vmMigrationRepository.updateStatus(task.id, 'completed');
+      vmMigrationRepository.updateProgress(task.id, 100);
 
-    this.progressIntervals.set(task.id, interval);
+      // 同步本地 SQLite 记录
+      virtualMachineRepository.update(task.vmId, { host: task.targetHost });
+
+      logger.info(`✅ VM migration completed: ${task.vmName} → ${task.targetHost}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.markFailed(task.id, message);
+      throw err;
+    } finally {
+      if (optimisticInterval) clearInterval(optimisticInterval);
+      this.progressIntervals.delete(task.id);
+      this.pendingRequests.delete(task.id);
+      this.activeMigrations.delete(task.id);
+    }
+  }
+
+  private markFailed(taskId: string, message: string) {
+    vmMigrationRepository.updateStatus(taskId, 'failed', message);
+    const task = this.activeMigrations.get(taskId);
+    if (task) {
+      task.status = 'failed';
+      task.errorMessage = message;
+      task.completedAt = new Date().toISOString();
+      this.activeMigrations.delete(taskId);
+    }
   }
 
   cancelMigration(migrationId: string): boolean {
     const task = this.activeMigrations.get(migrationId);
-    if (task?.status !== 'running') return false;
+    if (!task) return false;
+    if (task.status !== 'running' && task.status !== 'pending') return false;
+
+    // 中止 AbortController（对支持 AbortSignal 的 hypervisor 调用生效）
+    const abort = this.pendingRequests.get(migrationId);
+    abort?.abort();
 
     const interval = this.progressIntervals.get(migrationId);
     if (interval) {
@@ -107,9 +156,11 @@ class VmMigrationService {
     }
 
     task.status = 'cancelled';
+    task.completedAt = new Date().toISOString();
     this.activeMigrations.delete(migrationId);
     vmMigrationRepository.updateStatus(migrationId, 'cancelled');
 
+    logger.info(`🛑 VM migration cancelled: ${task.vmName}`);
     return true;
   }
 
@@ -133,7 +184,7 @@ class VmMigrationService {
       id: row.id, vmId: row.vm_id, vmName: row.vm_name,
       sourceHost: row.source_host, targetHost: row.target_host,
       platformId: row.platform_id, status: row.status,
-      progress: row.progress, reason: row.reason,
+      progress: row.progress || 0, reason: row.reason,
       errorMessage: row.error_message,
       startedAt: row.started_at, completedAt: row.completed_at,
       createdAt: row.created_at,

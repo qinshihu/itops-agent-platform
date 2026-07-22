@@ -5,7 +5,7 @@
  *   - save / saveFailed / list / getContent / cleanOld / getWithDeviceName
  */
 
-import db from '../../../models/database';
+import db from '../../models/database';
 
 // ── 类型定义 ──
 

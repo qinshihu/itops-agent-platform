@@ -206,6 +206,19 @@ export const devicesRepo = {
 
   // ── 未分配设备查询（devices.ts /unallocated）──
 
+  /**
+   * MCP 工具查询 dc_devices 表（支持 rackId/deviceType 过滤 + limit）
+   * 对应：toolDefinitions dc.device.list
+   */
+  listDcDevices(filters: { rackId?: string; deviceType?: string; limit?: number }): Array<Record<string, unknown>> {
+    let query = 'SELECT * FROM dc_devices WHERE 1=1';
+    const params: unknown[] = [];
+    if (filters.rackId) { query += ' AND rack_id = ?'; params.push(filters.rackId); }
+    if (filters.deviceType) { query += ' AND device_type = ?'; params.push(filters.deviceType); }
+    query += ` LIMIT ${filters.limit || 100}`;
+    return db.prepare(query).all(...params) as Array<Record<string, unknown>>;
+  },
+
   /** 未分配的服务器（不在 dc_rack_slots 中的 servers） */
   listUnallocatedServers(filters: UnallocatedQueryFilters): Array<Record<string, unknown>> {
     return buildUnallocatedQuery('servers', 'id, name, ip_address, enabled, cpu_cores, memory_gb', 'server', filters);

@@ -203,6 +203,24 @@ export function getStatsByStatusAndSeverity(): {
 }
 
 /**
+ * 统计告警总数
+ */
+export function countAll(): number {
+  const row = db.prepare('SELECT COUNT(*) as count FROM alerts').get() as { count: number };
+  return row.count;
+}
+
+/**
+ * 查询最近告警（排除指定 ID，且时间在 since 之后）
+ */
+export function listRecentExcludingId(excludeId: string, since: string, limit: number): AlertRecord[] {
+  const alerts = db.prepare(
+    'SELECT * FROM alerts WHERE id != ? AND created_at >= ? ORDER BY created_at DESC LIMIT ?'
+  ).all(excludeId, since, limit) as AlertRecord[];
+  return parseMetadataList(alerts);
+}
+
+/**
  * 删除告警
  */
 export function deleteAlert(id: string): void {
@@ -373,4 +391,18 @@ export function updateAarsConfig(fields: Partial<AarsConfig>): AarsConfig | unde
 /** 列出探针执行统计（按 total_uses 倒序，LIMIT 50） */
 export function listProbeStats(limit = 50): ProbeExecutionStats[] {
   return db.prepare('SELECT * FROM probe_execution_stats ORDER BY total_uses DESC LIMIT ?').all(limit) as ProbeExecutionStats[];
+}
+
+
+
+/**
+ * 导出告警列表（限 10000 条，供 importExportService 使用）
+ */
+export function listAllForExport(): Array<Record<string, unknown>> {
+  return db.prepare(`
+    SELECT id, source, severity, title, content, status, created_at, updated_at
+    FROM alerts 
+    ORDER BY created_at DESC
+    LIMIT 10000
+  `).all() as Array<Record<string, unknown>>;
 }

@@ -35,8 +35,8 @@ export default function Approvals() {
     queryKey: ['approvals', filter],
     queryFn: async () => {
       const params = filter !== 'all' ? `?status=${filter}` : '';
-      const res = await api.get(`/approvals${params}`);
-      return res.data.data as ApprovalRequest[];
+      const { data } = await api.get(`/approvals${params}`);
+      return data as ApprovalRequest[];
     },
   });
 

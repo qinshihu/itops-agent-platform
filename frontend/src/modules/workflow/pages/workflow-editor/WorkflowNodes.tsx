@@ -137,7 +137,22 @@ export function ConditionNode({ data, selected }: { data: GenericNodeData; selec
     <div className={defaultNodeStyle('yellow', selected)}>
       <Handle type="target" position={Position.Left} className="w-3 h-3 bg-yellow-500" />
       <div className="text-sm font-semibold">◇ {data.label || '条件'}</div>
-      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-yellow-500" />
+      <div className="text-[10px] text-text-secondary mt-1">分支路由: true / false</div>
+      {/* v6: 双源 handle - 右上 true, 右下 false, 用于条件分支路由 */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="true"
+        style={{ top: '30%', background: '#22c55e' }}
+        className="w-3 h-3"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="false"
+        style={{ top: '70%', background: '#ef4444' }}
+        className="w-3 h-3"
+      />
     </div>
   );
 }
@@ -234,6 +249,9 @@ export const nodeTypes: NodeTypes = {
   rollback: RollbackNode,
   loop: (props) => <GenericNode {...props} color="violet" />,
   parallel: (props) => <GenericNode {...props} color="teal" />,
+  http: (props) => <GenericNode {...props} color="sky" />,
+  notify: (props) => <GenericNode {...props} color="orange" />,
+  delay: (props) => <GenericNode {...props} color="amber" />,
   webhook: (props) => <GenericNode {...props} color="sky" />,
   wait: (props) => <GenericNode {...props} color="slate" />,
   variable_set: (props) => <GenericNode {...props} color="lime" />,

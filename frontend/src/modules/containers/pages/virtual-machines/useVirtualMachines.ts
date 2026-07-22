@@ -64,8 +64,8 @@ export function useVirtualMachines() {
   const { data: platforms, isLoading: platformsLoading } = useQuery<Platform[]>({
     queryKey: ['vm-platforms'],
     queryFn: async () => {
-      const res = await api.get('/virtual-machines/platforms');
-      return res.data.data;
+      const { data } = await api.get('/virtual-machines/platforms');
+      return data;
     },
   });
 
@@ -77,16 +77,16 @@ export function useVirtualMachines() {
       const params: Record<string, unknown> = { page, pageSize, search };
       if (statusFilter) params.status = statusFilter;
       if (selectedPlatformId) params.platformId = selectedPlatformId;
-      const res = await api.get('/virtual-machines', { params });
-      return { data: res.data.data, total: res.data.total, source: res.data.source };
+      const { data } = await api.get('/virtual-machines', { params });
+      return { data: data?.data || data || [], total: data?.total || 0, source: data?.source };
     },
   });
 
   const { data: aggregatedStats, refetch: refetchStats } = useQuery<AggregatedStats>({
     queryKey: ['vm-stats'],
     queryFn: async () => {
-      const res = await api.get('/virtual-machines/stats');
-      return res.data.data;
+      const { data } = await api.get('/virtual-machines/stats');
+      return data;
     },
   });
 
@@ -94,8 +94,8 @@ export function useVirtualMachines() {
     queryKey: ['vm-perf-stats', statsVM?.id],
     queryFn: async () => {
       if (!statsVM) return {};
-      const res = await api.get(`/virtual-machines/${statsVM.id}/stats`);
-      return res.data.data;
+      const { data } = await api.get(`/virtual-machines/${statsVM.id}/stats`);
+      return data;
     },
     enabled: !!statsVM,
     refetchInterval: 5000,
@@ -105,8 +105,8 @@ export function useVirtualMachines() {
     queryKey: ['vm-snapshots', snapshotVM?.id],
     queryFn: async () => {
       if (!snapshotVM) return [];
-      const res = await api.get(`/virtual-machines/${snapshotVM.id}/snapshots`);
-      return res.data.data;
+      const { data } = await api.get(`/virtual-machines/${snapshotVM.id}/snapshots`);
+      return data;
     },
     enabled: !!snapshotVM && showSnapshotDrawer,
   });
@@ -116,8 +116,8 @@ export function useVirtualMachines() {
 
   const createPlatformMutation = useMutation({
     mutationFn: async (data: PlatformForm) => {
-      const res = await api.post('/virtual-machines/platforms', data);
-      return res.data;
+      const { data: result } = await api.post('/virtual-machines/platforms', data);
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vm-platforms'] });
@@ -143,22 +143,22 @@ export function useVirtualMachines() {
 
   const testConnectionMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.post(`/virtual-machines/platforms/${id}/test`);
-      return res.data;
+      const { data } = await api.post(`/virtual-machines/platforms/${id}/test`);
+      return data;
     },
     onSuccess: (data) => toast.success(data.data?.message || '连接测试成功'),
     onError: (err: ApiError) => toast.error(err.response?.data?.message || '连接测试失败'),
   });
 
   const createVMMutation = useMutation({
-    mutationFn: async (data: VMForm) => {
+    mutationFn: async (vmData: VMForm) => {
       const payload: Record<string, unknown> = {
-        ...data,
-        tags: data.tags ? data.tags.split(',').map((tag) => tag.trim()).filter(Boolean) : [],
+        ...vmData,
+        tags: vmData.tags ? vmData.tags.split(',').map((tag) => tag.trim()).filter(Boolean) : [],
         platformId: selectedPlatformId || undefined,
       };
-      const res = await api.post('/virtual-machines', payload);
-      return res.data;
+      const { data } = await api.post('/virtual-machines', payload);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['virtual-machines'] });
@@ -171,13 +171,13 @@ export function useVirtualMachines() {
   });
 
   const updateVMMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: VMForm }) => {
+    mutationFn: async ({ id, data: formData }: { id: string; data: VMForm }) => {
       const payload: Record<string, unknown> = {
-        ...data,
-        tags: data.tags ? data.tags.split(',').map((tag) => tag.trim()).filter(Boolean) : [],
+        ...formData,
+        tags: formData.tags ? formData.tags.split(',').map((tag) => tag.trim()).filter(Boolean) : [],
       };
-      const res = await api.put(`/virtual-machines/${id}`, payload);
-      return res.data;
+      const { data } = await api.put(`/virtual-machines/${id}`, payload);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['virtual-machines'] });
@@ -204,8 +204,8 @@ export function useVirtualMachines() {
 
   const actionMutation = useMutation({
     mutationFn: async ({ id, action }: { id: string; action: string }) => {
-      const res = await api.post(`/virtual-machines/${id}/${action}`);
-      return res.data;
+      const { data } = await api.post(`/virtual-machines/${id}/${action}`);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['virtual-machines'] });
@@ -217,8 +217,8 @@ export function useVirtualMachines() {
 
   const syncMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/virtual-machines/sync', { platformId: selectedPlatformId || undefined });
-      return res.data;
+      const { data } = await api.post('/virtual-machines/sync', { platformId: selectedPlatformId || undefined });
+      return data;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['virtual-machines'] });
@@ -231,11 +231,11 @@ export function useVirtualMachines() {
   const cloneMutation = useMutation({
     mutationFn: async () => {
       if (!cloneTarget) return;
-      const res = await api.post(`/virtual-machines/${cloneTarget.id}/clone`, {
+      const { data } = await api.post(`/virtual-machines/${cloneTarget.id}/clone`, {
         name: cloneName,
         powerOn: clonePowerOn,
       });
-      return res.data;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['virtual-machines'] });
@@ -250,8 +250,8 @@ export function useVirtualMachines() {
   const createSnapshotMutation = useMutation({
     mutationFn: async () => {
       if (!snapshotVM) return;
-      const res = await api.post(`/virtual-machines/${snapshotVM.id}/snapshots`, snapshotForm);
-      return res.data;
+      const { data } = await api.post(`/virtual-machines/${snapshotVM.id}/snapshots`, snapshotForm);
+      return data;
     },
     onSuccess: () => {
       refetchSnapshots();
@@ -265,8 +265,8 @@ export function useVirtualMachines() {
   const restoreSnapshotMutation = useMutation({
     mutationFn: async (snapshotId: string) => {
       if (!snapshotVM) return;
-      const res = await api.post(`/virtual-machines/${snapshotVM.id}/snapshots/${snapshotId}/restore`);
-      return res.data;
+      const { data } = await api.post(`/virtual-machines/${snapshotVM.id}/snapshots/${snapshotId}/restore`);
+      return data;
     },
     onSuccess: () => {
       refetchSnapshots();

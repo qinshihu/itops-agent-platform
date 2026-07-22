@@ -56,7 +56,7 @@ export default function Servers() {
     // Compliance options
     complianceOptions, setComplianceOptions,
     // Data
-    _agents, sshKeys, groupsData, servers, isLoading,
+    agents, sshKeys, groupsData, servers, isLoading,
     allTags,
     filteredTagSuggestions,
     filteredServers,
@@ -164,7 +164,7 @@ export default function Servers() {
             isRunningCompliance={isRunningCompliance}
             complianceResults={complianceResults}
             complianceOptions={complianceOptions}
-            onComplianceOptionsChange={setComplianceOptions}
+            onComplianceOptionsChange={setComplianceOptions as unknown as (fn: (prev: { useAI: boolean; concurrency: number }) => { useAI: boolean; concurrency: number }) => void}
             onRunCompliance={handleRunCompliance}
           />
         )}
@@ -287,7 +287,7 @@ export default function Servers() {
           isOpen={showComplianceOptions}
           selectedServer={selectedServer}
           complianceOptions={complianceOptions}
-          onComplianceOptionsChange={setComplianceOptions}
+          onComplianceOptionsChange={setComplianceOptions as unknown as (updater: (prev: { useAI: boolean; concurrency: number }) => { useAI: boolean; concurrency: number }) => void}
           isRunningCompliance={isRunningCompliance}
           onClose={() => setShowComplianceOptions(false)}
           onStartCheck={startComplianceCheck}

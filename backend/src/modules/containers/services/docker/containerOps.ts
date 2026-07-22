@@ -159,8 +159,72 @@ export async function impl_pauseContainer(service: DS, id: string): Promise<void
 
 export async function impl_unpauseContainer(service: DS, id: string): Promise<void> {
   if (!service.initialized) throw new Error('Docker service not available');
-  
+
   const container = service.docker.getContainer(id);
   await container.unpause();
   logger.info(`Container ${id} unpaused`);
+}
+
+/**
+ * 创建并启动一个新容器副本（用于自动伸缩等场景）
+ *
+ * @param service dockerService 实例
+ * @param image   镜像名（如 nginx:latest）
+ * @param name    容器名（可选，自动伸缩会用带副本序号的命名规则）
+ * @param options 其它配置：env / ports / restartPolicy / labels
+ */
+export async function impl_runContainer(
+  service: DS,
+  image: string,
+  name?: string,
+  options: {
+    env?: string[];
+    ports?: Array<string | { hostPort: number; containerPort: number }>;
+    restartPolicy?: string;
+    labels?: Record<string, string>;
+  } = {}
+): Promise<{ id: string; name: string }> {
+  if (!service.initialized) throw new Error('Docker service not available');
+
+  const config: Record<string, unknown> = { Image: image };
+  if (name) config.name = name;
+
+  const hostConfig: Record<string, unknown> = {};
+  const exposedPorts: Record<string, unknown> = {};
+  const portBindings: Record<string, unknown> = {};
+
+  if (options.ports && options.ports.length > 0) {
+    for (const p of options.ports) {
+      if (typeof p === 'string') {
+        const [hp, cp] = p.split(':');
+        if (cp) {
+          exposedPorts[`${cp}/tcp`] = {};
+          portBindings[`${cp}/tcp`] = [{ HostPort: hp }];
+        }
+      } else {
+        exposedPorts[`${p.containerPort}/tcp`] = {};
+        portBindings[`${p.containerPort}/tcp`] = [{ HostPort: String(p.hostPort) }];
+      }
+    }
+    if (Object.keys(exposedPorts).length) {
+      config.ExposedPorts = exposedPorts;
+      hostConfig.PortBindings = portBindings;
+    }
+  }
+  if (options.restartPolicy) hostConfig.RestartPolicy = { Name: options.restartPolicy };
+  if (options.labels) config.Labels = options.labels;
+  if (options.env) config.Env = options.env;
+  if (Object.keys(hostConfig).length) config.HostConfig = hostConfig;
+
+  const container = await service.docker.createContainer(config);
+  await container.start();
+  logger.info(`Container created and started: ${name || container.id} (image=${image})`);
+  return { id: container.id, name: name || container.id };
+}
+
+/**
+ * 计算一组容器副本中 "健康且运行中" 的数量
+ */
+export function countRunningByNamePrefix(containers: DockerContainer[], namePrefix: string): number {
+  return containers.filter(c => c.name.startsWith(namePrefix) && c.state === 'running').length;
 }

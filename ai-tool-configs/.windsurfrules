@@ -1,0 +1,103 @@
+# ITops Agent — Windsurf 入口文件
+# 创建于 2026-07-21（v2 报告 §9.2 P1-#22）
+# 完整规则见 AGENTS.md（如有冲突，以 AGENTS.md 为准）
+# Windsurf 使用与 .cursorrules 相似的 markdown 格式
+
+本项目是一站式智能运维平台（ITops Agent）。
+
+技术栈：Node.js + Express + TypeScript + SQLite（后端）/ React + Vite + Ant Design + Tailwind（前端）。
+模块数：24 后端模块 + 23 前端模块，详见 `.trae/rules/architecture.md` §1.2。
+
+## 必须遵守的 5 条铁律
+
+1. **分层单向依赖**：core/ → modules/ → routes/。禁止反向。
+   - 允许：模块间通过 services 互调
+   - 允许：modules/<m>/services → repositories/
+   - 禁止：repositories/ → modules/
+   - 禁止：core/ → modules/
+   - 禁止：routes → repositories（ADR-016）
+
+2. **routes 层只做 3 件事**：参数校验（Zod）→ 可选鉴权 → 调 service → 返回
+   - 禁止在 routes 写业务判断
+   - 禁止直访 repositories
+
+3. **新文件 ≤ 500 行**：超过必须拆分。参考 `frontend/src/modules/ai/pages/agents/tool/` 的 4 文件拆分范例
+
+4. **不主动写测试**：除非用户明确要求。现有测试在 services/ 和 repositories/
+
+5. **报告/ADR 路径**：报告→`docs/`，ADR→`.trae/adr/NNN-<slug>.md`
+
+## 命名约定
+
+- 工具/服务：camelCase（如 `agentToolRegistry`）
+- 类/接口：PascalCase（如 `AgentTool`）
+- 常量：UPPER_SNAKE（如 `MCP_RATE_LIMIT_PER_MINUTE`）
+- 文件：camelCase.ts（如 `agentCrudService.ts`）
+- 数据库表/列：snake_case（如 `audit_logs.user_id`）
+- HTTP 路径：kebab-case（如 `/api/v1/agents/tools`）
+
+## 统一业务语言（不许别名）
+
+| 概念 | 用 | 别名（禁止） |
+|---|---|---|
+| 告警 | alert | ~~alarm~~ |
+| 工单 | task | ~~job~~ |
+| 工作流 | workflow | ~~pipeline~~ |
+| 通知 | notification | ~~notice~~ |
+| 审批 | approval | ~~review~~ |
+| 修复 | remediation | ~~fix~~ |
+| 代理 | agent | ~~bot~~ |
+
+## 关键目录
+
+backend/src/
+- core/ —— DI 容器
+- middleware/ —— auth/errorHandler/rateLimiter/trace/validation
+- repositories/ —— 28 .ts + 11 子目录（只通过此层访问 db）
+- shared/schemas/ —— Zod 集中
+- modules/<name>/ —— routes/services/repositories/README.md
+
+frontend/src/modules/<name>/
+- routes.ts/api.ts/index.ts/pages/README.md
+
+## 质量门禁
+
+- TypeScript 严格：`npm run tsc --noEmit` 必须 0 错
+- ESLint：`npm run lint` 必须 0 error
+- 架构校验：`npx depcruise --config .dependency-cruiser.json backend/src`
+- 测试：vitest，门槛见 vitest.config.ts
+
+## AI 工具常见错误（避免！）
+
+| ❌ 错误 | ✅ 正确 |
+|---|---|
+| routes 写业务 if/else | 移到 service |
+| routes 直 import repository | 调 xxxService |
+| `const result: any = ...` | `await api.get<MyType>(...)` |
+| `localStorage.getItem('token')` | `useAuth()` |
+| 新文件 800 行 | 拆分 |
+| 改 `migrations/v001_*.ts` SQL | 新建 `v0XX_*.ts` |
+| 改 `.trae/rules/` 不报告 | 必须报告给用户 |
+| `process.env.SOMETHING` | 写到 settings 表 |
+
+## 接到任务的工作流
+
+1. 读本文件
+2. 读相关模块 README.md
+3. 看同模块已有代码作为模板
+4. 决定需求属于哪个模块
+5. 只读相关代码
+6. 新文件遵守 5 铁律
+7. 改完后跑 lint + tsc
+
+## 一句话总结
+
+> 核心「分层 + 模块化」：业务在 services、数据走 repositories、routes 只做校验+转发。新功能 6 步：migration → repository → service → routes → frontend API → frontend page。
+
+## 详细文档索引
+
+- `.trae/rules/architecture.md` §1.2
+- `.trae/adr/README.md`（22+ ADR）
+- `.trae/rules/frontend.md`（前端规范）
+- `.trae/rules/top-rules.md`（顶层规则）
+- `AGENTS.md`（本文件的完整版）

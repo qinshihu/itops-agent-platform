@@ -3,14 +3,13 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Radio, Search, Loader2, CheckCircle2, AlertCircle, XCircle,
-  Plus as _Plus, _Trash2, Play, Square, Wifi, _Map, Download, Monitor,
-  Globe, Server, _RefreshCw, Clock, HardDrive
+  Trash2, Play, Square, Wifi, Download, Monitor,
+  Globe, Server, Clock, HardDrive
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../../lib/api';
 import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 import { useToast } from '../../../contexts/ToastContext';
-import { _safeFormatDistance } from '../../../lib/date';
 
 interface DiscoveryJob {
   id: string;
@@ -53,7 +52,7 @@ interface SnmpCredential {
 export default function NetworkDiscovery() {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const [_activeTab, _setActiveTab] = useState<'jobs' | 'results'>('jobs');
+  const [activeTab, setActiveTab] = useState<'jobs' | 'results'>('jobs');
 
   // 扫描表单
   const [scanName, setScanName] = useState('');
@@ -139,7 +138,7 @@ export default function NetworkDiscovery() {
       ssh_port: sshPort,
     }),
     onSuccess: (res) => {
-      setImportResult(res.data.data);
+      setImportResult(res.data);
       queryClient.invalidateQueries({ queryKey: ['network-devices'] });
     },
     onError: (err: unknown) => {

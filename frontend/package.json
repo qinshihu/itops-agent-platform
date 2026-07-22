@@ -6,11 +6,16 @@
   "license": "MPL-2.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20.19.5"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint src --ext ts,tsx",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
@@ -37,13 +42,13 @@
     "three": "^0.170.0",
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0",
-    "xterm-addon-web-links": "^0.9.0",
-    "zustand": "^4.4.7"
+    "xterm-addon-web-links": "^0.8.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@vitest/coverage-v8": "^1.6.0",
     "@types/dompurify": "^3.2.0",
     "@types/markdown-it": "^14.0.0",
     "@types/react": "^18.2.43",
@@ -54,10 +59,12 @@
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.16",
     "eslint": "^8.57.1",
+    "eslint-config-prettier": "10.1.8",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^24.1.1",
     "postcss": "^8.4.32",
+    "prettier": "3.9.5",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.3.3",
     "vite": "^5.0.8",

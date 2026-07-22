@@ -39,9 +39,9 @@ export default function ConfigTemplates() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/config-templates', { params: { page, pageSize, search, type: typeFilter } });
-      setData(res.data.data || []);
-      setTotal(res.data.total || 0);
+      const { data: result } = await api.get('/config-templates', { params: { page, pageSize, search, type: typeFilter } });
+      setData(result?.data || []);
+      setTotal(result?.total || 0);
     } catch { message.error('加载失败'); }
     finally { setLoading(false); }
   };
@@ -74,8 +74,8 @@ export default function ConfigTemplates() {
     try {
       const vars: Record<string, string> = {};
       variables.forEach(v => { vars[v] = `{{${v}}}`; });
-      const res = await api.post(`/config-templates/${id}/render`, { variables: vars });
-      setPreviewContent(res.data.data?.rendered || '');
+      const { data } = await api.post(`/config-templates/${id}/render`, { variables: vars });
+      setPreviewContent(data?.rendered || '');
       setPreviewOpen(true);
     } catch { message.error('预览失败'); }
   };

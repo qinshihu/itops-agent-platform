@@ -18,11 +18,11 @@ export default function ForcePasswordChange() {
 
   const changePasswordMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/auth/change-password', {
+      const { data } = await api.post('/auth/change-password', {
         currentPassword,
         newPassword
       });
-      return res.data;
+      return data;
     },
     onSuccess: () => {
       updateUser({ passwordMustChange: false });

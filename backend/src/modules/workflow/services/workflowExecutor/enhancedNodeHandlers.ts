@@ -9,7 +9,7 @@ import {
   executeDecisionNode,
   executeKnowledgeNode,
   executeRollbackNode,
-} from '../enhancedNodeExecutor';
+} from '../enhancedNodeExecutor/index';
 import type {
   VerificationNodeConfig,
   RiskAssessNodeConfig,

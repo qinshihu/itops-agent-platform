@@ -372,6 +372,25 @@ export const agentRepository = {
     return (result as { changes: number }).changes;
   },
 
+  /**
+   * 批量迁移 Agent 的 primary_model_id（根据 api_provider 匹配 ai_models 表的默认模型）
+   * 对应 aiModelService.ts 的 migrateOldAgents
+   */
+  migratePrimaryModelIds(): void {
+    db.exec(`
+      UPDATE agents 
+      SET primary_model_id = (
+        SELECT id FROM ai_models 
+        WHERE (
+          (agents.api_provider = 'doubao' AND provider_type = 'volcengine') OR
+          (agents.api_provider = provider_type)
+        ) AND is_default = 1
+        LIMIT 1
+      )
+      WHERE primary_model_id IS NULL AND api_provider IS NOT NULL;
+    `);
+  },
+
   // ── DELETE ──
 
   /**

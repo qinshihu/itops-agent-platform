@@ -15,3 +15,6 @@ change-management/
 
 ## 对应后端
 `backend/src/modules/change-management/`
+
+## 刷新记录
+- **2026-07-22**：核对结构与路由

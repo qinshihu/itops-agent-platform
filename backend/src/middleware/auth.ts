@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { userRepository } from '../repositories/userRepository';
 import { env } from '../utils/env';
 import { tokenBlacklist } from '../modules/auth/services/tokenBlacklist';
+import { logger } from '../utils/logger';
 
 interface AuthUser {
   id: string;

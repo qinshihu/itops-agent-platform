@@ -23,12 +23,12 @@ export interface WorkflowCreateInput {
 }
 
 export interface WorkflowUpdateInput {
-  name: string;
+  name?: string | null;
   description?: string | null;
   nodes?: string | null;
   edges?: string | null;
   agent_configs?: string | null;
-  is_template: number;
+  is_template?: number;
 }
 
 // ── tasks 表类型 ──
@@ -73,6 +73,7 @@ export interface TaskCreateWithStatusInput {
 
 export interface TaskListFilters {
   status?: string;
+  hostId?: string;
   limit?: number;
 }
 

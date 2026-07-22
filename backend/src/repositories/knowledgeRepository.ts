@@ -156,6 +156,23 @@ export const knowledgeRepository = {
   },
 
   /**
+   * MCP 工具查询（支持 title/content/tags LIKE + category 过滤 + limit）
+   * 对应：toolDefinitions aiops.knowledge
+   */
+  searchMcp(filters: { query?: string; category?: string; limit?: number }): KnowledgeRecord[] {
+    let sql = 'SELECT * FROM knowledge_base WHERE 1=1';
+    const params: unknown[] = [];
+    if (filters.query) {
+      sql += ' AND (title LIKE ? OR content LIKE ? OR tags LIKE ?)';
+      const pattern = `%${filters.query}%`;
+      params.push(pattern, pattern, pattern);
+    }
+    if (filters.category) { sql += ' AND category = ?'; params.push(filters.category); }
+    sql += ` LIMIT ${filters.limit || 5}`;
+    return db.prepare(sql).all(...params) as KnowledgeRecord[];
+  },
+
+  /**
    * 按关键词搜索（title OR content LIKE）
    * 对应 KnowledgeEngine.ts S6 / knowledgeRoutes.ts S7
    */

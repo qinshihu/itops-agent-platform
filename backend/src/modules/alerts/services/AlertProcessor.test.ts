@@ -26,6 +26,7 @@ vi.mock('../../../models/database', () => ({
     prepare: mocks.dbPrepare,
     exec: vi.fn(),
   },
+  performMaintenance: vi.fn(),
 }));
 
 vi.mock('../../../utils/logger', () => ({

@@ -67,34 +67,8 @@ export default function useDataCenter() {
   const [deviceGroupLoading, setDeviceGroupLoading] = useState(false);
   const [expandedRooms, setExpandedRooms] = useState<Record<string, boolean>>({});
 
-  // ===== NetBox 功能：制造商/型号/配电柜/供电线路/线缆 =====
-  const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
-  const [deviceTypes, setDeviceTypes] = useState<DeviceTypeInfo[]>([]);
-  const [powerPanels, setPowerPanels] = useState<PowerPanel[]>([]);
-  const [powerFeeds, setPowerFeeds] = useState<PowerFeed[]>([]);
-  const [cables, setCables] = useState<Cable[]>([]);
-  const [mfLoading, setMfLoading] = useState(false);
-  const [dtLoading, setDtLoading] = useState(false);
-  const [ppLoading, setPpLoading] = useState(false);
-  const [pfLoading, setPfLoading] = useState(false);
-  const [cableLoading, setCableLoading] = useState(false);
+  // ===== NetBox 资源（制造商/型号/配电柜/馈线/线缆）已抽离到 useNetboxResources =====
 
-  // ===== NetBox Modal 状态 =====
-  const [mfModalOpen, setMfModalOpen] = useState(false);
-  const [editingMf, setEditingMf] = useState<Manufacturer | null>(null);
-  const [mfForm] = Form.useForm();
-  const [dtModalOpen, setDtModalOpen] = useState(false);
-  const [editingDt, setEditingDt] = useState<DeviceTypeInfo | null>(null);
-  const [dtForm] = Form.useForm();
-  const [ppModalOpen, setPpModalOpen] = useState(false);
-  const [editingPp, setEditingPp] = useState<PowerPanel | null>(null);
-  const [ppForm] = Form.useForm();
-  const [pfModalOpen, setPfModalOpen] = useState(false);
-  const [editingPf, setEditingPf] = useState<PowerFeed | null>(null);
-  const [pfForm] = Form.useForm();
-  const [cableModalOpen, setCableModalOpen] = useState(false);
-  const [editingCable, setEditingCable] = useState<Cable | null>(null);
-  const [cableForm] = Form.useForm();
 
   // ===== 搜索过滤器 =====
   const [roomSearch, setRoomSearch] = useState('');
@@ -110,9 +84,9 @@ export default function useDataCenter() {
         api.get('/dc/racks'),
         api.get('/dc/overview'),
       ]);
-      const newRooms = rRes.data.data || [];
-      const newRacks = rackRes.data.data || [];
-      const newOverview = ovRes.data.data || null;
+      const newRooms = (rRes.data?.data ?? rRes.data) || [];
+      const newRacks = (rackRes.data?.data ?? rackRes.data) || [];
+      const newOverview = (ovRes.data?.data ?? ovRes.data) || null;
       setRooms(newRooms);
       setRacks(newRacks);
       setOverview(newOverview);
@@ -157,11 +131,8 @@ export default function useDataCenter() {
     if (key === 'pdus') loadPdus();
     if (key === 'export') loadExport();
     if (key === 'devices') loadDeviceGroups();
-    if (key === 'manufacturers') loadManufacturers();
-    if (key === 'deviceTypes') loadDeviceTypes();
-    if (key === 'powerPanels') loadPowerPanels();
-    if (key === 'powerFeeds') loadPowerFeeds();
-    if (key === 'cables') loadCables();
+    // NetBox Tab 由 useNetboxResources 自行加载
+
   };
 
   // ===== 设备导航 =====
@@ -178,8 +149,8 @@ export default function useDataCenter() {
   const loadDeviceGroups = useCallback(async () => {
     setDeviceGroupLoading(true);
     try {
-      const res = await api.get('/dc/devices');
-      setDeviceGroups(res.data.data?.groups || []);
+      const { data } = await api.get('/dc/devices');
+      setDeviceGroups(data?.groups || []);
     } catch {
       setDeviceGroups([]);
     } finally {
@@ -192,8 +163,8 @@ export default function useDataCenter() {
     try {
       const params: Record<string, unknown> = { limit: 500 };
       if (lifecycleFilter) params.action = lifecycleFilter;
-      const res = await api.get('/dc/lifecycle', { params });
-      setLifecycles(res.data.data || []);
+      const { data } = await api.get('/dc/lifecycle', { params });
+      setLifecycles(data || []);
     } catch {
       message.error('加载生命周期记录失败');
     } finally {
@@ -204,8 +175,8 @@ export default function useDataCenter() {
   const loadPdus = async () => {
     setPdusLoading(true);
     try {
-      const res = await api.get('/dc/pdus');
-      setPdus(res.data.data || []);
+      const { data } = await api.get('/dc/pdus');
+      setPdus(data || []);
     } catch {
       message.error('加载PDU/UPS数据失败');
     } finally {
@@ -215,161 +186,21 @@ export default function useDataCenter() {
 
   const loadExport = async () => {
     try {
-      const res = await api.get('/dc/export');
-      setExportData(res.data.data || null);
+      const { data } = await api.get('/dc/export');
+      setExportData(data || null);
     } catch {
       message.error('加载导出数据失败');
     }
   };
 
-  // ===== NetBox 功能加载 =====
-  const loadManufacturers = async () => {
-    setMfLoading(true);
-    try {
-      const res = await api.get('/dc/manufacturers');
-      setManufacturers(res.data.data || []);
-    } catch { setManufacturers([]); }
-    finally { setMfLoading(false); }
-  };
-
-  const loadDeviceTypes = async () => {
-    setDtLoading(true);
-    try {
-      const res = await api.get('/dc/device-types');
-      setDeviceTypes(res.data.data || []);
-    } catch { setDeviceTypes([]); }
-    finally { setDtLoading(false); }
-  };
-
-  const loadPowerPanels = async () => {
-    setPpLoading(true);
-    try {
-      const res = await api.get('/dc/power-panels');
-      setPowerPanels(res.data.data || []);
-    } catch { setPowerPanels([]); }
-    finally { setPpLoading(false); }
-  };
-
-  const loadPowerFeeds = async () => {
-    setPfLoading(true);
-    try {
-      const res = await api.get('/dc/power-feeds');
-      setPowerFeeds(res.data.data || []);
-    } catch { setPowerFeeds([]); }
-    finally { setPfLoading(false); }
-  };
-
-  const loadCables = async () => {
-    setCableLoading(true);
-    try {
-      const res = await api.get('/dc/cables');
-      setCables(res.data.data || []);
-    } catch { setCables([]); }
-    finally { setCableLoading(false); }
-  };
-
-  // ===== NetBox CRUD =====
-  const saveManufacturer = async () => {
-    try {
-      const values = await mfForm.validateFields();
-      if (editingMf) {
-        await api.put(`/dc/manufacturers/${editingMf.id}`, values);
-        message.success('制造商更新成功');
-      } else {
-        await api.post('/dc/manufacturers', values);
-        message.success('制造商创建成功');
-      }
-      setMfModalOpen(false); mfForm.resetFields(); setEditingMf(null);
-      loadManufacturers();
-    } catch { /* antd 自动提示 */ }
-  };
-  const deleteManufacturer = async (id: string) => {
-    try { await api.delete(`/dc/manufacturers/${id}`); message.success('已删除'); loadManufacturers(); }
-    catch { message.error('删除失败'); }
-  };
-
-  const saveDeviceType = async () => {
-    try {
-      const values = await dtForm.validateFields();
-      if (editingDt) {
-        await api.put(`/dc/device-types/${editingDt.id}`, values);
-        message.success('设备型号更新成功');
-      } else {
-        await api.post('/dc/device-types', values);
-        message.success('设备型号创建成功');
-      }
-      setDtModalOpen(false); dtForm.resetFields(); setEditingDt(null);
-      loadDeviceTypes();
-    } catch { /* antd 自动提示 */ }
-  };
-  const deleteDeviceType = async (id: string) => {
-    try { await api.delete(`/dc/device-types/${id}`); message.success('已删除'); loadDeviceTypes(); }
-    catch { message.error('删除失败'); }
-  };
-
-  const savePowerPanel = async () => {
-    try {
-      const values = await ppForm.validateFields();
-      if (editingPp) {
-        await api.put(`/dc/power-panels/${editingPp.id}`, values);
-        message.success('配电柜更新成功');
-      } else {
-        await api.post('/dc/power-panels', values);
-        message.success('配电柜创建成功');
-      }
-      setPpModalOpen(false); ppForm.resetFields(); setEditingPp(null);
-      loadPowerPanels();
-    } catch { /* antd 自动提示 */ }
-  };
-  const deletePowerPanel = async (id: string) => {
-    try { await api.delete(`/dc/power-panels/${id}`); message.success('已删除'); loadPowerPanels(); }
-    catch { message.error('删除失败'); }
-  };
-
-  const savePowerFeed = async () => {
-    try {
-      const values = await pfForm.validateFields();
-      if (editingPf) {
-        await api.put(`/dc/power-feeds/${editingPf.id}`, values);
-        message.success('供电线路更新成功');
-      } else {
-        await api.post('/dc/power-feeds', values);
-        message.success('供电线路创建成功');
-      }
-      setPfModalOpen(false); pfForm.resetFields(); setEditingPf(null);
-      loadPowerFeeds();
-    } catch { /* antd 自动提示 */ }
-  };
-  const deletePowerFeed = async (id: string) => {
-    try { await api.delete(`/dc/power-feeds/${id}`); message.success('已删除'); loadPowerFeeds(); }
-    catch { message.error('删除失败'); }
-  };
-
-  const saveCable = async () => {
-    try {
-      const values = await cableForm.validateFields();
-      if (editingCable) {
-        await api.put(`/dc/cables/${editingCable.id}`, values);
-        message.success('线缆更新成功');
-      } else {
-        await api.post('/dc/cables', values);
-        message.success('线缆创建成功');
-      }
-      setCableModalOpen(false); cableForm.resetFields(); setEditingCable(null);
-      loadCables();
-    } catch { /* antd 自动提示 */ }
-  };
-  const deleteCable = async (id: string) => {
-    try { await api.delete(`/dc/cables/${id}`); message.success('已删除'); loadCables(); }
-    catch { message.error('删除失败'); }
-  };
+  // ===== NetBox 功能已抽离到 useNetboxResources =====
 
   // ===== 选择机柜查看 U 位 =====
   const selectRack = async (rack: Rack) => {
     setSelectedRack(rack);
     try {
-      const res = await api.get(`/dc/slots/${rack.id}`);
-      setSlots(res.data.data || []);
+      const { data } = await api.get(`/dc/slots/${rack.id}`);
+      setSlots(data || []);
     } catch {
       message.error('加载U位数据失败');
       setSlots([]);
@@ -439,8 +270,8 @@ export default function useDataCenter() {
   // ===== U 位分配 =====
   const fetchAvailDevices = async () => {
     try {
-      const res = await api.get('/dc/devices/unallocated');
-      setAvailDevices(res.data.data || []);
+      const { data } = await api.get('/dc/devices/unallocated');
+      setAvailDevices(data || []);
     } catch {
       setAvailDevices([]);
     }
@@ -553,8 +384,8 @@ export default function useDataCenter() {
   // ===== 导出 =====
   const handleExportDownload = async () => {
     try {
-      const res = await api.get('/dc/export', { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const { data } = await api.get('/dc/export', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([data]));
       const a = document.createElement('a');
       a.href = url;
       a.download = `dc_export_${Date.now()}.json`;
@@ -597,22 +428,7 @@ export default function useDataCenter() {
     roomSearch, setRoomSearch,
     rackSearch, setRackSearch,
     rackStatusFilter, setRackStatusFilter,
-    // NetBox
-    manufacturers, deviceTypes, powerPanels, powerFeeds, cables,
-    mfLoading, dtLoading, ppLoading, pfLoading, cableLoading,
-    loadManufacturers, loadDeviceTypes, loadPowerPanels, loadPowerFeeds, loadCables,
-    // NetBox Modal
-    mfModalOpen, setMfModalOpen, editingMf, setEditingMf, mfForm,
-    dtModalOpen, setDtModalOpen, editingDt, setEditingDt, dtForm,
-    ppModalOpen, setPpModalOpen, editingPp, setEditingPp, ppForm,
-    pfModalOpen, setPfModalOpen, editingPf, setEditingPf, pfForm,
-    cableModalOpen, setCableModalOpen, editingCable, setEditingCable, cableForm,
-    // NetBox CRUD
-    saveManufacturer, deleteManufacturer,
-    saveDeviceType, deleteDeviceType,
-    savePowerPanel, deletePowerPanel,
-    savePowerFeed, deletePowerFeed,
-    saveCable, deleteCable,
+    // NetBox 资源已抽离到 useNetboxResources
 
     // 操作
     loadAll,

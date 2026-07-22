@@ -48,8 +48,8 @@ export default function VmDetailPanel({ open, onClose, vm }: VmDetailPanelProps)
     queryKey: ['vm-perf-stats', vm?.id],
     queryFn: async () => {
       if (!vm) return {};
-      const res = await api.get(`/virtual-machines/${vm.id}/stats`);
-      return res.data.data;
+      const { data } = await api.get(`/virtual-machines/${vm.id}/stats`);
+      return data;
     },
     enabled: !!vm && open,
     refetchInterval: 5000,
@@ -59,8 +59,8 @@ export default function VmDetailPanel({ open, onClose, vm }: VmDetailPanelProps)
     queryKey: ['vm-snapshots', vm?.id],
     queryFn: async () => {
       if (!vm) return [];
-      const res = await api.get(`/virtual-machines/${vm.id}/snapshots`);
-      return res.data.data;
+      const { data } = await api.get(`/virtual-machines/${vm.id}/snapshots`);
+      return data;
     },
     enabled: !!vm && open,
   });

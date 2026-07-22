@@ -95,6 +95,18 @@ export interface ScheduledTaskInput {
 
 // ── 工作流提供者 ──
 
+/**
+ * v6: 工作流节点类型元数据（来自后端 registry）
+ */
+export interface WorkflowNodeTypeMeta {
+  type: string;
+  label: string;
+  description: string;
+  category: 'core' | 'execution' | 'verification' | 'decision' | 'knowledge' | 'flow_control' | 'integration';
+  icon: string;
+  defaultConfig: Record<string, string | number | boolean | string[] | object[] | object>;
+}
+
 export interface WorkflowProvider {
   id: string;
   name: string;
@@ -174,6 +186,15 @@ export const workflowApi = {
     await api.put(`/tasks/${taskId}/cancel`);
   },
 
+  /**
+   * 重投失败/已取消任务
+   * 后端会创建新 task 并立即开始执行，返回新 taskId
+   */
+  async retryTask(taskId: string): Promise<{ taskId: string; parentTaskId: string; status: string; workflowId: string }> {
+    const { data } = await api.post(`/tasks/${taskId}/retry`);
+    return data.data;
+  },
+
   // ── 定时任务 ──
 
   /** 获取定时任务列表 */
@@ -209,6 +230,15 @@ export const workflowApi = {
   /** 获取工作流提供者列表 */
   async listProviders(params?: { type?: string }): Promise<WorkflowProvider[]> {
     const { data } = await api.get('/workflows/providers/list', { params });
+    return data.data;
+  },
+
+  /**
+   * v6: 获取所有可用节点类型的元数据（前后端共用源）
+   * 替代前端 hardcoded NON_CORE_NODES
+   */
+  async listNodeTypes(): Promise<WorkflowNodeTypeMeta[]> {
+    const { data } = await api.get('/workflow/node-types');
     return data.data;
   },
 

@@ -53,7 +53,7 @@ class ContainerLogService {
         if (this.io) {
           // Docker 日志前 8 字节是 header，需要去掉
           const output = chunk.slice(8).toString('utf-8');
-          this.io.to(roomId).emit('container:log', {
+          this.io.to(roomId).emit('container:log:entry', {
             containerId,
             data: output,
             timestamp: new Date().toISOString(),

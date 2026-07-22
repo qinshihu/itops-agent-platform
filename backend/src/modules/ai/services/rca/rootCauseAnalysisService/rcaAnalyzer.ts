@@ -1,7 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// eslint-disable-next-line no-restricted-imports
-import db from '../../../../../models/database';
-import { networkDeviceRepository, serversRepo } from '../../../../../repositories';
+import { networkDeviceRepository, serversRepo, alertRepository, deviceAssociationsRepo } from '../../../../../repositories';
 import { generateCompletion } from '../../llm/llmService';
 import { localRuleEngine } from '../localRuleEngine';
 import { logger } from '../../../../../utils/logger';
@@ -17,10 +15,7 @@ export function performRuleEngineAnalysis(rca: RootCauseAnalysis): UpdateRCAInpu
   let alertInfo = { title: rca.title, content: rca.description || '' };
 
   if (rca.alert_id) {
-    const alert = db.prepare('SELECT title, content FROM alerts WHERE id = ?').get(rca.alert_id) as {
-      title: string;
-      content: string;
-    } | undefined;
+    const alert = alertRepository.getById(rca.alert_id);
     if (alert) {
       alertInfo = alert;
     }
@@ -76,12 +71,7 @@ export async function performLLMAnalysis(rca: RootCauseAnalysis): Promise<Update
   // 获取告警信息（如果有关联告警）
   let alertInfo = '';
   if (rca.alert_id) {
-    const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(rca.alert_id) as {
-      title: string;
-      content: string;
-      severity: string;
-      source: string;
-    } | undefined;
+    const alert = alertRepository.getById(rca.alert_id);
     if (alert) {
       alertInfo = `
 告警标题: ${alert.title}
@@ -169,11 +159,7 @@ export function findDeviceByAlert(alertId: string): {
 } | null {
   try {
     // 1. 查 alert_device_associations
-    const assoc = db.prepare(`
-      SELECT ad.device_type, ad.device_id
-      FROM alert_device_associations ad
-      WHERE ad.alert_id = ?
-    `).get(alertId) as { device_type: 'server' | 'network_device'; device_id: string } | undefined;
+    const assoc = deviceAssociationsRepo.getByAlertId(alertId);
 
     if (assoc) {
       if (assoc.device_type === 'network_device') {
@@ -201,12 +187,12 @@ export function findDeviceByAlert(alertId: string): {
     }
 
     // 2. 回退：直接从 alert 的 metadata/host 字段提取 IP 匹配
-    const alert = db.prepare('SELECT title, content, metadata FROM alerts WHERE id = ?').get(alertId) as any;
+    const alert = alertRepository.getById(alertId);
     if (!alert) return null;
 
-    const metadata = typeof alert.metadata === 'string'
+    const metadata = (typeof alert.metadata === 'string'
       ? JSON.parse(alert.metadata || '{}')
-      : alert.metadata || {};
+      : alert.metadata) || {} as Record<string, unknown>;
     const possibleIps: string[] = [];
 
     // 从 metadata.host / annotations / labels 中找 IP
@@ -222,26 +208,22 @@ export function findDeviceByAlert(alertId: string): {
 
     for (const ip of [...new Set(possibleIps)]) {
       // 查 network_devices
-      const nd = db.prepare(
-        'SELECT id, name, ip_address FROM network_devices WHERE ip_address = ?'
-      ).get(ip) as any;
+      const nd = networkDeviceRepository.getByIp(ip);
       if (nd) {
         return {
           id: nd.id,
           name: nd.name,
-          ip_address: nd.ip_address,
+          ip_address: ip,
           device_type: 'network_device',
         };
       }
       // 查 servers（匹配 hostname、ip_address、private_ip 三个字段）
-      const sv = db.prepare(
-        'SELECT id, name, hostname, ip_address, private_ip FROM servers WHERE hostname = ? OR ip_address = ? OR private_ip = ?'
-      ).get(ip, ip, ip) as any;
+      const sv = serversRepo.getByIp(ip);
       if (sv) {
         return {
           id: sv.id,
           name: sv.name,
-          ip_address: sv.hostname || sv.ip_address || sv.private_ip,
+          ip_address: sv.hostname || sv.ip_address || sv.private_ip || '',
           device_type: 'server',
         };
       }
@@ -338,7 +320,7 @@ export async function collectContext(alert: {
     }
 
     try {
-      context.serverStatus = db.prepare('SELECT id, name, hostname, status, os_type FROM servers WHERE id = ?').get(alert.server_id);
+      context.serverStatus = serversRepo.getById(alert.server_id);
     } catch (error) {
       logger.warn(`⚠️ [RCA] 获取服务器状态失败: ${error instanceof Error ? error.message : 'Unknown'}`);
     }
@@ -346,9 +328,7 @@ export async function collectContext(alert: {
 
   try {
     const oneHourAgo = new Date(new Date(alert.created_at).getTime() - 3600000).toISOString();
-    const rawAlerts = db.prepare(
-      'SELECT * FROM alerts WHERE id != ? AND created_at >= ? ORDER BY created_at DESC LIMIT 10'
-    ).all(alert.id, oneHourAgo) as Array<Record<string, unknown>>;
+    const rawAlerts = alertRepository.listRecentExcludingId(alert.id, oneHourAgo, 10);
     context.relatedAlerts = rawAlerts.map(a => {
       const alertCopy = { ...a };
       if (alertCopy.content && typeof alertCopy.content === 'string') {

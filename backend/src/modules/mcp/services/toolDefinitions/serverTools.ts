@@ -1,8 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from 'zod';
 import { type RegisteredTool, RiskLevel } from '../types';
 import { textResult, jsonResult, READONLY } from './shared';
 import { executeCommand } from '../../../../modules/servers/services/sshService';
+import { serversRepo } from '../../../../repositories';
 
 export const serverTools: RegisteredTool[] = [
   {
@@ -19,16 +19,13 @@ export const serverTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        // eslint-disable-next-line no-restricted-imports
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT id, name, host, port, status, group_id, os, cpu_cores, memory_gb, last_checked FROM servers WHERE 1=1';
-        const params: any[] = [];
-        if (args.groupId) { query += ' AND group_id = ?'; params.push(args.groupId); }
-        if (args.status) { query += ' AND status = ?'; params.push(args.status); }
-        if (args.search) { query += ' AND (name LIKE ? OR host LIKE ?)'; params.push(`%${args.search}%`, `%${args.search}%`); }
-        query += ` LIMIT ${args.limit || 50}`;
-        const servers = db.prepare(query).all(...params);
-        return jsonResult(servers, `找到 ${(servers as any[])?.length || 0} 台服务器`);
+        const servers = serversRepo.listWithFilters({
+          groupId: args.groupId,
+          status: args.status,
+          search: args.search,
+          limit: args.limit || 50,
+        });
+        return jsonResult(servers, `找到 ${(servers as unknown[])?.length || 0} 台服务器`);
       } catch (err) {
         return textResult(`查询服务器失败: ${(err as Error).message}`, true);
       }
@@ -47,9 +44,7 @@ export const serverTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        // eslint-disable-next-line no-restricted-imports
-        const { default: db } = await import('../../../../models/database');
-        const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(args.serverId);
+        const server = serversRepo.getById(args.serverId as string);
         if (!server) return textResult(`服务器 ${args.serverId} 不存在`, true);
         return jsonResult(server, `服务器 ${(server as any).name} 详情`);
       } catch (err) {

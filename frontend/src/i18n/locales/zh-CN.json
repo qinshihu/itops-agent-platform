@@ -1,9 +1,19 @@
 {
-  "app": { "title": "ITOps Agent", "subtitle": "多Agent自动化平台", "systemNormal": "系统正常", "collapseAll": "展开全部", "expandAll": "折叠全部", "logout": "退出登录", "darkMode": "切换深色模式", "lightMode": "切换浅色模式" },
+  "app": {
+    "title": "AIOps Agent",
+    "subtitle": "多Agent自动化平台",
+    "systemNormal": "系统正常",
+    "collapseAll": "展开全部",
+    "expandAll": "折叠全部",
+    "logout": "退出登录",
+    "darkMode": "切换深色模式",
+    "lightMode": "切换浅色模式"
+  },
   "nav": {
     "home": "首页",
     "dashboard": "仪表盘",
     "bigScreen": "监控大屏",
+    "zabbixQuery": "Zabbix 查询",
     "serverMgmt": "服务器管理",
     "servers": "服务器",
     "sshKeys": "SSH密钥",
@@ -46,10 +56,12 @@
     "auditLogs": "审计日志",
     "notifications": "通知管理",
     "users": "用户管理",
+    "backups": "备份设置",
     "settings": "系统设置",
     "dbConnections": "数据库连接",
     "aiModels": "AI模型",
     "agents": "Agent管理",
+    "agentTools": "Agent工具",
     "terminal": "终端",
     "remoteDesktop": "远程桌面",
     "frontendTests": "前端测试",
@@ -65,6 +77,7 @@
     "containerLogs": "容器日志",
     "compose": "Compose编排",
     "snapshotPolicies": "快照策略",
+    "vmMigrations": "虚拟机迁移",
     "imageRegistry": "镜像仓库",
     "smartOps": "智能运维",
     "kubernetes": "K8s管理",
@@ -75,7 +88,9 @@
     "mcpTools": "工具浏览器",
     "mcpExternalServers": "外部服务器",
     "mcpTester": "工具调用测试",
-    "alertProviders": "告警源配置"
+    "alertProviders": "告警源配置",
+    "prometheusQuery": "Prometheus 查询",
+    "workflowProviders": "工作流动作库"
   },
   "toolLinks": {
     "title": "运维工具导航",

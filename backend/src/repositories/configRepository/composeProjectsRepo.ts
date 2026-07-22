@@ -6,7 +6,7 @@
  *   - setStatus / updateStatus
  */
 
-import db from '../../../models/database';
+import db from '../../models/database';
 
 // ── 类型定义 ──
 
@@ -34,10 +34,10 @@ export interface ComposeProjectCreateInput {
 }
 
 export interface ComposeProjectUpdateInput {
-  name: string;
-  description: string;
-  compose_content: string;
-  tags: string;
+  name: string | null;
+  description: string | null;
+  compose_content: string | null;
+  tags: string | null;
   updated_at: string;
 }
 

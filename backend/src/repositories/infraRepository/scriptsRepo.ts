@@ -30,6 +30,19 @@ export const scriptsRepo = {
     return scripts.map(processScript);
   },
 
+  /**
+   * MCP 工具查询（支持 script_type 过滤 + name 搜索 + limit）
+   * 对应：toolDefinitions infra.script.list
+   */
+  listForMcp(filters: { scriptType?: string; search?: string; limit?: number }): ScriptRecordRaw[] {
+    let query = 'SELECT id, name, description, script_type, language, enabled FROM scripts WHERE 1=1';
+    const params: unknown[] = [];
+    if (filters.scriptType) { query += ' AND script_type = ?'; params.push(filters.scriptType); }
+    if (filters.search) { query += ' AND name LIKE ?'; params.push(`%${filters.search}%`); }
+    query += ` LIMIT ${filters.limit || 20}`;
+    return db.prepare(query).all(...params) as ScriptRecordRaw[];
+  },
+
   listCategories(): string[] {
     const categories = db.prepare(
       'SELECT DISTINCT category FROM scripts WHERE category IS NOT NULL'

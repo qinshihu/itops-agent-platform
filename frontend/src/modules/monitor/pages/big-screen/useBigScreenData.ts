@@ -26,12 +26,12 @@ export function useBigScreenData() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [dashboardTitle, setDashboardTitle] = useState(() => {
-    const saved = localStorage.getItem('dashboardTitle');
-    return saved || 'ITOps 运维监控大屏';
-  });
+  const [dashboardTitle, setDashboardTitle] = useState('ITOps 运维监控大屏');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleInputValue, setTitleInputValue] = useState(dashboardTitle);
+  // big-screen 系统资源监控：用户选定的服务器
+  // 'auto' = 跟随本机/聚合（默认），'__all__' = 所有服务器聚合，具体 serverId = 单服务器
+  const [selectedServerId, setSelectedServerId] = useState<string>('auto');
 
   const prevCriticalCountRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -54,9 +54,7 @@ export function useBigScreenData() {
   }, []);
 
   useEffect(() => {
-    if (dashboardTitle !== 'ITOps 运维监控大屏') {
-      localStorage.setItem('dashboardTitle', dashboardTitle);
-    }
+    // Keep dashboardTitle in state only (no localStorage)
   }, [dashboardTitle]);
 
   const handleSaveTitle = () => {
@@ -92,8 +90,8 @@ export function useBigScreenData() {
   const { data: fullDashboard, isError: isStatsError } = useQuery({
     queryKey: ['dashboard-full', refreshKey],
     queryFn: async () => {
-      const res = await api.get('/dashboard/full');
-      return res.data.data as {
+      const { data } = await api.get('/dashboard/full');
+      return data as {
         stats: DashboardStats;
         recentTasks: Task[];
         recentAlerts: Alert[];
@@ -111,8 +109,8 @@ export function useBigScreenData() {
   const { data: rawTasks } = useQuery({
     queryKey: ['tasks', { limit: 10 }, refreshKey],
     queryFn: async () => {
-      const res = await api.get('/tasks', { params: { limit: 10 } });
-      return res.data.data as Task[];
+      const { data } = await api.get('/tasks', { params: { limit: 10 } });
+      return data as Task[];
     },
     refetchInterval: 15000,
     ...RETRY_CONFIG,
@@ -158,8 +156,8 @@ export function useBigScreenData() {
   const { data: alertTrends } = useQuery({
     queryKey: ['alert-trends', refreshKey],
     queryFn: async () => {
-      const res = await api.get('/dashboard/alert-trends');
-      return res.data.data as AlertTrendPoint[];
+      const { data } = await api.get('/dashboard/alert-trends');
+      return data as AlertTrendPoint[];
     },
     refetchInterval: 60000,
     ...RETRY_CONFIG,
@@ -168,8 +166,8 @@ export function useBigScreenData() {
   const { data: taskTrends } = useQuery({
     queryKey: ['task-trends', refreshKey],
     queryFn: async () => {
-      const res = await api.get('/dashboard/task-trends');
-      return res.data.data as TaskTrendPoint[];
+      const { data } = await api.get('/dashboard/task-trends');
+      return data as TaskTrendPoint[];
     },
     refetchInterval: 60000,
     ...RETRY_CONFIG,
@@ -178,8 +176,8 @@ export function useBigScreenData() {
   const { data: agentStats } = useQuery({
     queryKey: ['agent-stats', refreshKey],
     queryFn: async () => {
-      const res = await api.get('/dashboard/agent-stats');
-      return res.data.data as {
+      const { data } = await api.get('/dashboard/agent-stats');
+      return data as {
         agents: AgentStat[];
         overall: {
           totalExecutions: number;
@@ -196,8 +194,8 @@ export function useBigScreenData() {
   const { data: taskDistribution } = useQuery({
     queryKey: ['task-distribution', refreshKey],
     queryFn: async () => {
-      const res = await api.get('/dashboard/task-distribution');
-      return res.data.data as {
+      const { data } = await api.get('/dashboard/task-distribution');
+      return data as {
         byStatus: Array<{ status: string; count: number }>;
         byWorkflow: Array<{ name: string; count: number }>;
       };
@@ -209,18 +207,30 @@ export function useBigScreenData() {
   const { data: remediationStats } = useQuery<RemediationStats>({
     queryKey: ['remediation-stats', refreshKey],
     queryFn: async () => {
-      const res = await api.get('/dashboard/remediation-stats');
-      return res.data.data;
+      const { data } = await api.get('/dashboard/remediation-stats');
+      return data;
     },
     refetchInterval: 30000,
     ...RETRY_CONFIG,
   });
 
   const { data: serverMetricsData } = useQuery<ServerMetricsData>({
-    queryKey: ['server-metrics', refreshKey],
+    queryKey: ['server-metrics', refreshKey, selectedServerId],
     queryFn: async () => {
-      const res = await api.get('/dashboard/server-metrics');
-      return res.data.data;
+      // 根据用户选择构建 URL
+      //   'auto'      → 后端自动选本机（无数据则聚合）
+      //   '__all__'   → 强制所有服务器聚合
+      //   具体 id     → 单服务器数据
+      let url = '/dashboard/server-metrics';
+      if (selectedServerId === 'auto') {
+        url += '?autoSelectLocal=1';
+      } else if (selectedServerId === '__all__') {
+        // 不带参数 = 聚合
+      } else {
+        url += `?serverId=${encodeURIComponent(selectedServerId)}`;
+      }
+      const { data } = await api.get(url);
+      return data;
     },
     refetchInterval: 30000,
     ...RETRY_CONFIG,
@@ -229,8 +239,8 @@ export function useBigScreenData() {
   const { data: slaStats } = useQuery<SlaStats>({
     queryKey: ['sla-stats', refreshKey],
     queryFn: async () => {
-      const res = await api.get('/dashboard/sla-stats');
-      return res.data.data;
+      const { data } = await api.get('/dashboard/sla-stats');
+      return data;
     },
     refetchInterval: 60000,
     ...RETRY_CONFIG,
@@ -427,5 +437,7 @@ export function useBigScreenData() {
     remediationStats,
     slaStats,
     serverMetricsData,
+    selectedServerId,
+    setSelectedServerId,
   };
 }

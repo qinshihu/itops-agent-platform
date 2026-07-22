@@ -1,21 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Bell, CheckCircle, XCircle, Filter, Search, Clock } from 'lucide-react';
+import { Bell, CheckCircle, XCircle, Filter, Search, Clock, RotateCw, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
+import { message, Modal } from 'antd';
 import api from '../../../lib/api';
-
-interface Notification {
-  id: string;
-  type: string;
-  title: string;
-  content: string | null;
-  recipient: string | null;
-  status: string;
-  related_alert_id: string | null;
-  related_task_id: string | null;
-  sent_at: string | null;
-  created_at: string;
-}
+import { getAxiosErrorMessage } from '@/lib/errorHandler';
+import type { NotificationRecord } from '../api';
 
 export default function Notifications() {
   const [page, setPage] = useState(1);
@@ -32,16 +22,16 @@ export default function Notifications() {
       if (selectedType) params.type = selectedType;
       if (selectedStatus) params.status = selectedStatus;
       
-      const res = await api.get('/notifications', { params });
-      return res.data.data;
+      const { data } = await api.get('/notifications', { params });
+      return data;
     },
   });
 
   const { data: stats } = useQuery({
     queryKey: ['notificationStats'],
     queryFn: async () => {
-      const res = await api.get('/notifications/stats/summary');
-      return res.data.data;
+      const { data } = await api.get('/notifications/stats/summary');
+      return data;
     },
   });
 
@@ -52,8 +42,42 @@ export default function Notifications() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       queryClient.invalidateQueries({ queryKey: ['notificationStats'] });
+      message.success('已标记为已发送');
+    },
+    onError: (err) => {
+      message.error(getAxiosErrorMessage(err, '操作失败'));
     },
   });
+
+  // 2026-07-06 增：单条重发
+  const retryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { data } = await api.post(`/notifications/${id}/retry`);
+      return data;
+    },
+    onSuccess: (data: { success: boolean; error?: string }) => {
+      if (data.success) {
+        message.success('通知已重发');
+      } else {
+        message.error(`重发失败: ${data.error || '未知错误'}`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notificationStats'] });
+    },
+    onError: (err) => {
+      message.error(getAxiosErrorMessage(err, '重发失败'));
+    },
+  });
+
+  const handleRetry = (n: NotificationRecord) => {
+    Modal.confirm({
+      title: '重发通知',
+      content: `确定要重发通知「${n.title}」吗？`,
+      okText: '重发',
+      cancelText: '取消',
+      onOk: () => retryMutation.mutate(n.id),
+    });
+  };
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -62,17 +86,32 @@ export default function Notifications() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       queryClient.invalidateQueries({ queryKey: ['notificationStats'] });
+      message.success('已删除');
+    },
+    onError: (err) => {
+      message.error(getAxiosErrorMessage(err, '删除失败'));
     },
   });
 
-  const filteredNotifications = notificationsData?.notifications?.filter((notif: Notification) =>
+  const handleDelete = (n: NotificationRecord) => {
+    Modal.confirm({
+      title: '删除通知',
+      content: `确定要删除通知「${n.title}」吗？此操作不可恢复。`,
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: () => deleteMutation.mutate(n.id),
+    });
+  };
+
+  const filteredNotifications = notificationsData?.notifications?.filter((notif: NotificationRecord) =>
     !searchQuery || 
     notif.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     notif.content?.toLowerCase().includes(searchQuery.toLowerCase())
   ) || [];
 
   const notificationTypes = Array.from(
-    new Set((notificationsData?.notifications || []).map((n: Notification) => n.type))
+    new Set((notificationsData?.notifications || []).map((n: NotificationRecord) => n.type))
   ) as string[];
 
   const formatDate = (dateStr: string) => {
@@ -91,6 +130,19 @@ export default function Notifications() {
         return '📊';
       default:
         return '📧';
+    }
+  };
+
+  // 2026-07-06 增：状态徽章配置（支持 failed 状态）
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'sent':
+        return { label: '已发送', className: 'bg-green-100 text-green-700', icon: <CheckCircle className="w-3 h-3" /> };
+      case 'failed':
+        return { label: '失败', className: 'bg-red-100 text-red-700', icon: <AlertCircle className="w-3 h-3" /> };
+      case 'pending':
+      default:
+        return { label: '待发送', className: 'bg-yellow-100 text-yellow-700', icon: <Clock className="w-3 h-3" /> };
     }
   };
 
@@ -179,6 +231,7 @@ export default function Notifications() {
                   <option value="">所有状态</option>
                   <option value="pending">待发送</option>
                   <option value="sent">已发送</option>
+                  <option value="failed">失败</option>
                 </select>
               </div>
             </div>
@@ -195,7 +248,7 @@ export default function Notifications() {
                 暂无通知
               </div>
             ) : (
-              filteredNotifications.map((notification: Notification) => (
+              filteredNotifications.map((notification: NotificationRecord) => (
                 <div key={notification.id} className="p-4 hover:bg-background transition-colors">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3">
@@ -205,17 +258,28 @@ export default function Notifications() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <h3 className="font-medium text-text-primary">{notification.title}</h3>
-                          <span className={clsx(
-                            'px-2 py-0.5 rounded-full text-xs font-medium',
-                            notification.status === 'sent'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-yellow-100 text-yellow-700'
-                          )}>
-                            {notification.status === 'sent' ? '已发送' : '待发送'}
-                          </span>
+                          {(() => {
+                            const badge = getStatusBadge(notification.status);
+                            return (
+                              <span className={clsx(
+                                'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
+                                badge.className
+                              )}>
+                                {badge.icon}
+                                {badge.label}
+                              </span>
+                            );
+                          })()}
                         </div>
                         {notification.content && (
                           <p className="text-sm text-text-secondary mb-2">{notification.content}</p>
+                        )}
+                        {/* 2026-07-06 增：失败原因展示 */}
+                        {notification.status === 'failed' && notification.error_message && (
+                          <div className="flex items-start gap-1.5 mb-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                            <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                            <span className="font-mono break-all">{notification.error_message}</span>
+                          </div>
                         )}
                         <div className="flex items-center gap-4 text-xs text-text-tertiary">
                           <span>创建: {formatDate(notification.created_at)}</span>
@@ -229,6 +293,17 @@ export default function Notifications() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      {/* 2026-07-06 增：失败重发按钮（status=failed 或 status=pending 都可） */}
+                      {(notification.status === 'failed' || notification.status === 'pending') && (
+                        <button
+                          onClick={() => handleRetry(notification)}
+                          disabled={retryMutation.isPending}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                          title="重发通知"
+                        >
+                          <RotateCw className="w-5 h-5" />
+                        </button>
+                      )}
                       {notification.status === 'pending' && (
                         <button
                           onClick={() => markAsSentMutation.mutate(notification.id)}
@@ -240,7 +315,7 @@ export default function Notifications() {
                         </button>
                       )}
                       <button
-                        onClick={() => deleteMutation.mutate(notification.id)}
+                        onClick={() => handleDelete(notification)}
                         disabled={deleteMutation.isPending}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                         title="删除"

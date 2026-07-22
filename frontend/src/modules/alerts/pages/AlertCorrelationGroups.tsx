@@ -100,7 +100,8 @@ export default function AlertCorrelationGroups() {
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['alert-correlation-groups'] });
       queryClient.invalidateQueries({ queryKey: ['alert-correlation-stats'] });
-      toast.success(`自动关联完成: ${res.data.data?.grouped || 0} 条告警已分组`);
+      const grouped = (res as { data?: { data?: { grouped?: number } } }).data?.data?.grouped ?? 0;
+      toast.success(`自动关联完成: ${grouped} 条告警已分组`);
     },
   });
 

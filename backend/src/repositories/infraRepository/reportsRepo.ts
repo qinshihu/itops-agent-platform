@@ -60,4 +60,16 @@ export const reportsRepo = {
   getGeneratedById(id: string): ReportRecord | undefined {
     return db.prepare("SELECT * FROM reports WHERE id = ? AND type IN ('generated', 'workflow')").get(id) as ReportRecord | undefined;
   },
+
+  /**
+   * 导出报告列表（限 5000 条，供 importExportService 使用）
+   */
+  listAllForExport(): Array<Record<string, unknown>> {
+    return db.prepare(`
+      SELECT id, name, type, format, content, is_preset, created_at, updated_at
+      FROM reports 
+      ORDER BY created_at DESC
+      LIMIT 5000
+    `).all() as Array<Record<string, unknown>>;
+  },
 };

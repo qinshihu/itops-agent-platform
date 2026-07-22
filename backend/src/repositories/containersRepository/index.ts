@@ -8,6 +8,7 @@
  *   - vmAuditLogRepository         (vm_audit_logs)
  *   - imageRegistryRepository      (image_registries)
  *   - dockerEndpointRepository     (docker_endpoints)
+ *   - storageVolumeRepository      (storage_volumes)
  */
 
 export { vmMigrationRepository } from './vmMigrationRepository';
@@ -27,3 +28,6 @@ export type { ImageRegistryRecord, ImageRegistryCreateInput } from './imageRegis
 
 export { dockerEndpointRepository } from './dockerEndpointRepository';
 export type { DockerEndpointRecord, DockerEndpointCreateInput } from './dockerEndpointRepository';
+
+export { storageVolumeRepository } from './storageVolumeRepository';
+export type { StorageVolumeRecord, StorageVolumeInput, StorageVolumeListFilters } from './storageVolumeRepository';

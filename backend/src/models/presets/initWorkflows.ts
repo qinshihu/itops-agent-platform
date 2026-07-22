@@ -1,6 +1,11 @@
 import db from '../database';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { logger } from '../../utils/logger';
+
+/** 为 preset workflow 生成稳定 ID（基于 name 哈希）— 避免每次启动生成新 UUID 导致重复插入 */
+function presetWorkflowId(name: string): string {
+  return 'preset-wf-' + createHash('sha1').update(`workflow:${name}`).digest('hex').slice(0, 32);
+}
 
 export function initializePresetWorkflows() {
   const alertAgent = db.prepare("SELECT id FROM agents WHERE name = '告警处理 Agent'").get() as { id: string } | undefined;
@@ -107,7 +112,7 @@ export function initializePresetWorkflows() {
   
   const presetWorkflows = [
     {
-      id: randomUUID(),
+      id: presetWorkflowId('日常健康检查'),
       name: '日常健康检查',
       description: '对服务器进行日常健康检查，包括系统巡检、命令执行和报告生成',
       nodes: dailyHealthCheckNodes,
@@ -115,7 +120,7 @@ export function initializePresetWorkflows() {
       is_template: 1
     },
     {
-      id: randomUUID(),
+      id: presetWorkflowId('告警处理'),
       name: '告警处理',
       description: '处理系统告警，分析告警信息，检查日志并生成处理报告',
       nodes: alertHandlingNodes,
@@ -123,7 +128,7 @@ export function initializePresetWorkflows() {
       is_template: 1
     },
     {
-      id: randomUUID(),
+      id: presetWorkflowId('故障诊断'),
       name: '故障诊断',
       description: '对系统故障进行全面诊断，分析症状、检查日志、执行命令并生成诊断报告',
       nodes: diagnosticNodes,
@@ -131,7 +136,7 @@ export function initializePresetWorkflows() {
       is_template: 1
     },
     {
-      id: randomUUID(),
+      id: presetWorkflowId('合规检查'),
       name: '合规检查',
       description: '验证服务器配置是否符合安全基线和合规要求，生成合规检查报告',
       nodes: complianceNodes,
@@ -139,7 +144,7 @@ export function initializePresetWorkflows() {
       is_template: 1
     },
     {
-      id: randomUUID(),
+      id: presetWorkflowId('变更执行'),
       name: '变更执行',
       description: '执行系统变更操作，验证操作结果，生成变更执行报告',
       nodes: changeNodes,
@@ -147,7 +152,7 @@ export function initializePresetWorkflows() {
       is_template: 1
     },
     {
-      id: randomUUID(),
+      id: presetWorkflowId('日志分析'),
       name: '日志分析',
       description: '分析系统和应用日志，识别错误模式和异常事件，生成分析报告',
       nodes: logAnalysisNodes,

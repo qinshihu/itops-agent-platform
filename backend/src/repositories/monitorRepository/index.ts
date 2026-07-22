@@ -7,7 +7,8 @@
  *       reports/report_schedules 已有 infraRepository 子仓库。
  */
 
-export { serverMetricsRepo } from './serverMetricsRepo';
+import { serverMetricsRepo } from './serverMetricsRepo';
+export { serverMetricsRepo };
 export type { ServerMetricRecord, ServerMetricInsertInput } from './serverMetricsRepo';
 
 export const monitorRepository = {

@@ -179,10 +179,31 @@ export interface Manufacturer {
   [key: string]: unknown;
 }
 
+export interface ManufacturerInput {
+  name: string;
+  slug?: string;
+  description?: string;
+  logo_url?: string;
+  sort_order?: number;
+}
+
 export interface DeviceType {
   id: string;
   name: string;
   [key: string]: unknown;
+}
+
+export interface DeviceTypeInput {
+  manufacturer_id: string;
+  model: string;
+  slug?: string;
+  part_number?: string;
+  u_height?: number;
+  is_full_depth?: boolean;
+  weight_kg?: number;
+  description?: string;
+  power_consumption_w?: number;
+  airflow?: 'front-to-rear' | 'rear-to-front' | 'side-to-side' | 'passive';
 }
 
 export interface PowerPanel {
@@ -191,16 +212,57 @@ export interface PowerPanel {
   [key: string]: unknown;
 }
 
+export interface PowerPanelInput {
+  room_id: string;
+  name: string;
+  location_label?: string;
+  panel_type?: 'primary' | 'redundant' | 'transfer' | 'subpanel';
+  voltage?: number;
+  amperage?: number;
+  phase_count?: number;
+  description?: string;
+  sort_order?: number;
+}
+
 export interface PowerFeed {
   id: string;
   name: string;
   [key: string]: unknown;
 }
 
+export interface PowerFeedInput {
+  power_panel_id: string;
+  rack_id?: string;
+  name: string;
+  status?: 'active' | 'planned' | 'offline' | 'fault';
+  feed_type?: 'primary' | 'redundant' | 'single';
+  supply?: 'ac' | 'dc';
+  voltage?: number;
+  amperage?: number;
+  max_utilization_pct?: number;
+  current_load_w?: number;
+  description?: string;
+}
+
 export interface Cable {
   id: string;
   name: string;
   [key: string]: unknown;
+}
+
+export interface CableInput {
+  name?: string;
+  cable_type: string;
+  cable_color?: string;
+  length_m?: number;
+  status?: 'connected' | 'planned' | 'decommissioned' | 'fault';
+  a_device_id: string;
+  a_device_type?: string;
+  a_port_name?: string;
+  b_device_id: string;
+  b_device_type?: string;
+  b_port_name?: string;
+  description?: string;
 }
 
 // ============================================================
@@ -361,13 +423,13 @@ export const dcApi = {
   },
 
   /** 创建制造商 */
-  async createManufacturer(input: Record<string, unknown>): Promise<Manufacturer> {
+  async createManufacturer(input: ManufacturerInput): Promise<Manufacturer> {
     const { data } = await api.post('/dc/manufacturers', input);
     return data.data;
   },
 
   /** 更新制造商 */
-  async updateManufacturer(id: string, input: Record<string, unknown>): Promise<Manufacturer> {
+  async updateManufacturer(id: string, input: ManufacturerInput): Promise<Manufacturer> {
     const { data } = await api.put(`/dc/manufacturers/${id}`, input);
     return data.data;
   },
@@ -386,13 +448,13 @@ export const dcApi = {
   },
 
   /** 创建设备型号 */
-  async createDeviceType(input: Record<string, unknown>): Promise<DeviceType> {
+  async createDeviceType(input: DeviceTypeInput): Promise<DeviceType> {
     const { data } = await api.post('/dc/device-types', input);
     return data.data;
   },
 
   /** 更新设备型号 */
-  async updateDeviceType(id: string, input: Record<string, unknown>): Promise<DeviceType> {
+  async updateDeviceType(id: string, input: DeviceTypeInput): Promise<DeviceType> {
     const { data } = await api.put(`/dc/device-types/${id}`, input);
     return data.data;
   },
@@ -411,13 +473,13 @@ export const dcApi = {
   },
 
   /** 创建配电柜 */
-  async createPowerPanel(input: Record<string, unknown>): Promise<PowerPanel> {
+  async createPowerPanel(input: PowerPanelInput): Promise<PowerPanel> {
     const { data } = await api.post('/dc/power-panels', input);
     return data.data;
   },
 
   /** 更新配电柜 */
-  async updatePowerPanel(id: string, input: Record<string, unknown>): Promise<PowerPanel> {
+  async updatePowerPanel(id: string, input: PowerPanelInput): Promise<PowerPanel> {
     const { data } = await api.put(`/dc/power-panels/${id}`, input);
     return data.data;
   },
@@ -436,13 +498,13 @@ export const dcApi = {
   },
 
   /** 创建供电线路 */
-  async createPowerFeed(input: Record<string, unknown>): Promise<PowerFeed> {
+  async createPowerFeed(input: PowerFeedInput): Promise<PowerFeed> {
     const { data } = await api.post('/dc/power-feeds', input);
     return data.data;
   },
 
   /** 更新供电线路 */
-  async updatePowerFeed(id: string, input: Record<string, unknown>): Promise<PowerFeed> {
+  async updatePowerFeed(id: string, input: PowerFeedInput): Promise<PowerFeed> {
     const { data } = await api.put(`/dc/power-feeds/${id}`, input);
     return data.data;
   },
@@ -461,13 +523,13 @@ export const dcApi = {
   },
 
   /** 创建线缆 */
-  async createCable(input: Record<string, unknown>): Promise<Cable> {
+  async createCable(input: CableInput): Promise<Cable> {
     const { data } = await api.post('/dc/cables', input);
     return data.data;
   },
 
   /** 更新线缆 */
-  async updateCable(id: string, input: Record<string, unknown>): Promise<Cable> {
+  async updateCable(id: string, input: Partial<CableInput>): Promise<Cable> {
     const { data } = await api.put(`/dc/cables/${id}`, input);
     return data.data;
   },

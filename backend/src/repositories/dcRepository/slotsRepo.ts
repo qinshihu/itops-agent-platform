@@ -73,37 +73,61 @@ export const slotsRepo = {
   },
 
   /**
-   * 全部 U 位 + 关联设备信息（servers/network_devices/virtual_machines）
+   * 全部 U 位 + 关联设备信息（servers/network_devices/virtual_machines/pdus）
    * 用于 slots.ts GET / 和 overview.ts
    */
   listWithDeviceInfo(): DcRackSlot[] {
     return db.prepare(`
       SELECT s.*,
-        COALESCE(ser.name, nd.name, vm.name, s.device_id) as device_name,
-        COALESCE(ser.ip_address, nd.ip_address, '') as ip_address,
-        COALESCE(CASE WHEN ser.enabled = 1 THEN 'online' ELSE 'offline' END, nd.status, vm.status) as device_status,
+        COALESCE(ser.name, nd.name, vm.name, pdu.name, s.device_id) as device_name,
+        COALESCE(ser.ip_address, nd.ip_address, pdu.ip_address, '') as ip_address,
+        COALESCE(
+          CASE WHEN ser.enabled = 1 THEN 'online' ELSE 'offline' END,
+          nd.status,
+          vm.status,
+          pdu.status
+        ) as device_status,
         CASE WHEN ser.enabled = 1 THEN 'online' ELSE 'offline' END as server_status,
         ser.cpu_cores, (ser.memory_gb * 1000) as memory_mb,
-        nd.status as net_status, vm.status as vm_status
+        (SELECT cpu_usage FROM server_metrics WHERE server_id = ser.id ORDER BY collected_at DESC LIMIT 1) as cpu_usage,
+        (SELECT memory_usage FROM server_metrics WHERE server_id = ser.id ORDER BY collected_at DESC LIMIT 1) as memory_usage,
+        (SELECT disk_usage FROM server_metrics WHERE server_id = ser.id ORDER BY collected_at DESC LIMIT 1) as disk_usage,
+        nd.status as net_status, vm.status as vm_status,
+        pdu.type as pdu_type, pdu.power_capacity_w, pdu.current_load_w
       FROM dc_rack_slots s
       LEFT JOIN servers ser ON s.device_type='server' AND s.device_id = ser.id
       LEFT JOIN network_devices nd ON s.device_type='network_device' AND s.device_id = nd.id
       LEFT JOIN virtual_machines vm ON s.device_type='vm_host' AND s.device_id = vm.id
+      LEFT JOIN dc_pdus pdu ON (s.device_type='pdu' OR s.device_type='ups') AND s.device_id = pdu.id
       ORDER BY s.rack_id, s.start_u
     `).all() as DcRackSlot[];
   },
 
-  /** 按机柜列出 U 位 + 设备信息 */
+  /** 按机柜列出 U 位 + 设备信息（包含 server cpu/mem 最近指标） */
   listByRackWithDeviceInfo(rackId: string): DcRackSlot[] {
     return db.prepare(`
       SELECT s.*,
-        COALESCE(ser.name, nd.name, vm.name, s.device_id) as device_name,
-        COALESCE(ser.ip_address, nd.ip_address, '') as ip_address,
-        COALESCE(CASE WHEN ser.enabled = 1 THEN 'online' ELSE 'offline' END, nd.status, vm.status) as device_status
+        COALESCE(ser.name, nd.name, vm.name, pdu.name, s.device_id) as device_name,
+        COALESCE(ser.ip_address, nd.ip_address, pdu.ip_address, '') as ip_address,
+        COALESCE(
+          CASE WHEN ser.enabled = 1 THEN 'online' ELSE 'offline' END,
+          nd.status,
+          vm.status,
+          pdu.status
+        ) as device_status,
+        CASE WHEN ser.enabled = 1 THEN 'online' ELSE 'offline' END as server_status,
+        ser.cpu_cores, (ser.memory_gb * 1000) as memory_mb,
+        -- 最近一次采集的 CPU/MEM/Disk 使用率（来自 server_metrics 表）
+        (SELECT cpu_usage FROM server_metrics WHERE server_id = ser.id ORDER BY collected_at DESC LIMIT 1) as cpu_usage,
+        (SELECT memory_usage FROM server_metrics WHERE server_id = ser.id ORDER BY collected_at DESC LIMIT 1) as memory_usage,
+        (SELECT disk_usage FROM server_metrics WHERE server_id = ser.id ORDER BY collected_at DESC LIMIT 1) as disk_usage,
+        nd.status as net_status, vm.status as vm_status,
+        pdu.type as pdu_type, pdu.power_capacity_w, pdu.current_load_w
       FROM dc_rack_slots s
       LEFT JOIN servers ser ON s.device_type='server' AND s.device_id = ser.id
       LEFT JOIN network_devices nd ON s.device_type='network_device' AND s.device_id = nd.id
       LEFT JOIN virtual_machines vm ON s.device_type='vm_host' AND s.device_id = vm.id
+      LEFT JOIN dc_pdus pdu ON (s.device_type='pdu' OR s.device_type='ups') AND s.device_id = pdu.id
       WHERE s.rack_id = ?
       ORDER BY s.start_u
     `).all(rackId) as DcRackSlot[];
@@ -195,10 +219,13 @@ export const slotsRepo = {
 
   /** DC 状态推送：统计关联告警的设备数 */
   countAlertDevices(): number {
+    // alerts 表无 device_id 列，设备 ID 存在 metadata JSON 中
     return (db.prepare(`
-      SELECT COUNT(DISTINCT a.id) as c
+      SELECT COUNT(DISTINCT json_extract(a.metadata, '$.device_id')) as c
       FROM alerts a
-      JOIN dc_rack_slots s ON s.device_id = a.device_id AND s.device_id IS NOT NULL
+      JOIN dc_rack_slots s ON s.device_id = json_extract(a.metadata, '$.device_id')
+        AND s.device_id IS NOT NULL
+        AND json_extract(a.metadata, '$.device_id') IS NOT NULL
       WHERE a.status != 'resolved'
     `).get() as { c: number }).c;
   },

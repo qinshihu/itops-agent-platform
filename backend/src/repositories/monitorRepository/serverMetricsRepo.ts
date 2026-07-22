@@ -4,7 +4,7 @@
  * 覆盖 server_metrics 表的查询操作，用于监控仪表盘和趋势分析。
  */
 
-import db from '../../../models/database';
+import db from '../../models/database';
 
 // ── 类型定义 ──
 

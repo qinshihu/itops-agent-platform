@@ -1,7 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from 'zod';
 import { type RegisteredTool } from '../types';
 import { textResult, jsonResult, READONLY } from './shared';
+import { remediationPolicyRepository } from '../../../../repositories';
+import { remediationAuditRepository } from '../../../../repositories';
+import { knowledgeRepository } from '../../../../repositories';
+import { chatSessionRepository } from '../../../../repositories';
 
 export const aiTools: RegisteredTool[] = [
   {
@@ -16,13 +19,10 @@ export const aiTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        // eslint-disable-next-line no-restricted-imports
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT * FROM remediation_policies WHERE 1=1';
-        const params: unknown[] = [];
-        if (args.enabled !== undefined) { query += ' AND enabled = ?'; params.push(args.enabled ? 1 : 0); }
-        query += ` LIMIT ${args.limit || 20}`;
-        const policies = db.prepare(query).all(...params);
+        const policies = remediationPolicyRepository.listForMcp(
+          args.enabled !== undefined ? (args.enabled ? 1 : 0) : undefined,
+          args.limit || 20
+        );
         return jsonResult(policies, `找到 ${policies.length} 条修复策略`);
       } catch (err) {
         return textResult(`查询修复策略失败: ${(err as Error).message}`, true);
@@ -43,15 +43,11 @@ export const aiTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        // eslint-disable-next-line no-restricted-imports
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT * FROM remediation_audit WHERE 1=1';
-        const params: any[] = [];
-        if (args.status) { query += ' AND status = ?'; params.push(args.status); }
-        query += ' ORDER BY executed_at DESC';
-        query += ` LIMIT ${args.limit || 20}`;
-        const audits = db.prepare(query).all(...params);
-        return jsonResult(audits, `找到 ${(audits as any[])?.length || 0} 条修复审计`);
+        const { audits } = remediationAuditRepository.listWithJoins({
+          status: args.status,
+          limit: args.limit || 20,
+        });
+        return jsonResult(audits, `找到 ${audits?.length || 0} 条修复审计`);
       } catch (err) {
         return textResult(`查询修复审计失败: ${(err as Error).message}`, true);
       }
@@ -72,18 +68,12 @@ export const aiTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        // eslint-disable-next-line no-restricted-imports
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT * FROM knowledge WHERE 1=1';
-        const params: any[] = [];
-        if (args.query) {
-          query += ' AND (title LIKE ? OR content LIKE ? OR tags LIKE ?)';
-          params.push(`%${args.query}%`, `%${args.query}%`, `%${args.query}%`);
-        }
-        if (args.category) { query += ' AND category = ?'; params.push(args.category); }
-        query += ` LIMIT ${args.limit || 5}`;
-        const results = db.prepare(query).all(...params);
-        return jsonResult(results, `找到 ${(results as any[])?.length || 0} 条知识`);
+        const results = knowledgeRepository.searchMcp({
+          query: args.query,
+          category: args.category,
+          limit: args.limit || 5,
+        });
+        return jsonResult(results, `找到 ${results?.length || 0} 条知识`);
       } catch (err) {
         return textResult(`查询知识图谱失败: ${(err as Error).message}`, true);
       }
@@ -103,21 +93,11 @@ export const aiTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        // eslint-disable-next-line no-restricted-imports
-        const { default: db } = await import('../../../../models/database');
-        let query = `
-          SELECT cs.id, cs.title, cs.status, cs.model_name, cs.created_at,
-            COUNT(cm.id) as message_count
-          FROM chat_sessions cs
-          LEFT JOIN chat_messages cm ON cs.id = cm.session_id
-          WHERE 1=1
-        `;
-        const params: unknown[] = [];
-        if (args.status) { query += ' AND cs.status = ?'; params.push(args.status); }
-        query += ' GROUP BY cs.id ORDER BY cs.created_at DESC';
-        query += ` LIMIT ${args.limit || 10}`;
-        const sessions = db.prepare(query).all(...params);
-        return jsonResult(sessions, `找到 ${sessions.length} 个会话`);
+        const sessions = chatSessionRepository.listWithMessageCount({
+          status: args.status,
+          limit: args.limit || 10,
+        });
+        return jsonResult(sessions, `找到 ${(sessions as unknown[]).length} 个会话`);
       } catch (err) {
         return textResult(`查询会话失败: ${(err as Error).message}`, true);
       }

@@ -1,8 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from 'zod';
 import { type RegisteredTool } from '../types';
 import { textResult, jsonResult, READONLY } from './shared';
 import { dockerService } from '../../../../modules/containers/services/dockerService';
+import { containerRepository } from '../../../../repositories';
+import { virtualMachineRepository } from '../../../../repositories';
 
 export const containerTools: RegisteredTool[] = [
   {
@@ -18,14 +19,12 @@ export const containerTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT * FROM containers WHERE 1=1';
-        const params: any[] = [];
-        if (args.hostId) { query += ' AND docker_host_id = ?'; params.push(args.hostId); }
-        if (args.status) { query += ' AND status = ?'; params.push(args.status); }
-        query += ` LIMIT ${args.limit || 50}`;
-        const containers = db.prepare(query).all(...params);
-        return jsonResult(containers, `找到 ${(containers as any[])?.length || 0} 个容器`);
+        const containers = containerRepository.list({
+          dockerHostId: args.hostId,
+          status: args.status,
+          limit: args.limit || 50,
+        });
+        return jsonResult(containers, `找到 ${(containers as unknown[])?.length || 0} 个容器`);
       } catch (err) {
         return textResult(`查询容器失败: ${(err as Error).message}`, true);
       }
@@ -46,14 +45,11 @@ export const containerTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        // eslint-disable-next-line no-restricted-imports
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT * FROM virtual_machines WHERE 1=1';
-        const params: unknown[] = [];
-        if (args.status) { query += ' AND status = ?'; params.push(args.status); }
-        if (args.hostId) { query += ' AND host_id = ?'; params.push(args.hostId); }
-        query += ` LIMIT ${args.limit || 50}`;
-        const vms = db.prepare(query).all(...params);
+        const vms = virtualMachineRepository.list({
+          status: args.status,
+          hostId: args.hostId,
+          limit: args.limit || 50,
+        });
         return jsonResult(vms, `找到 ${vms.length} 台虚拟机`);
       } catch (err) {
         return textResult(`查询虚拟机失败: ${(err as Error).message}`, true);

@@ -1,6 +1,7 @@
 {
   "name": "itops-agent-platform",
   "version": "3.0.5",
+  "private": true,
   "description": "企业 IT 运维多 Agent 自动化平台",
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
@@ -16,7 +17,8 @@
     "check:deps": "npx depcruise --config .dependency-cruiser.json backend/src",
     "check:deps:graph": "npx depcruise --config .dependency-cruiser.json backend/src --output-type dot | dot -T svg > deps-graph.svg",
     "check:circular": "npx madge --circular --extensions ts backend/src",
-    "precommit": "npm run check:arch",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
     "prepare": "husky",
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
@@ -37,13 +39,11 @@
   "license": "MPL-2.0",
   "devDependencies": {
     "concurrently": "^8.2.2",
-    "dependency-cruiser": "^18.0.0",
+    "dependency-cruiser": "16.10.4",
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.8",
-    "madge": "^8.0.0"
-  },
-  "dependencies": {
-    "docx": "^9.7.1"
+    "lint-staged": "15.5.2",
+    "madge": "^8.0.0",
+    "prettier": "3.9.5"
   },
   "lint-staged": {
     "backend/src/**/*.ts": [
@@ -51,6 +51,21 @@
     ],
     "frontend/src/**/*.{ts,tsx}": [
       "node scripts/lint-staged.cjs frontend"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "npx prettier --write"
+    ],
+    ".github/**/*.{yml,yaml}": [
+      "npx prettier --write"
+    ],
+    ".trae/**/*.md": [
+      "npx prettier --write"
+    ],
+    "docs/**/*.md": [
+      "npx prettier --write"
+    ],
+    "scripts/**/*.{js,cjs}": [
+      "npx prettier --write"
     ]
   }
 }

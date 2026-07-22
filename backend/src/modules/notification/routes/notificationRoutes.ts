@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { notificationsRepo } from '../../../repositories';
+import { notificationCrudService } from '../services/notificationCrudService';
 import { createNotification as _createNotification } from '../services/notificationService';
 
 const router = Router();
@@ -8,44 +8,18 @@ const router = Router();
 // 获取通知列表
 router.get('/', (req: Request, res: Response) => {
   try {
-    const {
-      page = 1,
-      limit = 50,
-      type,
-      status,
-      start_date,
-      end_date
-    } = req.query;
+    const { page, limit, type, status, start_date, end_date } = req.query;
 
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
-
-    const notifications = notificationsRepo.list({
-      type: type as string | undefined,
-      status: status as string | undefined,
-      start_date: start_date as string | undefined,
-      end_date: end_date as string | undefined,
-      limit: limitNum,
-      offset: (pageNum - 1) * limitNum,
-    });
-
-    // 获取总数
-    const total = notificationsRepo.count({
+    const result = notificationCrudService.listNotifications({
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
       type: type as string | undefined,
       status: status as string | undefined,
       start_date: start_date as string | undefined,
       end_date: end_date as string | undefined,
     });
 
-    res.json({
-      success: true,
-      data: {
-        notifications,
-        total,
-        page: pageNum,
-        limit: limitNum
-      }
-    });
+    res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -59,15 +33,13 @@ router.put('/:id/send', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const notification = notificationsRepo.getById(id);
-    if (!notification) {
+    const ok = notificationCrudService.markNotificationSent(id);
+    if (!ok) {
       return res.status(404).json({
         success: false,
         error: 'Notification not found'
       });
     }
-
-    notificationsRepo.markSent(id);
 
     res.json({
       success: true,
@@ -86,9 +58,8 @@ router.delete('/:id', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const changes = notificationsRepo.delete(id);
-
-    if (changes === 0) {
+    const ok = notificationCrudService.deleteNotification(id);
+    if (!ok) {
       return res.status(404).json({
         success: false,
         error: 'Notification not found'
@@ -110,7 +81,7 @@ router.delete('/:id', (req: Request, res: Response) => {
 // 获取通知统计
 router.get('/stats/summary', (_req: Request, res: Response) => {
   try {
-    const stats = notificationsRepo.getStats();
+    const stats = notificationCrudService.getNotificationStats();
 
     res.json({
       success: true,

@@ -1,6 +1,6 @@
 import { Plus, RefreshCw, Terminal } from 'lucide-react';
 import clsx from 'clsx';
-import { ImportExport } from '../../../../modules/infra/components/ImportExport';
+import { ImportExport } from '../../../../modules/import-export/components/ImportExport';
 import type { Server as ServerType } from '../types';
 
 interface ServerToolbarProps {

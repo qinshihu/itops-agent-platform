@@ -1,11 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   GitBranch, Play, Clock, Edit, Copy, Trash2,
   Server, Shield, Database, Globe, Cpu, ArrowRight,
   Sparkles
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import type { Workflow } from './types';
+import type { Workflow, WorkflowNode } from './types';
 
 interface WorkflowCardProps {
   workflow: Workflow;
@@ -149,7 +148,7 @@ export default function WorkflowCard({
                   const startNodes = (workflow.nodes || []).filter(n => !targetIds.has(n.id));
 
                   if (startNodes.length === 1) {
-                    const orderedNodes: any[] = [];
+                    const orderedNodes: WorkflowNode[] = [];
                     let currentId: string | null = startNodes[0].id;
                     const visited = new Set<string>();
 
@@ -157,7 +156,7 @@ export default function WorkflowCard({
                       visited.add(currentId);
                       const node = nodeMap.get(currentId);
                       if (node) orderedNodes.push(node);
-                      const nextTargets = edgeMap.get(currentId) || [];
+                      const nextTargets: string[] = edgeMap.get(currentId) || [];
                       currentId = nextTargets.length > 0 ? nextTargets[0] : null;
                     }
 

@@ -1,28 +1,29 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import crypto from 'crypto';
+import { randomUUID } from 'crypto';
 import { requireRole } from '../../../middleware/auth';
-import { configTemplatesRepo } from '../../../repositories';
 import { getErrorMessage } from '../../../utils/errorHelpers';
+import { configTemplateCrudService } from '../services/configTemplateCrudService';
 
 const router = Router();
 
-// GET /
 router.get('/', (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const pageSize = parseInt(req.query.pageSize as string) || 20;
-    const offset = (page - 1) * pageSize;
-    const type = req.query.type as string || '';
-    const target = req.query.target_type as string || '';
-    const search = req.query.search as string || '';
+    const type = (req.query.type as string) || '';
+    const target = (req.query.target_type as string) || '';
+    const search = (req.query.search as string) || '';
 
-    const { data, total } = configTemplatesRepo.list({
-      type: type || undefined,
-      target_type: target || undefined,
-      search: search || undefined,
+    const { data, total } = configTemplateCrudService.listTemplates({
+      page,
       pageSize,
-      offset,
+      filters: {
+        type: type || undefined,
+        target_type: target || undefined,
+        search: search || undefined,
+      },
     });
     res.json({ success: true, data, total });
   } catch (error: unknown) {
@@ -30,10 +31,9 @@ router.get('/', (req: Request, res: Response) => {
   }
 });
 
-// GET /:id
 router.get('/:id', (req: Request, res: Response) => {
   try {
-    const item = configTemplatesRepo.getById(req.params.id);
+    const item = configTemplateCrudService.getTemplateById(req.params.id);
     if (!item) return res.status(404).json({ success: false, message: '未找到' });
     res.json({ success: true, data: item });
   } catch (error: unknown) {
@@ -41,12 +41,11 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 });
 
-// POST /
 router.post('/', (req: Request, res: Response) => {
   try {
     const { name, description, type, content, variables, target_type, tags, created_by } = req.body;
-    const id = crypto.randomUUID();
-    configTemplatesRepo.create({
+    const id = randomUUID();
+    configTemplateCrudService.createTemplate({
       id,
       name: name || '',
       description: description || '',
@@ -63,11 +62,10 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
-// PUT /:id
 router.put('/:id', (req: Request, res: Response) => {
   try {
     const { name, description, type, content, variables, target_type, tags } = req.body;
-    configTemplatesRepo.update(req.params.id, {
+    configTemplateCrudService.updateTemplate(req.params.id, {
       name: name || '',
       description: description || '',
       type: type || 'generic',
@@ -82,20 +80,18 @@ router.put('/:id', (req: Request, res: Response) => {
   }
 });
 
-// DELETE /:id
 router.delete('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
-    configTemplatesRepo.delete(req.params.id);
+    configTemplateCrudService.deleteTemplate(req.params.id);
     res.json({ success: true });
   } catch (error: unknown) {
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
-// POST /:id/render — 渲染模板
 router.post('/:id/render', (req: Request, res: Response) => {
   try {
-    const tmpl = configTemplatesRepo.getById(req.params.id);
+    const tmpl: any = configTemplateCrudService.getTemplateById(req.params.id);
     if (!tmpl) return res.status(404).json({ success: false, message: '未找到' });
 
     const variables = req.body.variables || {};
@@ -110,14 +106,12 @@ router.post('/:id/render', (req: Request, res: Response) => {
   }
 });
 
-// POST /:id/apply — 应用到目标
 router.post('/:id/apply', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const targetIds = req.body.target_ids || [];
-    const result = configTemplatesRepo.apply(req.params.id, targetIds);
+    const result = configTemplateCrudService.applyTemplate(req.params.id, targetIds);
     if (!result) return res.status(404).json({ success: false, message: '未找到' });
-
-    res.json({ success: true, data: { taskId: result.taskId, targetIds: result.targetIds } });
+    res.json({ success: true, data: { taskId: (result as any).taskId, targetIds: (result as any).targetIds } });
   } catch (error: unknown) {
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }

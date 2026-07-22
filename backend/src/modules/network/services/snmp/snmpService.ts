@@ -195,8 +195,8 @@ class SnmpService {
 
     // 并行获取系统信息、接口、厂商指标
     const [sysInfo, interfaces] = await Promise.all([
-      getSystemInfoFn(createSession, targetHost, targetPort, credential.snmp_version, community).catch(() => null),
-      getInterfacesFn(createSession, targetHost, targetPort, credential.snmp_version, community).catch(() => [] as InterfaceInfo[]),
+      getSystemInfoFn(createSession, targetHost, targetPort, credential.snmp_version, community).catch((err) => { logger.warn('SNMP getSystemInfo failed:', err); return null; }),
+      getInterfacesFn(createSession, targetHost, targetPort, credential.snmp_version, community).catch((err) => { logger.warn('SNMP getInterfaces failed:', err); return [] as InterfaceInfo[]; }),
     ]);
 
     // 获取厂商特定指标

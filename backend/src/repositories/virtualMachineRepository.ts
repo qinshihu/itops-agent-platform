@@ -30,6 +30,7 @@ export interface VirtualMachineRecord {
 
 export interface VirtualMachineListFilters {
   status?: string;
+  hostId?: string;
   hypervisor?: string;
   search?: string;
   limit?: number;
@@ -86,6 +87,10 @@ function buildWhereClause(filters: VirtualMachineListFilters): { where: string; 
   if (filters.status) {
     where += ' AND status = ?';
     params.push(filters.status);
+  }
+  if (filters.hostId) {
+    where += ' AND host_id = ?';
+    params.push(filters.hostId);
   }
   if (filters.hypervisor) {
     where += ' AND hypervisor = ?';

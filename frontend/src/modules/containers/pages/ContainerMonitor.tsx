@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Table, Button, Tag, Card, Statistic, Row, Col, Drawer, Descriptions, Progress, message, Switch as _Switch, Space, Tooltip } from 'antd';
+import { Table, Button, Tag, Card, Row, Col, Drawer, Descriptions, Progress, message, Switch as _Switch, Space, Tooltip } from 'antd';
 import { Play, Square, Eye, Activity, RefreshCw } from 'lucide-react';
 import api from '../../../lib/api';
 import type { Socket } from 'socket.io-client';
 import io from 'socket.io-client';
+import { useAuth } from '../../../contexts/AuthContext';
 
 interface ContainerStats {
   containerId: string;
@@ -38,6 +39,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function ContainerMonitor() {
+  const { token } = useAuth();
   const [data, setData] = useState<Container[]>([]);
   const [loading, setLoading] = useState(false);
   const [clusterStats, setClusterStats] = useState<ClusterSnapshot>({
@@ -54,7 +56,6 @@ export default function ContainerMonitor() {
 
   // Initialize Socket.io
   useEffect(() => {
-    const token = localStorage.getItem('token');
     const socket = io('/', { auth: { token }, transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
@@ -63,7 +64,7 @@ export default function ContainerMonitor() {
     });
 
     return () => { socket.disconnect(); };
-  }, []);
+  }, [token]);
 
   // Fetch initial data
   const fetchData = useCallback(async () => {
@@ -73,8 +74,8 @@ export default function ContainerMonitor() {
         api.get('/containers'),
         api.get('/docker-monitor/cluster-snapshot'),
       ]);
-      setData(containerRes.data.data || []);
-      setClusterStats(snapRes.data.data || {
+      setData((containerRes.data?.data ?? containerRes.data) || []);
+      setClusterStats((snapRes.data?.data ?? snapRes.data) || {
         totalContainers: 0, runningContainers: 0, totalCpuPercent: '0',
         totalMemoryUsage: 0, totalMemoryLimit: 0, totalMemoryPercent: '0',
       });
@@ -110,8 +111,8 @@ export default function ContainerMonitor() {
     setDetailInspect(null);
     setDetailVisible(true);
     try {
-      const res = await api.get(`/containers/${item.id}`);
-      setDetailInspect(res.data.data || res.data);
+      const { data } = await api.get(`/containers/${item.id}`);
+      setDetailInspect(data ||data);
     } catch {
       // inspect may not be available
     }
@@ -269,65 +270,98 @@ export default function ContainerMonitor() {
       </div>
 
       {/* Cluster Overview Cards */}
-      <Row gutter={16} className="mb-6">
-        <Col xs={12} sm={6} lg={4}>
-          <Card hoverable>
-            <Statistic title="容器总数" value={clusterStats.totalContainers} prefix={<Activity className="w-4 h-4 text-blue-500" />} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6} lg={4}>
-          <Card hoverable>
-            <Statistic title="运行中" value={clusterStats.runningContainers} valueStyle={{ color: '#52c41a' }} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6} lg={4}>
-          <Card hoverable>
-            <Statistic
-              title="总 CPU 使用率"
-              value={parseFloat(clusterStats.totalCpuPercent)}
-              suffix="%"
-              precision={1}
-              valueStyle={{ color: parseFloat(clusterStats.totalCpuPercent) > 90 ? '#ff4d4f' : parseFloat(clusterStats.totalCpuPercent) > 70 ? '#faad14' : '#3b82f6' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6} lg={4}>
-          <Card hoverable>
-            <Statistic
-              title="总内存使用"
-              value={clusterStats.totalMemoryUsage}
-              formatter={(val) => {
-                const v = Number(val);
-                return formatBytes(v);
-              }}
-              valueStyle={{ color: '#3b82f6' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6} lg={4}>
-          <Card hoverable>
-            <Statistic
-              title="总内存限制"
-              value={clusterStats.totalMemoryLimit}
-              formatter={(val) => {
-                const v = Number(val);
-                return formatBytes(v);
-              }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6} lg={4}>
-          <Card hoverable>
-            <Statistic
-              title="总内存使用率"
-              value={parseFloat(clusterStats.totalMemoryPercent)}
-              suffix="%"
-              precision={1}
-              valueStyle={{ color: parseFloat(clusterStats.totalMemoryPercent) > 90 ? '#ff4d4f' : parseFloat(clusterStats.totalMemoryPercent) > 70 ? '#faad14' : '#3b82f6' }}
-            />
-          </Card>
-        </Col>
-      </Row>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+        <div className="bg-surface border border-border/60 rounded-xl p-4 flex items-center gap-3 transition-all hover:border-primary/40 hover:shadow-sm">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+            <Activity className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-text-secondary">容器总数</div>
+            <div className="text-xl font-semibold text-text-primary leading-tight">{clusterStats.totalContainers}</div>
+          </div>
+        </div>
+        <div className="bg-surface border border-border/60 rounded-xl p-4 flex items-center gap-3 transition-all hover:border-primary/40 hover:shadow-sm">
+          <div className="w-10 h-10 rounded-lg bg-green-500/10 text-green-500 flex items-center justify-center">
+            <Play className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-text-secondary">运行中</div>
+            <div className="text-xl font-semibold text-text-primary leading-tight">{clusterStats.runningContainers}</div>
+          </div>
+        </div>
+        <div className={`rounded-xl p-4 flex items-center gap-3 transition-all border ${
+          parseFloat(clusterStats.totalCpuPercent) > 90
+            ? 'bg-red-500/5 border-red-500/30'
+            : parseFloat(clusterStats.totalCpuPercent) > 70
+              ? 'bg-amber-500/5 border-amber-500/30'
+              : 'bg-surface border-border/60 hover:border-primary/40 hover:shadow-sm'
+        }`}>
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+            parseFloat(clusterStats.totalCpuPercent) > 90
+              ? 'bg-red-500/15 text-red-500'
+              : parseFloat(clusterStats.totalCpuPercent) > 70
+                ? 'bg-amber-500/15 text-amber-500'
+                : 'bg-primary/10 text-primary'
+          }`}>
+            <Activity className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-text-secondary">总 CPU 使用率</div>
+            <div className={`text-xl font-semibold leading-tight ${
+              parseFloat(clusterStats.totalCpuPercent) > 90
+                ? 'text-red-500'
+                : parseFloat(clusterStats.totalCpuPercent) > 70
+                  ? 'text-amber-500'
+                  : 'text-text-primary'
+            }`}>{parseFloat(clusterStats.totalCpuPercent).toFixed(1)}%</div>
+          </div>
+        </div>
+        <div className="bg-surface border border-border/60 rounded-xl p-4 flex items-center gap-3 transition-all hover:border-primary/40 hover:shadow-sm">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+            <Square className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-text-secondary">总内存使用</div>
+            <div className="text-xl font-semibold text-text-primary leading-tight">{formatBytes(clusterStats.totalMemoryUsage)}</div>
+          </div>
+        </div>
+        <div className="bg-surface border border-border/60 rounded-xl p-4 flex items-center gap-3 transition-all hover:border-primary/40 hover:shadow-sm">
+          <div className="w-10 h-10 rounded-lg bg-slate-500/10 text-slate-500 flex items-center justify-center">
+            <Square className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-text-secondary">总内存限制</div>
+            <div className="text-xl font-semibold text-text-primary leading-tight">{formatBytes(clusterStats.totalMemoryLimit)}</div>
+          </div>
+        </div>
+        <div className={`rounded-xl p-4 flex items-center gap-3 transition-all border ${
+          parseFloat(clusterStats.totalMemoryPercent) > 90
+            ? 'bg-red-500/5 border-red-500/30'
+            : parseFloat(clusterStats.totalMemoryPercent) > 70
+              ? 'bg-amber-500/5 border-amber-500/30'
+              : 'bg-surface border-border/60 hover:border-primary/40 hover:shadow-sm'
+        }`}>
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+            parseFloat(clusterStats.totalMemoryPercent) > 90
+              ? 'bg-red-500/15 text-red-500'
+              : parseFloat(clusterStats.totalMemoryPercent) > 70
+                ? 'bg-amber-500/15 text-amber-500'
+                : 'bg-primary/10 text-primary'
+          }`}>
+            <Activity className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-text-secondary">总内存使用率</div>
+            <div className={`text-xl font-semibold leading-tight ${
+              parseFloat(clusterStats.totalMemoryPercent) > 90
+                ? 'text-red-500'
+                : parseFloat(clusterStats.totalMemoryPercent) > 70
+                  ? 'text-amber-500'
+                  : 'text-text-primary'
+            }`}>{parseFloat(clusterStats.totalMemoryPercent).toFixed(1)}%</div>
+          </div>
+        </div>
+      </div>
 
       {/* Container Table */}
       <Card title="容器列表" className="shadow-sm">

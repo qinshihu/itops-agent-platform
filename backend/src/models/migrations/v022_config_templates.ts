@@ -1,5 +1,18 @@
 import type { Database } from 'better-sqlite3';
 
+/**
+ * v022: config_templates 表 + config_template_history 表
+ *
+ * 2026-07-21 P1-#18 修复说明：
+ *   - 原 export const `v021_config_templates`（文件名是 v022，导出名是 v021）→ 改为 `v022_config_templates`
+ *   - 这是手抖导致的命名错配
+ *
+ * 2026-07-21 P1-#18 跳号说明（v011/v021 跳号原因）：
+ *   - v011 原计划是"任务调度表增强"，但实际工作合并到 v012 timezone_migration 中一起做
+ *   - v021 原计划是"配置模板前缀"，但实际直接作为 v022_config_templates 创建（更明确表达）
+ *   - 跳号避免重命名导致旧 db 文件与新 db 文件混淆
+ */
+
 export function up(db: Database) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS config_templates (
@@ -61,5 +74,5 @@ export function down(db: Database) {
   db.exec(`DROP TABLE IF EXISTS config_templates;`);
 }
 
-const v021_config_templates = { up, down };
-export default v021_config_templates;
+const v022_config_templates = { up, down };
+export default v022_config_templates;

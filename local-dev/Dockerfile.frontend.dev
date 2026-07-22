@@ -1,21 +1,44 @@
-# ITOps Agent Platform - Frontend Development
-# 用于本地开发环境，支持Vite热重载
-FROM node:20-slim
+# ============================================================
+# ITOps Agent Platform - Frontend Development Image
+# ============================================================
+# 用途：本地开发用镜像，支持 Vite HMR 热重载
+#
+# 关键配置：
+#   - Vite dev server 监听 0.0.0.0:3000（容器内）
+#   - 宿主端口 5173 → 容器端口 3000（由 compose 映射）
+#   - /api 和 /socket.io 走 Vite proxy 转发到 backend:3001
+# ============================================================
+
+FROM node:20.19.5-bookworm-slim
 
 WORKDIR /app
 
-# Copy package files first for better layer caching
-COPY frontend/package.json frontend/package-lock.json ./
+# 切换阿里云 apt 镜像（中国大陆加速，slim 镜像默认无 apt 源需要列表，先创建）
+RUN if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+      sed -i 's|deb.debian.org/debian-security|mirrors.aliyun.com/debian-security|g; s|deb.debian.org/debian|mirrors.aliyun.com/debian|g' \
+        /etc/apt/sources.list.d/debian.sources; \
+    fi
 
-# Install dependencies
+# 安装 wget（healthcheck 用）+ ca-certificates
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制 package.json 走 Docker 缓存层
+COPY frontend/package.json frontend/package-lock.json* ./
+
+# 安装依赖
 RUN npm ci
 
-# Vite dev server port
+# Vite dev server 端口（容器内 3000，宿主映射为 5173）
 EXPOSE 3000
 
-# Vite requires host to be 0.0.0.0 for Docker
+# 容器内必须监听 0.0.0.0，否则宿主机访问不到
 ENV HOST=0.0.0.0
 ENV DOCKER_MODE=true
+# Vite 客户端 HMR 走宿主 5173
+ENV VITE_HMR_CLIENT_PORT=5173
 
-# Run Vite dev server
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+# 启动 Vite：直接调二进制绕过 npm stdout 缓冲（与 backend 用 tsx 二进制同理）
+# --host 0.0.0.0 让容器外可访问
+CMD ["node", "./node_modules/vite/bin/vite.js", "--host", "0.0.0.0", "--port", "3000"]</new_str>

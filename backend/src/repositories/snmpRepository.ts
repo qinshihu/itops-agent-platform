@@ -72,10 +72,10 @@ export interface SnmpCredentialCreateInput {
 }
 
 export interface SnmpCredentialUpdateInput {
-  name?: string;
+  name?: string | null;
   community?: string | null;
-  snmp_version?: string;
-  snmp_port?: number;
+  snmp_version?: string | null;
+  snmp_port?: number | null;
   snmp_user?: string | null;
   snmp_auth_protocol?: string | null;
   snmp_auth_key?: string | null;

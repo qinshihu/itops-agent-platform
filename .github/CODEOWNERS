@@ -5,20 +5,45 @@
 * @tance
 
 # 核心基础设施（任何改动都需要审查）
-/core/                        @tance
-/middleware/                   @tance
-/repositories/                 @tance
-/models/migrations/            @tance
+/backend/src/core/                        @tance
+/backend/src/middleware/                   @tance
+/backend/src/repositories/                 @tance
+/backend/src/models/migrations/            @tance
 /scripts/                      @tance
 /.github/workflows/            @tance
 /.trae/                        @tance
 
 # 核心业务模块（改动影响全局）
-/src/modules/ai/               @tance
-/src/modules/workflow/         @tance
-/src/modules/mcp/              @tance
-/src/modules/alerts/           @tance
-/src/modules/auto/             @tance
+/backend/src/modules/ai/               @tance
+/backend/src/modules/workflow/         @tance
+/backend/src/modules/mcp/              @tance
+/backend/src/modules/alerts/           @tance
+/backend/src/modules/auto/             @tance
+
+# 基础设施与安全模块
+/backend/src/modules/auth/             @tance
+/backend/src/modules/audit/            @tance
+/backend/src/modules/settings/         @tance
+
+# 资源管理模块
+/backend/src/modules/servers/          @tance
+/backend/src/modules/containers/       @tance
+/backend/src/modules/kubernetes/       @tance
+/backend/src/modules/network/          @tance
+/backend/src/modules/database/         @tance
+/backend/src/modules/dc/               @tance
+
+# 业务支撑模块
+/backend/src/modules/notification/     @tance
+/backend/src/modules/monitor/          @tance
+/backend/src/modules/backup/           @tance
+/backend/src/modules/change-management/  @tance
+/backend/src/modules/config-management/  @tance
+/backend/src/modules/import-export/    @tance
+/backend/src/modules/scripts/          @tance
+/backend/src/modules/tool-links/       @tance
+/backend/src/modules/linkage/          @tance
+/backend/src/modules/infra/            @tance
 
 # 前端核心
 /frontend/src/lib/             @tance

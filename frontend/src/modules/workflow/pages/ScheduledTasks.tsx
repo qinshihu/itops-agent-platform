@@ -38,23 +38,23 @@ export default function ScheduledTasks() {
   const { data: tasksData, isLoading: tasksLoading } = useQuery({
     queryKey: ['scheduledTasks'],
     queryFn: async () => {
-      const res = await api.get('/scheduled-tasks');
-      return res.data.data as ScheduledTask[];
+      const { data } = await api.get('/scheduled-tasks');
+      return data as ScheduledTask[];
     },
   });
 
   const { data: workflowsData } = useQuery({
     queryKey: ['workflows'],
     queryFn: async () => {
-      const res = await api.get('/workflows');
-      return res.data.data as Workflow[];
+      const { data } = await api.get('/workflows');
+      return data as Workflow[];
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
-      const res = await api.post('/scheduled-tasks', data);
-      return res.data;
+      const { data: result } = await api.post('/scheduled-tasks', data);
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scheduledTasks'] });
@@ -65,8 +65,8 @@ export default function ScheduledTasks() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
-      const res = await api.put(`/scheduled-tasks/${id}`, data);
-      return res.data;
+      const { data: result } = await api.put(`/scheduled-tasks/${id}`, data);
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scheduledTasks'] });
@@ -77,8 +77,8 @@ export default function ScheduledTasks() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.delete(`/scheduled-tasks/${id}`);
-      return res.data;
+      const { data } = await api.delete(`/scheduled-tasks/${id}`);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scheduledTasks'] });
@@ -87,8 +87,8 @@ export default function ScheduledTasks() {
 
   const toggleMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.post(`/scheduled-tasks/${id}/toggle`);
-      return res.data;
+      const { data } = await api.post(`/scheduled-tasks/${id}/toggle`);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scheduledTasks'] });

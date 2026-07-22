@@ -13,8 +13,8 @@ import type {
   RepairPlan,
   RepairRecord,
 } from '../../../../types/configRepair';
-// eslint-disable-next-line no-restricted-imports
-import db from '../../../../models/database';
+import { configFileTemplateRepository } from '../../../../repositories';
+import type { ConfigFileTemplate } from '../../../../repositories';
 import { analyzeConfig, findMatchingTemplate, type DetectionDeps } from './detection';
 import { generateRepairPlan, executeRepair, rollbackRepair, type RepairDeps } from './repairStrategies';
 import { getRepairRecord, listRepairRecords, saveRepairRecord as _saveRepairRecord } from './verification';
@@ -34,40 +34,6 @@ export class ConfigRepairService {
     if (this.initialized) return;
 
     try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS config_templates (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          path TEXT NOT NULL,
-          parser TEXT NOT NULL,
-          validator TEXT,
-          reload_cmd TEXT,
-          backup_dir TEXT NOT NULL,
-          description TEXT,
-          is_preset INTEGER NOT NULL DEFAULT 0,
-          created_at TEXT NOT NULL
-        )
-      `);
-
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS config_repair_records (
-          id TEXT PRIMARY KEY,
-          config_path TEXT NOT NULL,
-          device_id TEXT NOT NULL,
-          device_name TEXT NOT NULL,
-          device_ip TEXT NOT NULL,
-          repair_plan TEXT NOT NULL,
-          status TEXT NOT NULL,
-          backup_id TEXT,
-          execution_result TEXT,
-          error_message TEXT,
-          approver TEXT,
-          approved_at TEXT,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL
-        )
-      `);
-
       // 加载预设模板
       this.loadPresetTemplates();
 
@@ -123,24 +89,21 @@ export class ConfigRepairService {
 
       // 保存到数据库
       try {
-        const existing = db.prepare('SELECT id FROM config_templates WHERE id = ?').get(template.id);
+        const existing = configFileTemplateRepository.getById(template.id);
         if (!existing) {
-          db.prepare(`
-            INSERT INTO config_templates 
-            (id, name, path, parser, validator, reload_cmd, backup_dir, description, is_preset, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            template.id,
-            template.name,
-            template.path,
-            template.parser,
-            template.validator || null,
-            template.reloadCmd || null,
-            template.backupDir,
-            template.description,
-            template.isPreset ? 1 : 0,
-            new Date().toISOString()
-          );
+          const now = new Date().toISOString();
+          configFileTemplateRepository.create({
+            id: template.id,
+            name: template.name,
+            path: template.path,
+            parser: template.parser,
+            validator: template.validator ?? null,
+            reload_cmd: template.reloadCmd ?? null,
+            backup_dir: template.backupDir,
+            description: template.description ?? null,
+            is_preset: template.isPreset ? 1 : 0,
+            created_at: now,
+          } as ConfigFileTemplate);
         }
       } catch (error) {
         logger.warn(`⚠️ 保存模板失败: ${template.name}`, error);

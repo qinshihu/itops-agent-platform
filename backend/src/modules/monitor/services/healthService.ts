@@ -1,8 +1,7 @@
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
-// eslint-disable-next-line no-restricted-imports
-import db from '../../../models/database';
+import { dbHealthRepository } from '../../../repositories';
 import { logger } from '../../../utils/logger';
 import { getIOInstance } from '../../../shared/websocket/io';
 import { alertService } from '../../alerts/services/alertService';
@@ -274,10 +273,10 @@ export class HealthService {
     const startTime = Date.now();
     
     try {
-      db.prepare('SELECT 1').get();
+      dbHealthRepository.ping();
       const latency = Date.now() - startTime;
       
-      const tableCount = (db.prepare("SELECT COUNT(*) as count FROM sqlite_master WHERE type='table'").get() as { count: number }).count;
+      const tableCount = dbHealthRepository.getTableCount();
       const size = this.getDatabaseSize();
       
       return {
@@ -391,12 +390,7 @@ export class HealthService {
 
   private getDatabaseSize(): number {
     try {
-      const result = db.prepare('PRAGMA page_count').get() as { page_count: number } | undefined;
-      const pageSizeResult = db.prepare('PRAGMA page_size').get() as { page_size: number } | undefined;
-      
-      if (result && pageSizeResult) {
-        return result.page_count * pageSizeResult.page_size;
-      }
+      return dbHealthRepository.getDatabaseSize();
     } catch (error) {
       logger.warn('Failed to get database size', error as Error);
     }

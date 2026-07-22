@@ -27,7 +27,9 @@ const ToolTester: React.FC = () => {
     fetchManifest().then((m) => {
       setAllTools(m.tools || []);
       setTools(m.tools || []);
-    }).catch(() => {});
+    }).catch((err: unknown) => {
+      message.error(getAxiosErrorMessage(err, '获取工具清单失败'));
+    });
   }, []);
 
   function handleToolChange(name: string) {

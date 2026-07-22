@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { serverInfoCollector } from '../services/serverInfoCollector';
 import { serverImportService } from '../services/serverImportService';
+import { validateBody } from '../../../middleware/validation';
+import { serverImportSchemas } from '../../../shared/schemas/apiValidation';
 
 const router = Router();
 
@@ -48,7 +50,7 @@ router.post('/collect-all-metrics', async (_req, res) => {
   }
 });
 
-router.post('/import', async (req, res) => {
+router.post('/import', validateBody(serverImportSchemas.importServers), async (req, res) => {
   try {
     const { servers, test_connection } = req.body as {
       servers: Array<{
@@ -65,11 +67,6 @@ router.post('/import', async (req, res) => {
       }>;
       test_connection?: boolean;
     };
-
-    if (!servers || !Array.isArray(servers) || servers.length === 0) {
-      res.status(400).json({ success: false, error: '请提供服务器列表数据' });
-      return;
-    }
 
     const validation = serverImportService.validateServers(servers);
     if (!validation.valid) {

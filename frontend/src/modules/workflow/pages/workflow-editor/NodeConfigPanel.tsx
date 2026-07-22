@@ -1,6 +1,20 @@
+import { useQuery } from '@tanstack/react-query';
+import { Bot, Copy, Trash2, Settings, Shield, Wrench } from 'lucide-react';
 import type { Node } from '@xyflow/react';
-import { Copy, Trash2, Settings, Shield, Wrench } from 'lucide-react';
 import type { ApprovalNodeData, Provider, ProviderNodeData } from './types';
+import { VerificationConfig } from './node-configs/VerificationConfig';
+import { RiskAssessConfig } from './node-configs/RiskAssessConfig';
+import { DecisionConfig } from './node-configs/DecisionConfig';
+import { KnowledgeConfig } from './node-configs/KnowledgeConfig';
+import { RollbackConfig } from './node-configs/RollbackConfig';
+import { ConditionConfig } from './node-configs/ConditionConfig';
+import { LoopConfig } from './node-configs/LoopConfig';
+import { ParallelConfig } from './node-configs/ParallelConfig';
+import { HttpConfig } from './node-configs/HttpConfig';
+import { NotifyConfig } from './node-configs/NotifyConfig';
+import { DelayConfig } from './node-configs/DelayConfig';
+import aiApi from '../../../ai/api';
+import type { Agent } from '../../../ai/api';
 
 interface NodeConfigPanelProps {
   selectedNode: Node;
@@ -15,6 +29,12 @@ interface NodeConfigPanelProps {
   onUpdateApprovalConfig: (nodeId: string, partial: Record<string, unknown>) => void;
   onUpdateProviderId: (nodeId: string, pid: string) => void;
   onUpdateProviderConfig: (nodeId: string, key: string, value: unknown) => void;
+  onUpdateVerificationConfig: (nodeId: string, partial: Record<string, unknown>) => void;
+  onUpdateRiskAssessConfig: (nodeId: string, partial: Record<string, unknown>) => void;
+  onUpdateDecisionConfig: (nodeId: string, partial: Record<string, unknown>) => void;
+  onUpdateKnowledgeConfig: (nodeId: string, partial: Record<string, unknown>) => void;
+  onUpdateRollbackConfig: (nodeId: string, partial: Record<string, unknown>) => void;
+  onUpdateGenericConfig: (nodeId: string, partial: Record<string, unknown>) => void;
 }
 
 export function NodeConfigPanel({
@@ -30,6 +50,12 @@ export function NodeConfigPanel({
   onUpdateApprovalConfig,
   onUpdateProviderId,
   onUpdateProviderConfig,
+  onUpdateVerificationConfig,
+  onUpdateRiskAssessConfig,
+  onUpdateDecisionConfig,
+  onUpdateKnowledgeConfig,
+  onUpdateRollbackConfig,
+  onUpdateGenericConfig,
 }: NodeConfigPanelProps) {
   return (
     <div className="border-t border-border p-4 bg-background/50 overflow-y-auto max-h-96">
@@ -93,14 +119,104 @@ export function NodeConfigPanel({
           />
         )}
 
-        {selectedNode.type !== 'approval' && selectedNode.type !== 'provider' && (
-          <AgentConfig
+        {selectedNode.type === 'verification' && (
+          <VerificationConfig
             selectedNode={selectedNode}
-            onUpdateInputKey={onUpdateInputKey}
-            onUpdateOutputKey={onUpdateOutputKey}
-            onUpdatePrompt={onUpdatePrompt}
+            onUpdate={onUpdateVerificationConfig}
           />
         )}
+
+        {selectedNode.type === 'risk_assess' && (
+          <RiskAssessConfig
+            selectedNode={selectedNode}
+            onUpdate={onUpdateRiskAssessConfig}
+          />
+        )}
+
+        {selectedNode.type === 'decision' && (
+          <DecisionConfig
+            selectedNode={selectedNode}
+            onUpdate={onUpdateDecisionConfig}
+          />
+        )}
+
+        {selectedNode.type === 'knowledge' && (
+          <KnowledgeConfig
+            selectedNode={selectedNode}
+            onUpdate={onUpdateKnowledgeConfig}
+          />
+        )}
+
+        {selectedNode.type === 'rollback' && (
+          <RollbackConfig
+            selectedNode={selectedNode}
+            onUpdate={onUpdateRollbackConfig}
+          />
+        )}
+
+        {selectedNode.type === 'condition' && (
+          <ConditionConfig
+            selectedNode={selectedNode}
+            onUpdate={onUpdateGenericConfig}
+          />
+        )}
+
+        {selectedNode.type === 'loop' && (
+          <LoopConfig
+            selectedNode={selectedNode}
+            onUpdate={onUpdateGenericConfig}
+          />
+        )}
+
+        {selectedNode.type === 'parallel' && (
+          <ParallelConfig
+            selectedNode={selectedNode}
+            onUpdate={onUpdateGenericConfig}
+          />
+        )}
+
+        {selectedNode.type === 'http' && (
+          <HttpConfig
+            selectedNode={selectedNode}
+            onUpdate={onUpdateGenericConfig}
+          />
+        )}
+
+        {selectedNode.type === 'notify' && (
+          <NotifyConfig
+            selectedNode={selectedNode}
+            onUpdate={onUpdateGenericConfig}
+          />
+        )}
+
+        {selectedNode.type === 'delay' && (
+          <DelayConfig
+            selectedNode={selectedNode}
+            onUpdate={onUpdateGenericConfig}
+          />
+        )}
+
+        {selectedNode.type !== 'approval' &&
+          selectedNode.type !== 'provider' &&
+          selectedNode.type !== 'verification' &&
+          selectedNode.type !== 'risk_assess' &&
+          selectedNode.type !== 'decision' &&
+          selectedNode.type !== 'knowledge' &&
+          selectedNode.type !== 'rollback' &&
+          selectedNode.type !== 'condition' &&
+          selectedNode.type !== 'loop' &&
+          selectedNode.type !== 'parallel' &&
+          selectedNode.type !== 'http' &&
+          selectedNode.type !== 'notify' &&
+          selectedNode.type !== 'delay' && (
+            <AgentConfig
+              selectedNode={selectedNode}
+              onUpdateInputKey={onUpdateInputKey}
+              onUpdateOutputKey={onUpdateOutputKey}
+              onUpdatePrompt={onUpdatePrompt}
+              onUpdateGenericConfig={onUpdateGenericConfig}
+            />
+          )}
       </div>
     </div>
   );
@@ -259,14 +375,65 @@ function AgentConfig({
   onUpdateInputKey,
   onUpdateOutputKey,
   onUpdatePrompt,
+  onUpdateGenericConfig,
 }: {
   selectedNode: Node;
   onUpdateInputKey: (nodeId: string, value: string) => void;
   onUpdateOutputKey: (nodeId: string, value: string) => void;
   onUpdatePrompt: (nodeId: string, value: string) => void;
+  onUpdateGenericConfig: (nodeId: string, partial: Record<string, unknown>) => void;
 }) {
+  // v3 P0-9：让用户从下拉框选 Agent，而不是硬编码 agentId
+  const { data: agents, isLoading: agentsLoading } = useQuery({
+    queryKey: ['agents-for-workflow'],
+    queryFn: () => aiApi.listAgents(),
+    staleTime: 30000,
+  });
+  const selectedAgentId = (selectedNode.data?.agentId as string) || '';
+
   return (
     <>
+      <div className="pt-3 border-t border-border">
+        <h4 className="text-sm font-semibold text-text-primary mb-3 flex items-center gap-2">
+          <Bot className="w-4 h-4 text-purple-500" />
+          Agent 选择
+        </h4>
+        <div>
+          <label className="block text-sm text-text-secondary mb-1">选择 Agent</label>
+          <select
+            value={selectedAgentId}
+            onChange={(e) =>
+              onUpdateGenericConfig(selectedNode.id, { agentId: e.target.value })
+            }
+            disabled={agentsLoading}
+            className="w-full px-3 py-2 rounded bg-background border border-border focus:border-primary focus:outline-none text-sm"
+          >
+            <option value="">{agentsLoading ? '加载中...' : '请选择 Agent'}</option>
+            {(agents ?? [])
+              .filter((a: Agent) => a.enabled === 1 || a.enabled === undefined)
+              .map((a: Agent) => (
+                <option key={a.id} value={a.id}>
+                  {a.avatar ? `${a.avatar} ` : ''}
+                  {a.name}（{a.role}）
+                </option>
+              ))}
+            {agents && agents.length === 0 && (
+              <option value="" disabled>
+                暂无可用 Agent，请先在 AI 模块创建
+              </option>
+            )}
+          </select>
+          <p className="text-xs text-text-secondary mt-1">
+            工作流执行时会调用此 Agent 完成节点任务
+          </p>
+          {selectedAgentId && (
+            <p className="text-xs text-blue-500 mt-1">
+              当前已选 Agent ID: {selectedAgentId}
+            </p>
+          )}
+        </div>
+      </div>
+
       <div className="pt-3 border-t border-border">
         <h4 className="text-sm font-semibold text-text-primary mb-3">数据流转配置</h4>
         <div className="space-y-3">

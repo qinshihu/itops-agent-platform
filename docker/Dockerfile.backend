@@ -5,7 +5,7 @@
 # ============================================================
 # Stage 1: Builder
 # ============================================================
-FROM node:20-slim AS builder
+FROM node:20.19.5-slim AS builder
 
 # Use Aliyun Debian mirror for faster and more reliable apt access in China
 # Note: Must use HTTP (not HTTPS) because node:20-slim lacks ca-certificates
@@ -23,19 +23,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy package files first for better layer caching
 COPY backend/package.json backend/package-lock.json ./
 
-# Install all dependencies and build native modules
+# Install all dependencies (including devDependencies for tsx) and build native modules
 RUN npm ci
 
 # Copy source code
 COPY backend/ ./
 
-# Build TypeScript to JavaScript
-RUN npm run build
-
 # ============================================================
 # Stage 2: Production
 # ============================================================
-FROM node:20-slim
+FROM node:20.19.5-slim
 
 # Use Aliyun Debian mirror for faster and more reliable apt access in China
 # Note: Must use HTTP (not HTTPS) because node:20-slim lacks ca-certificates
@@ -43,12 +40,12 @@ RUN sed -i 's|http://deb.debian.org/debian|http://mirrors.aliyun.com/debian|g; s
 
 # Labels for public registry (replace with your actual info)
 LABEL maintainer="谭策 <huawei_network@foxmail.com>" \
-      org.opencontainers.image.title="ITOps Agent Platform Backend" \
-      org.opencontainers.image.description="Enterprise IT Operations Multi-Agent Automation Platform - Backend API Server" \
-      org.opencontainers.image.source="https://github.com/qinshihu/itops-agent-platform" \
-      org.opencontainers.image.licenses="MPL-2.0" \
-      org.opencontainers.image.vendor="谭策" \
-      org.opencontainers.image.url="https://www.zjzwfw.cloud/ITOpsAgentinfo"
+    org.opencontainers.image.title="ITOps Agent Platform Backend" \
+    org.opencontainers.image.description="Enterprise IT Operations Multi-Agent Automation Platform - Backend API Server" \
+    org.opencontainers.image.source="https://github.com/qinshihu/itops-agent-platform" \
+    org.opencontainers.image.licenses="MPL-2.0" \
+    org.opencontainers.image.vendor="谭策" \
+    org.opencontainers.image.url="https://www.zjzwfw.cloud/ITOpsAgentinfo"
 
 # Set working directory
 WORKDIR /app
@@ -71,11 +68,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python3 -m pip install --upgrade pip --break-system-packages || true
 RUN python3 -m pip install dbskiter --break-system-packages || true
 
-# Copy built application from builder stage
-COPY --from=builder /app/dist ./dist
-
 # Copy node_modules from builder (already compiled with native modules)
 COPY --from=builder /app/node_modules ./node_modules
+
+# Copy source code from builder
+COPY --from=builder /app/src ./src
 
 # Copy package.json for reference
 COPY backend/package.json ./
@@ -104,5 +101,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 # Use entrypoint script for proper volume permission handling
 ENTRYPOINT ["docker-entrypoint.sh"]
 
-# Start the application
-CMD ["node", "dist/app.js"]
+# Start the application using tsx (TypeScript runtime, no pre-compilation needed)
+CMD ["npx", "tsx", "src/app.ts"]

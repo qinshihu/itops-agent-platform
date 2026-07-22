@@ -1,4 +1,3 @@
-import { _useState } from 'react';
 import {
   Bot, Server, AlertCircle, Sparkles, RefreshCw, Terminal, X,
 } from 'lucide-react';

@@ -33,8 +33,8 @@ export function useKubernetes() {
   } = useQuery({
     queryKey: ['kubernetes-contexts'],
     queryFn: async () => {
-      const res = await api.get('/kubernetes/contexts');
-      return (res.data.data || []) as K8sContext[];
+      const { data } = await api.get('/kubernetes/contexts');
+      return (data || []) as K8sContext[];
     },
   });
 
@@ -46,10 +46,10 @@ export function useKubernetes() {
     queryKey: ['kubernetes-namespaces', effectiveContext],
     queryFn: async () => {
       if (!effectiveContext) return [];
-      const res = await api.get('/kubernetes/namespaces', {
+      const { data } = await api.get('/kubernetes/namespaces', {
         params: { context: effectiveContext },
       });
-      return (res.data.data || []) as Namespace[];
+      return (data || []) as Namespace[];
     },
     enabled: !!effectiveContext,
   });
@@ -68,10 +68,10 @@ export function useKubernetes() {
         api.get('/kubernetes/deployments', { params: { namespace: effectiveNamespace || undefined, context: effectiveContext } }),
       ]);
       return {
-        nodes: (nodesRes.data.data || []).length,
-        pods: (podsRes.data.data || []).length,
-        services: (servicesRes.data.data || []).length,
-        deployments: (deploymentsRes.data.data || []).length,
+        nodes: ((nodesRes.data?.data ?? nodesRes.data) || []).length,
+        pods: ((podsRes.data?.data ?? podsRes.data) || []).length,
+        services: ((servicesRes.data?.data ?? servicesRes.data) || []).length,
+        deployments: ((deploymentsRes.data?.data ?? deploymentsRes.data) || []).length,
       };
     },
     enabled: !!effectiveContext,
@@ -88,10 +88,10 @@ export function useKubernetes() {
     queryKey: ['kubernetes-pods', effectiveContext, effectiveNamespace],
     queryFn: async () => {
       if (!effectiveContext) return [];
-      const res = await api.get('/kubernetes/pods', {
+      const { data } = await api.get('/kubernetes/pods', {
         params: { namespace: effectiveNamespace || undefined, context: effectiveContext },
       });
-      return (res.data.data || []) as Pod[];
+      return (data || []) as Pod[];
     },
     enabled: !!effectiveContext,
   });
@@ -106,10 +106,10 @@ export function useKubernetes() {
     queryKey: ['kubernetes-deployments', effectiveContext, effectiveNamespace],
     queryFn: async () => {
       if (!effectiveContext) return [];
-      const res = await api.get('/kubernetes/deployments', {
+      const { data } = await api.get('/kubernetes/deployments', {
         params: { namespace: effectiveNamespace || undefined, context: effectiveContext },
       });
-      return (res.data.data || []) as Deployment[];
+      return (data || []) as Deployment[];
     },
     enabled: !!effectiveContext,
   });
@@ -124,10 +124,10 @@ export function useKubernetes() {
     queryKey: ['kubernetes-services', effectiveContext, effectiveNamespace],
     queryFn: async () => {
       if (!effectiveContext) return [];
-      const res = await api.get('/kubernetes/services', {
+      const { data } = await api.get('/kubernetes/services', {
         params: { namespace: effectiveNamespace || undefined, context: effectiveContext },
       });
-      return (res.data.data || []) as Service[];
+      return (data || []) as Service[];
     },
     enabled: !!effectiveContext,
   });
@@ -142,10 +142,10 @@ export function useKubernetes() {
     queryKey: ['kubernetes-nodes', effectiveContext],
     queryFn: async () => {
       if (!effectiveContext) return [];
-      const res = await api.get('/kubernetes/nodes', {
+      const { data } = await api.get('/kubernetes/nodes', {
         params: { context: effectiveContext },
       });
-      return (res.data.data || []) as NodeInfo[];
+      return (data || []) as NodeInfo[];
     },
     enabled: !!effectiveContext,
   });
@@ -153,8 +153,8 @@ export function useKubernetes() {
   // ==================== 导入 kubeconfig ====================
   const importMutation = useMutation({
     mutationFn: async (config: string) => {
-      const res = await api.post('/kubernetes/contexts', { config });
-      return res.data;
+      const { data } = await api.post('/kubernetes/contexts', { config });
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['kubernetes-contexts'] });
@@ -176,10 +176,10 @@ export function useKubernetes() {
     setTestingConfig(true);
     setTestResult(null);
     try {
-      const res = await api.post('/kubernetes/contexts/test', { config: kubeconfigContent });
+      const { data } = await api.post('/kubernetes/contexts/test', { config: kubeconfigContent });
       setTestResult({
-        success: res.data.data?.success ?? false,
-        message: res.data.data?.message || (res.data.data?.success ? '连接成功' : '连接失败'),
+        success: data?.success ?? false,
+        message: data?.message || (data?.success ? '连接成功' : '连接失败'),
       });
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string; message?: string } }; message?: string };

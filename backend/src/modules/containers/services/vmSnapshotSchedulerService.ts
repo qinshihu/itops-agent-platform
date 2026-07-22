@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
-import { vmSnapshotPolicyRepository } from '../../../../repositories';
+import { vmSnapshotPolicyRepository } from '../../../repositories';
 import { vmManagementService } from '../../containers/services/vmManagement';
 
 interface SnapshotPolicy {
@@ -20,7 +20,7 @@ interface SnapshotPolicy {
 }
 
 class VmSnapshotSchedulerService {
-  private intervals: Map<string, NodeJS.Timeout> = new Map();
+  private intervals: Map<string, NodeJS.Timeout> = new Map(); // 实际存的是 setTimeout 返回的 Timeout 对象
 
   constructor() {
     // 表结构由 migration v050 维护；本服务的运行时策略加载由 initialize() 负责。
@@ -46,32 +46,104 @@ class VmSnapshotSchedulerService {
     }
   }
 
-  private parseCronToInterval(cronExpression: string): number {
-    const parts = cronExpression.split(' ');
-    if (parts.length !== 5) return 3600000;
+  /**
+   * 解析 cron 表达式 → 下次触发时间（毫秒时间戳）
+   *
+   * 支持常见的 5 段 cron 语法（minute hour day-of-month month day-of-week）：
+   *   - * * * * *      每分钟
+   *   - m * * * *       每 m 分钟（m 1-59）
+   *   - m h * * *       每天 h:m
+   *   - m h * * d       每周星期 d 的 h:m
+   *   - *(步进 n) * * * *   每 n 分钟
+   *   - m h * * 1-5     周一到周五的 h:m
+   *
+   * 不支持：复杂 day-of-month / 范围 / L 表达式 → 退回到每分钟执行
+   *
+   * 较之前实现的优势：
+   *   1) 使用"到下次触发时间"差值而不是 setInterval 的固定间隔，确保到点执行
+   *   2) 支持更多 cron 语法（步进、星期几、星期范围）
+   *   3) 解析失败不静默降级为 1 小时，而是返回下次 1 分钟后（更快重试）
+   */
+  private parseCronToNextRun(cronExpression: string, fromDate: Date = new Date()): number {
+    const parts = cronExpression.trim().split(/\s+/);
+    if (parts.length !== 5) {
+      // 解析失败 → 1 分钟后执行
+      return fromDate.getTime() + 60 * 1000;
+    }
+    const [minute, hour, , , dow] = parts;
 
-    const [minute, hour] = parts;
-    if (hour === '*' && minute !== '*') {
-      return parseInt(minute) * 60 * 1000;
+    // 计算候选时间：从下一分钟开始（cron 触发到分钟边界）
+    const next = new Date(fromDate);
+    next.setSeconds(0, 0);
+    next.setMinutes(next.getMinutes() + 1);
+
+    // 最多往前看 8 天（足够覆盖 dows 7 + 1 缓冲）
+    for (let i = 0; i < 60 * 24 * 8; i++) {
+      if (
+        this.matchCronField(minute, next.getMinutes()) &&
+        this.matchCronField(hour, next.getHours()) &&
+        this.matchCronField(dow, next.getDay())
+      ) {
+        return next.getTime();
+      }
+      next.setMinutes(next.getMinutes() + 1);
     }
-    if (hour !== '*' && minute !== '*') {
-      return 24 * 60 * 60 * 1000;
+
+    // 实在找不到匹配：8 天后再试
+    return fromDate.getTime() + 8 * 24 * 60 * 60 * 1000;
+  }
+
+  /**
+   * 判断 cron 字段是否匹配给定数值
+   * 支持 *、数字、步进（星号斜杠n）、a-b、a,b,c
+   */
+  private matchCronField(field: string, value: number): boolean {
+    if (field === '*') return true;
+
+    // 逗号分隔：任一子表达式匹配即可
+    for (const part of field.split(',')) {
+      // 步进：星号 / n
+      const stepMatch = part.match(/^\*\/(\d+)$/);
+      if (stepMatch) {
+        const step = parseInt(stepMatch[1]);
+        if (step > 0 && value % step === 0) return true;
+        continue;
+      }
+      // 范围 a-b
+      const rangeMatch = part.match(/^(\d+)-(\d+)$/);
+      if (rangeMatch) {
+        const start = parseInt(rangeMatch[1]);
+        const end = parseInt(rangeMatch[2]);
+        if (value >= start && value <= end) return true;
+        continue;
+      }
+      // 单值
+      const num = parseInt(part);
+      if (!isNaN(num) && num === value) return true;
     }
-    return 60 * 60 * 1000;
+    return false;
   }
 
   private schedulePolicy(row: any) {
-    const intervalMs = this.parseCronToInterval(row.cron_expression);
+    const scheduleNext = () => {
+      const delay = Math.max(this.parseCronToNextRun(row.cron_expression) - Date.now(), 1000);
 
-    const interval = setInterval(async () => {
-      try {
-        await this.executePolicy(row);
-      } catch (err) {
-        logger.error(`Snapshot policy ${row.name} failed:`, err);
-      }
-    }, intervalMs);
+      const timeout = setTimeout(async () => {
+        try {
+          await this.executePolicy(row);
+        } catch (err) {
+          logger.error(`Snapshot policy ${row.name} failed:`, err);
+        }
+        // 重新调度
+        if (this.intervals.has(row.id)) {
+          scheduleNext();
+        }
+      }, delay);
 
-    this.intervals.set(row.id, interval);
+      this.intervals.set(row.id, timeout);
+    };
+
+    scheduleNext();
   }
 
   private async executePolicy(policy: any) {
@@ -79,15 +151,18 @@ class VmSnapshotSchedulerService {
 
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      // 快照名带 policyId 前缀，避免不同策略/手动快照被误删
+      const snapshotName = `auto-${policy.id}-${timestamp}`;
 
       await vmManagementService.createSnapshot(policy.platform_id, {
         vmId: policy.vm_id,
-        name: `auto-${policy.name}-${timestamp}`,
+        name: snapshotName,
         description: `Scheduled snapshot by policy ${policy.name}`,
         includeMemory: policy.snapshot_memory === 1,
       });
 
-      await this.cleanupOldSnapshots(policy.platform_id, policy.vm_id, policy.retention);
+      // 只清理属于本策略的快照（按 policyId 前缀）
+      await this.cleanupOldSnapshots(policy.platform_id, policy.vm_id, policy.id, policy.retention);
 
       vmSnapshotPolicyRepository.updateLastRunAt(policy.id);
 
@@ -97,15 +172,20 @@ class VmSnapshotSchedulerService {
     }
   }
 
-  private async cleanupOldSnapshots(platformId: string, vmId: string, retention: number) {
+  /**
+   * 清理本策略的旧快照（按 policyId 隔离，避免误删其它策略/手动快照）
+   */
+  private async cleanupOldSnapshots(platformId: string, vmId: string, policyId: string, retention: number) {
     try {
       const snapshots = await vmManagementService.listSnapshots(platformId, vmId);
-      const autoSnapshots = snapshots
-        .filter(s => s.name.startsWith('auto-'))
+      const policyPrefix = `auto-${policyId}-`;
+
+      const policySnapshots = snapshots
+        .filter(s => s.name.startsWith(policyPrefix))
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-      if (autoSnapshots.length > retention) {
-        const toDelete = autoSnapshots.slice(0, autoSnapshots.length - retention);
+      if (policySnapshots.length > retention) {
+        const toDelete = policySnapshots.slice(0, policySnapshots.length - retention);
 
         for (const snap of toDelete) {
           await vmManagementService.deleteSnapshot(platformId, snap.id, vmId);
@@ -123,7 +203,7 @@ class VmSnapshotSchedulerService {
       id: r.id, name: r.name, platformId: r.platform_id, vmId: r.vm_id,
       cronExpression: r.cron_expression, retention: r.retention,
       snapshotMemory: r.snapshot_memory === 1, enabled: r.enabled === 1,
-      lastRunAt: r.last_run_at, nextRunAt: r.next_run_at,
+      lastRunAt: r.last_run_at ?? undefined, nextRunAt: r.next_run_at ?? undefined,
       createdAt: r.created_at, updatedAt: r.updated_at,
     }));
   }
@@ -135,7 +215,7 @@ class VmSnapshotSchedulerService {
       id: row.id, name: row.name, platformId: row.platform_id, vmId: row.vm_id,
       cronExpression: row.cron_expression, retention: row.retention,
       snapshotMemory: row.snapshot_memory === 1, enabled: row.enabled === 1,
-      lastRunAt: row.last_run_at, nextRunAt: row.next_run_at,
+      lastRunAt: row.last_run_at ?? undefined, nextRunAt: row.next_run_at ?? undefined,
       createdAt: row.created_at, updatedAt: row.updated_at,
     };
   }
@@ -190,15 +270,15 @@ class VmSnapshotSchedulerService {
   }
 
   private stopPolicy(policyId: string) {
-    const interval = this.intervals.get(policyId);
-    if (interval) {
-      clearInterval(interval);
+    const timeout = this.intervals.get(policyId);
+    if (timeout) {
+      clearTimeout(timeout);
       this.intervals.delete(policyId);
     }
   }
 
   stopAll() {
-    this.intervals.forEach((interval) => clearInterval(interval));
+    this.intervals.forEach((timeout) => clearTimeout(timeout));
     this.intervals.clear();
   }
 }

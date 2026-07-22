@@ -300,7 +300,9 @@ class AlertAutoResponseService {
 
       await this.saveLog(logId, alertId, null, 'failed', {
         error_message: getErrorMessage(err),
-      }).catch(() => {});
+      }).catch((err) => {
+        logger.warn(`[AARS] Failed to save log for alert ${alertId}:`, err);
+      });
 
     } finally {
       this.processingIds.delete(alertId);

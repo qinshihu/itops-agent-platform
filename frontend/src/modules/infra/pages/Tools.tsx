@@ -41,15 +41,15 @@ export default function Tools() {
     queryKey: ['tools', selectedCategory],
     queryFn: async () => {
       const params = selectedCategory ? { category: selectedCategory } : undefined;
-      const res = await api.get('/agents/tools/list', { params });
-      return res.data.data as AgentTool[];
+      const { data } = await api.get('/agents/tools/list', { params });
+      return data as AgentTool[];
     },
   });
 
   const testMutation = useMutation({
     mutationFn: async ({ toolId, args }: { toolId: string; args: Record<string, unknown> }) => {
-      const res = await api.post('/agents/tools/test', { toolId, args });
-      return res.data.data;
+      const { data } = await api.post('/agents/tools/test', { toolId, args });
+      return data;
     },
   });
 

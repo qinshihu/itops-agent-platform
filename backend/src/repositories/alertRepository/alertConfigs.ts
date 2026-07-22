@@ -68,15 +68,18 @@ export const alertConfigsRepo = {
   },
 
   /**
-   * 列出通知记录（按触发时间倒序，LIMIT）
-   * 对应：alertNotificationService.getNotifications
+   * 列出通知记录（按触发时间倒序，支持 level/status 过滤 + 分页）
+   * 对应：alertNotificationService.getNotifications / MCP toolDefinitions alert.list
    */
-  listNotifications(limit = 50): AlertNotificationRecord[] {
-    return db.prepare(`
-      SELECT * FROM alert_notifications
-      ORDER BY triggered_at DESC
-      LIMIT ?
-    `).all(limit) as AlertNotificationRecord[];
+  listNotifications(filters: { level?: string; status?: string; limit?: number; offset?: number } = {}): AlertNotificationRecord[] {
+    let sql = 'SELECT * FROM alert_notifications WHERE 1=1';
+    const params: unknown[] = [];
+    if (filters.level) { sql += ' AND level = ?'; params.push(filters.level); }
+    if (filters.status) { sql += ' AND status = ?'; params.push(filters.status); }
+    sql += ' ORDER BY triggered_at DESC';
+    sql += ` LIMIT ${filters.limit || 50}`;
+    if (filters.offset) { sql += ` OFFSET ${filters.offset}`; }
+    return db.prepare(sql).all(...params) as AlertNotificationRecord[];
   },
 
   /**

@@ -42,7 +42,10 @@ class SnmpTrapService {
     }
 
     try {
-      const receiver = snmp.createReceiver(address, port, (error: any, data?: any) => {
+      // net-snmp v3.x API: createReceiver(options, callback)
+      // options 是对象 { port, address, ... }
+      // 详见 net-snmp 文档：https://github.com/markabrahamsen/node-net-snmp#createreceiver
+      const receiver = snmp.createReceiver({ port, address }, (error: any, data?: any) => {
         if (error) {
           logger.error(`SNMP Trap receive error: ${error.message}`);
           return;
@@ -75,6 +78,13 @@ class SnmpTrapService {
     }
     this.receivers.clear();
     this.running = false;
+  }
+
+  /**
+   * 是否正在运行
+   */
+  isRunning(): boolean {
+    return this.running;
   }
 
   /**

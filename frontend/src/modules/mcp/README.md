@@ -18,3 +18,6 @@ mcp/
 
 ## 对应后端
 `backend/src/modules/mcp/`
+
+## 刷新记录
+- **2026-07-22**：核对 ADR-014（routes.tsx 唯一例外）+ 4 主页面

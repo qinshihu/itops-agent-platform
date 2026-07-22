@@ -1,11 +1,16 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Activity, Search, Loader2, Zap, Wifi, FileText, Server, Eye, _Bell, _Clock, CheckCircle2, AlertCircle, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Activity, Search, Loader2, Zap, Wifi, FileText, Server, Eye, CheckCircle2, AlertCircle, AlertTriangle, TrendingUp } from 'lucide-react';
 import TrendCharts from '../../../modules/monitor/components/TrendCharts';
 import clsx from 'clsx';
 import api from '../../../lib/api';
 import { safeFormatDistance } from '../../../lib/date';
+
+interface RawInspectionData {
+  alert_id?: string;
+  [key: string]: unknown;
+}
 
 interface InspectionItem {
   id: string;
@@ -18,8 +23,7 @@ interface InspectionItem {
   summary: string;
   duration_ms: number;
   created_at: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  raw: any;
+  raw?: RawInspectionData;
 }
 
 interface DashboardLinkage {
@@ -40,8 +44,8 @@ export default function InspectionCenter() {
     queryFn: async () => {
       const params: Record<string, string> = { limit: '200' };
       if (searchParams.get('deviceId')) params.deviceId = searchParams.get('deviceId')!;
-      const res = await api.get('/inspection-center', { params });
-      return (res.data.data || []) as InspectionItem[];
+      const { data } = await api.get('/inspection-center', { params });
+      return (data || []) as InspectionItem[];
     },
     refetchInterval: 30000,
   });

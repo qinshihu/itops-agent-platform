@@ -26,7 +26,9 @@ services:
       - HOST=0.0.0.0
       - DATABASE_PATH=/app/data/app.db
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set for production deployment}
+      # JWT_SECRET 可选 — 不设置则由 backend 自动生成并持久化到 /app/data/.jwt-secret
+      # 重启不会使已有 token 失效。如需自定义，可通过环境变量覆盖。
+      - JWT_SECRET=${JWT_SECRET:-}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-24h}
       - DOUBAO_API_KEY=${DOUBAO_API_KEY:-}
       - DOUBAO_API_BASE=${DOUBAO_API_BASE:-https://ark.cn-beijing.volces.com/api/v3}

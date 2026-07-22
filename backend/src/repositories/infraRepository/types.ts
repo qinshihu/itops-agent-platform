@@ -158,25 +158,25 @@ export interface ConfigTemplateRecord {
 }
 
 export interface ConfigTemplateCreateInput {
-  id: string;
+  id?: string;
   name: string;
-  description: string;
+  description?: string;
   type: string;
   content: string;
-  variables: unknown;
+  variables?: unknown;
   target_type: string;
-  tags: unknown;
-  created_by: string;
+  tags?: unknown;
+  created_by?: string;
 }
 
 export interface ConfigTemplateUpdateInput {
-  name: string;
-  description: string;
-  type: string;
-  content: string;
-  variables: unknown;
-  target_type: string;
-  tags: unknown;
+  name?: string;
+  description?: string;
+  type?: string;
+  content?: string;
+  variables?: unknown;
+  target_type?: string;
+  tags?: unknown;
 }
 
 export interface ConfigTemplateListFilters {
@@ -184,6 +184,7 @@ export interface ConfigTemplateListFilters {
   target_type?: string;
   search?: string;
   pageSize?: number;
+  limit?: number;
   offset?: number;
 }
 

@@ -1,10 +1,16 @@
 import { z } from 'zod';
 import { type RegisteredTool } from '../types';
 import { textResult, jsonResult, READONLY } from './shared';
-// eslint-disable-next-line no-restricted-imports
-import db from '../../../../models/database';
-
-interface CountResult { count: number }
+import { racksRepo } from '../../../../repositories';
+import { devicesRepo } from '../../../../repositories';
+import { workflowsRepo } from '../../../../repositories';
+import { tasksRepo } from '../../../../repositories';
+import { dbConnectionRepository } from '../../../../repositories';
+import { scriptsRepo } from '../../../../repositories';
+import { backupRepository } from '../../../../repositories';
+import { userRepository } from '../../../../repositories';
+import { serversRepo } from '../../../../repositories';
+import { alertRepository } from '../../../../repositories';
 
 export const infraTools: RegisteredTool[] = [
   {
@@ -20,13 +26,11 @@ export const infraTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT * FROM dc_racks WHERE 1=1';
-        const params: unknown[] = [];
-        if (args.roomId) { query += ' AND room_id = ?'; params.push(args.roomId); }
-        if (args.status) { query += ' AND status = ?'; params.push(args.status); }
-        query += ` LIMIT ${args.limit || 50}`;
-        const racks = db.prepare(query).all(...params);
+        const racks = racksRepo.list({
+          roomId: args.roomId,
+          status: args.status,
+          limit: args.limit || 50,
+        });
         return jsonResult(racks, `找到 ${racks.length} 个机柜`);
       } catch (err) {
         return textResult(`查询机柜失败: ${(err as Error).message}`, true);
@@ -48,13 +52,11 @@ export const infraTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT * FROM dc_devices WHERE 1=1';
-        const params: unknown[] = [];
-        if (args.rackId) { query += ' AND rack_id = ?'; params.push(args.rackId); }
-        if (args.deviceType) { query += ' AND device_type = ?'; params.push(args.deviceType); }
-        query += ` LIMIT ${args.limit || 100}`;
-        const devices = db.prepare(query).all(...params);
+        const devices = devicesRepo.listDcDevices({
+          rackId: args.rackId,
+          deviceType: args.deviceType,
+          limit: args.limit || 100,
+        });
         return jsonResult(devices, `找到 ${(devices as unknown[])?.length || 0} 台设备`);
       } catch (err) {
         return textResult(`查询数据中心设备失败: ${(err as Error).message}`, true);
@@ -75,12 +77,10 @@ export const infraTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT id, name, description, status, trigger_type, created_at, updated_at FROM workflows WHERE 1=1';
-        const params: unknown[] = [];
-        if (args.status) { query += ' AND status = ?'; params.push(args.status); }
-        query += ` LIMIT ${args.limit || 20}`;
-        const workflows = db.prepare(query).all(...params);
+        const workflows = workflowsRepo.listWithFilters({
+          status: args.status,
+          limit: args.limit || 20,
+        });
         return jsonResult(workflows, `找到 ${workflows.length} 个工作流`);
       } catch (err) {
         return textResult(`查询工作流失败: ${(err as Error).message}`, true);
@@ -102,14 +102,11 @@ export const infraTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT * FROM tasks WHERE 1=1';
-        const params: unknown[] = [];
-        if (args.status) { query += ' AND status = ?'; params.push(args.status); }
-        if (args.hostId) { query += ' AND host_id = ?'; params.push(args.hostId); }
-        query += ' ORDER BY created_at DESC';
-        query += ` LIMIT ${args.limit || 20}`;
-        const tasks = db.prepare(query).all(...params);
+        const tasks = tasksRepo.list({
+          status: args.status,
+          hostId: args.hostId,
+          limit: args.limit || 20,
+        });
         return jsonResult(tasks, `找到 ${tasks.length} 个任务`);
       } catch (err) {
         return textResult(`查询任务失败: ${(err as Error).message}`, true);
@@ -130,12 +127,10 @@ export const infraTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT id, name, db_type, host, port, status, version FROM databases WHERE 1=1';
-        const params: unknown[] = [];
-        if (args.dbType) { query += ' AND db_type = ?'; params.push(args.dbType); }
-        query += ` LIMIT ${args.limit || 20}`;
-        const databases = db.prepare(query).all(...params);
+        const databases = dbConnectionRepository.listWithFilters({
+          dbType: args.dbType,
+          limit: args.limit || 20,
+        });
         return jsonResult(databases, `找到 ${(databases as unknown[])?.length || 0} 个数据库`);
       } catch (err) {
         return textResult(`查询数据库失败: ${(err as Error).message}`, true);
@@ -157,13 +152,11 @@ export const infraTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT id, name, description, script_type, language, enabled FROM scripts WHERE 1=1';
-        const params: unknown[] = [];
-        if (args.scriptType) { query += ' AND script_type = ?'; params.push(args.scriptType); }
-        if (args.search) { query += ' AND name LIKE ?'; params.push(`%${args.search}%`); }
-        query += ` LIMIT ${args.limit || 20}`;
-        const scripts = db.prepare(query).all(...params);
+        const scripts = scriptsRepo.listForMcp({
+          scriptType: args.scriptType,
+          search: args.search,
+          limit: args.limit || 20,
+        });
         return jsonResult(scripts, `找到 ${(scripts as unknown[])?.length || 0} 个脚本`);
       } catch (err) {
         return textResult(`查询脚本失败: ${(err as Error).message}`, true);
@@ -184,14 +177,11 @@ export const infraTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT * FROM backups WHERE 1=1';
-        const params: unknown[] = [];
-        if (args.backupType) { query += ' AND backup_type = ?'; params.push(args.backupType); }
-        query += ' ORDER BY created_at DESC';
-        query += ` LIMIT ${args.limit || 20}`;
-        const backups = db.prepare(query).all(...params);
-        return jsonResult(backups, `找到 ${backups.length} 条备份记录`);
+        const backups = backupRepository.list({
+          backupType: args.backupType,
+          limit: args.limit || 20,
+        });
+        return jsonResult(backups, `找到 ${(backups as unknown[]).length} 条备份记录`);
       } catch (err) {
         return textResult(`查询备份失败: ${(err as Error).message}`, true);
       }
@@ -212,13 +202,11 @@ export const infraTools: RegisteredTool[] = [
     }),
     handler: async (args) => {
       try {
-        const { default: db } = await import('../../../../models/database');
-        let query = 'SELECT id, username, display_name, role, email, status, created_at FROM users WHERE 1=1';
-        const params: unknown[] = [];
-        if (args.role) { query += ' AND role = ?'; params.push(args.role); }
-        if (args.status) { query += ' AND status = ?'; params.push(args.status); }
-        query += ` LIMIT ${args.limit || 20}`;
-        const users = db.prepare(query).all(...params);
+        const users = userRepository.listWithFilters({
+          role: args.role,
+          status: args.status,
+          limit: args.limit || 20,
+        });
         return jsonResult(users, `找到 ${users.length} 个用户`);
       } catch (err) {
         return textResult(`查询用户失败: ${(err as Error).message}`, true);
@@ -236,9 +224,9 @@ export const infraTools: RegisteredTool[] = [
     annotations: READONLY,
     handler: async (_args, _ctx) => {
       try {
-        const serverCount = (db.prepare('SELECT COUNT(*) as count FROM servers').get() as CountResult).count;
-        const alertCount = (db.prepare('SELECT COUNT(*) as count FROM alerts').get() as CountResult).count;
-        const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as CountResult).count;
+        const serverCount = serversRepo.countAll();
+        const alertCount = alertRepository.countAll();
+        const userCount = userRepository.countAll();
         return jsonResult(
           { serverCount, alertCount, userCount },
           `数据库信息统计:\n- 服务器数量: ${serverCount}\n- 告警数量: ${alertCount}\n- 用户数量: ${userCount}`
