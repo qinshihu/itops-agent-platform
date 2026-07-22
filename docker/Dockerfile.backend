@@ -5,7 +5,7 @@
 # ============================================================
 # Stage 1: Builder
 # ============================================================
-FROM node:20.19.5-slim AS builder
+FROM node:26.5.0-slim AS builder
 
 # Use Aliyun Debian mirror for faster and more reliable apt access in China
 # Note: Must use HTTP (not HTTPS) because node:20-slim lacks ca-certificates
@@ -32,7 +32,7 @@ COPY backend/ ./
 # ============================================================
 # Stage 2: Production
 # ============================================================
-FROM node:20.19.5-slim
+FROM node:26.5.0-slim
 
 # Use Aliyun Debian mirror for faster and more reliable apt access in China
 # Note: Must use HTTP (not HTTPS) because node:20-slim lacks ca-certificates
