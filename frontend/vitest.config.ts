@@ -14,7 +14,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
-    // setupFiles 暂时移除：等创建 src/test-setup.ts 后再加
+    setupFiles: ['./src/test-setup.ts'],
     css: false,
     coverage: {
       provider: 'v8',
