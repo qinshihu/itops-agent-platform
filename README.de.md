@@ -1,6 +1,6 @@
 [English](README.en.md) | [中文](README.md) | [繁體中文](README.tw.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [Deutsch](README.de.md) | [Français](README.fr.md)
 
-***
+---
 
 **⚠️ IMPORTANT: The project is undergoing a comprehensive refactoring based on the 4A architecture framework and DDD (Domain-Driven Design). Recent Docker images are transitional builds and not recommended for direct use. Please refer to the [English README](README.en.md) or [Chinese README](README.md) for the latest information.**
 
@@ -9,13 +9,13 @@
 curl -sL https://gitee.com/IT_Oline/itops-agent-platform/raw/main/deploy.sh -o deploy.sh && chmod +x deploy.sh && ./deploy.sh
 ```
 
-***
+---
 
 **Wichtiger Hinweis zur Lizenzänderung (27.05.2026)**
 
 Ab dem 27. Mai 2026 werden alle neu eingereichten Code-Beiträge dieses Projekts unter der **Mozilla Public License 2.0 (MPL-2.0)** als Open Source veröffentlicht. Dieses Projekt verbietet Closed-Source-Weiterentwicklung, Wiederverpackung zum Verkauf, SaaS-Kommerzialisierung und andere kommerzielle Nutzungen. Dauerhaft Open Source. Dieses Projekt gehört den Tausenden von Ingenieuren, die den Open-Source-Geist umarmen, nicht einem einzelnen Unternehmen.
 
-***
+---
 
 <br />
 
@@ -54,26 +54,25 @@ Ab dem 27. Mai 2026 werden alle neu eingereichten Code-Beiträge dieses Projekts
   </a>
 </p>
 
-🎮 [Live-Demo](https://agentdemo-0mwug01t6.maozi.io/) &emsp;|&emsp; 📝[Vision & Gemeinschaft](项目愿景与社区共建.md) &emsp;|&emsp; 📝[KI-Programmier-Skill](SKILL.md) &emsp;|&emsp; 📝[Lehrbuch](https://aiopsdoc-0mwug01t6.maozi.io/book/) &emsp;|&emsp; 📖[Projektdokumentation](https://aiopsdoc-0mwug01t6.maozi.io/) &emsp;|&emsp; ✍️[Wort des Autors](https://mp.weixin.qq.com/s/NDqYrfqR0RZEvSESyVD2hg)
+🎮 [Live-Demo](https://agentdemo-0mwug01t6.maozi.io/) &emsp;|&emsp; 📝[Vision & Gemeinschaft](项目愿景与社区共建.md) &emsp;|&emsp; 📘[AI 协作入口](AGENTS.md) &emsp;|&emsp; 📝[Lehrbuch](https://aiopsdoc-0mwug01t6.maozi.io/book/) &emsp;|&emsp; 📖[Projektdokumentation](https://aiopsdoc-0mwug01t6.maozi.io/) &emsp;|&emsp; ✍️[Wort des Autors](https://mp.weixin.qq.com/s/NDqYrfqR0RZEvSESyVD2hg)
 
 🌐 Offizielle Website: <https://www.zjzwfw.cloud/ITOpsAgentinfo>
 
-📦 Code-Repositories: [GitHub](https://github.com/qinshihu/itops-agent-platform)  |  [Gitee](https://gitee.com/IT_Oline/itops-agent-platform)  |  [GitCode](https://gitcode.com/gcw_IM7aAihp/itops-agent-platform)
+📦 Code-Repositories: [GitHub](https://github.com/qinshihu/itops-agent-platform) | [Gitee](https://gitee.com/IT_Oline/itops-agent-platform) | [GitCode](https://gitcode.com/gcw_IM7aAihp/itops-agent-platform)
 
----------------------------------------------------------------
-
+---
 
 ## 🎯 Wer nutzt es / Für wen ist es geeignet?
 
-| Rolle | Typische Schmerzpunkte | Wie diese Plattform sie löst |
-| ---------------- | --------------------------- | -------------------------- |
-| **Betriebsingenieure** | Werden um Mitternacht von Alarmen geweckt, manuelles SSH-Troubleshooting | KI diagnostiziert automatisch die Ursache → sendet zur Genehmigung → One-Tap-Reparatur auf dem Handy |
-| **SRE / DevOps** | Wechseln zwischen mehreren Tools, Informationssilos | One-Stop-Closed-Loop für Alarme + Diagnose + Ausführung + Genehmigung |
-| **IT-Leiter / CTOs** | Betrieb hängt vollständig von Menschen ab, Störungsreaktion ist Glückssache | Automatisierte Inspektion + Selbstheilungsstrategien, befreien Menschen von repetitiver Arbeit |
-| **KMU-IT-Teams** | Können kommerzielle Software wie PagerDuty/Rundeck nicht leisten | Funktionsgleichheit, Open Source und kostenlos, Daten verlassen die Domäne nicht |
-| **Sicherheits- & Compliance-Teams** | Reparaturmaßnahmen ohne Genehmigung oder Audit-Trail | HITL-Menschen-Genehmigung + Full-Chain-Audit + Befehlssicherheitsfilterung |
+| Rolle                               | Typische Schmerzpunkte                                                      | Wie diese Plattform sie löst                                                                         |
+| ----------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Betriebsingenieure**              | Werden um Mitternacht von Alarmen geweckt, manuelles SSH-Troubleshooting    | KI diagnostiziert automatisch die Ursache → sendet zur Genehmigung → One-Tap-Reparatur auf dem Handy |
+| **SRE / DevOps**                    | Wechseln zwischen mehreren Tools, Informationssilos                         | One-Stop-Closed-Loop für Alarme + Diagnose + Ausführung + Genehmigung                                |
+| **IT-Leiter / CTOs**                | Betrieb hängt vollständig von Menschen ab, Störungsreaktion ist Glückssache | Automatisierte Inspektion + Selbstheilungsstrategien, befreien Menschen von repetitiver Arbeit       |
+| **KMU-IT-Teams**                    | Können kommerzielle Software wie PagerDuty/Rundeck nicht leisten            | Funktionsgleichheit, Open Source und kostenlos, Daten verlassen die Domäne nicht                     |
+| **Sicherheits- & Compliance-Teams** | Reparaturmaßnahmen ohne Genehmigung oder Audit-Trail                        | HITL-Menschen-Genehmigung + Full-Chain-Audit + Befehlssicherheitsfilterung                           |
 
-***
+---
 
 ## Warum brauchen Sie dieses Projekt?
 
@@ -93,7 +92,7 @@ Alarm ausgelöst → KI diagnostiziert automatisch die Ursache → Reparaturbefe
 
 **Der gesamte Prozess dauert 3 Minuten. Sie müssen nur auf „Genehmigen" tippen.**
 
-***
+---
 
 ## 🚀 Die ultimative Form des Betriebs: Von Automatisierung zu Autonomie
 
@@ -104,23 +103,23 @@ Manueller Betrieb  →  Skript-Automatisierung  →  Plattformisierung  →  KI-
  2000er        2010er        2020er       2024+         Jetzt & Zukunft
 ```
 
-| Evolutionsstufe | Merkmale | Menschliche Rolle |
-|---------|------|---------|
-| Manueller Betrieb | Befehle eingeben, auf Server einloggen | Ausführender |
-| Skript-Automatisierung | Shell / Python Semi-Automatisierung | Skript-Verwalter |
-| Plattformisierung | Ansible / Prometheus / Terraform | Plattform-Bedienender |
-| KI-Unterstützung | Copilot-Vorschläge, Alarmanalyse | Entscheidungsträger |
-| **KI-autonomer Betrieb** | **KI-Agent Full-Loop: Wahrnehmen → Diagnostizieren → Entscheiden → Ausführen → Verifizieren** | **Aufsichtsperson** |
+| Evolutionsstufe          | Merkmale                                                                                      | Menschliche Rolle     |
+| ------------------------ | --------------------------------------------------------------------------------------------- | --------------------- |
+| Manueller Betrieb        | Befehle eingeben, auf Server einloggen                                                        | Ausführender          |
+| Skript-Automatisierung   | Shell / Python Semi-Automatisierung                                                           | Skript-Verwalter      |
+| Plattformisierung        | Ansible / Prometheus / Terraform                                                              | Plattform-Bedienender |
+| KI-Unterstützung         | Copilot-Vorschläge, Alarmanalyse                                                              | Entscheidungsträger   |
+| **KI-autonomer Betrieb** | **KI-Agent Full-Loop: Wahrnehmen → Diagnostizieren → Entscheiden → Ausführen → Verifizieren** | **Aufsichtsperson**   |
 
 ### Warum ist dies die ultimative Form?
 
-| Dimension | Traditioneller Ansatz | ITOps Agent Platform |
-|------|---------|---------------------|
-| Störungsreaktion | Mensch: entdecken → lokalisieren → reparieren (30-60 Min) | KI: auto-wahrnehmen → diagnostizieren → reparieren (< 3 Min) |
-| Betriebsmaßstab | 1 Person verwaltet 20-50 Knoten | **1 Person verwaltet 500+ Knoten, KI bearbeitet 80%+ der Arbeit** |
-| Wissensbewahrung | Im Kopf erfahrener Ingenieure, verstreute Dokumente | **Wissensdatenbank + RAG, KI lernt kontinuierlich, geht nie verloren** |
-| Entscheidungsqualität | Hängt von persönlicher Erfahrung ab, instabil | **Multi-Agent-kollaborative Schlussfolgerung, vollständige Reasoning-Chain auditierbar** |
-| Grenzkosten | Maschinen hinzufügen ≈ Personal hinzufügen | **Maschinen hinzufügen ≈ Agenten hinzufügen, Grenzkosten nähern sich Null** |
+| Dimension             | Traditioneller Ansatz                                     | ITOps Agent Platform                                                                     |
+| --------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Störungsreaktion      | Mensch: entdecken → lokalisieren → reparieren (30-60 Min) | KI: auto-wahrnehmen → diagnostizieren → reparieren (< 3 Min)                             |
+| Betriebsmaßstab       | 1 Person verwaltet 20-50 Knoten                           | **1 Person verwaltet 500+ Knoten, KI bearbeitet 80%+ der Arbeit**                        |
+| Wissensbewahrung      | Im Kopf erfahrener Ingenieure, verstreute Dokumente       | **Wissensdatenbank + RAG, KI lernt kontinuierlich, geht nie verloren**                   |
+| Entscheidungsqualität | Hängt von persönlicher Erfahrung ab, instabil             | **Multi-Agent-kollaborative Schlussfolgerung, vollständige Reasoning-Chain auditierbar** |
+| Grenzkosten           | Maschinen hinzufügen ≈ Personal hinzufügen                | **Maschinen hinzufügen ≈ Agenten hinzufügen, Grenzkosten nähern sich Null**              |
 
 > **Dies ist kein Betriebstool. Dies ist das Betriebssystem der nächsten Generation für den Betrieb.** Wenn KI-Agenten autonom die gesamte Kette von Alarm-Eingang, Ursachendiagnose, Reparatur-Entscheidung, Befehlsausführung und Ergebnisverifikation abschließen können, ist Betrieb nicht mehr „Menschen beobachten Systeme", sondern „Menschen entwerfen Strategien, KI führt Strategien aus."
 
@@ -143,11 +142,11 @@ Langfristiges Ziel: 80% der täglichen Betriebsarbeit wird vollständig autonom 
 
 Drei Trends treffen zum gleichen Zeitpunkt aufeinander und verwandeln KI-autonomen Betrieb von „Konzept" zu „Unvermeidlichkeit":
 
-| Trend | Erklärung |
-|------|------|
-| **LLM-Fähigkeit überschreitet die Schwelle** | GPT-4o / DeepSeek / Doubao / Qwen und andere Modelle verfügen nun über produktionsreife Reasoning-Fähigkeiten, geeignet für ernste Szenarien wie Fehlerdiagnose und Befehlsgenerierung |
-| **Unumkehrbarer Anstieg der Betriebsarbeitskosten** | Unternehmens-IT skaliert 10x, Betriebsteams können nicht proportional expandieren. Der einzige Ausweg ist KI, die 80%+ der täglichen Arbeit bearbeitet |
-| **Reifes Open-Source-Ökosystem** | Docker / K8s / React / TypeScript / Node.js-Stacks sind reif genug für Enterprise-Produkte. Open Source ist nicht mehr Synonym für „grob" |
+| Trend                                               | Erklärung                                                                                                                                                                              |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **LLM-Fähigkeit überschreitet die Schwelle**        | GPT-4o / DeepSeek / Doubao / Qwen und andere Modelle verfügen nun über produktionsreife Reasoning-Fähigkeiten, geeignet für ernste Szenarien wie Fehlerdiagnose und Befehlsgenerierung |
+| **Unumkehrbarer Anstieg der Betriebsarbeitskosten** | Unternehmens-IT skaliert 10x, Betriebsteams können nicht proportional expandieren. Der einzige Ausweg ist KI, die 80%+ der täglichen Arbeit bearbeitet                                 |
+| **Reifes Open-Source-Ökosystem**                    | Docker / K8s / React / TypeScript / Node.js-Stacks sind reif genug für Enterprise-Produkte. Open Source ist nicht mehr Synonym für „grob"                                              |
 
 > **2026 ist das Gründungsjahr des KI-autonomen Betriebs.** Wenn LLM-Fähigkeit + Betriebs-Schmerzpunkte + Open-Source-Ökosystem zusammentreffen, steht die ITOps Agent Platform an diesem historischen Knotenpunkt. Dieses Fenster zu verpassen, bedeutet, eine Ära zu verpassen.
 
@@ -164,25 +163,25 @@ Der globale IT-Betriebsmarkt beträgt **40 Milliarden Dollar (2025)** und wird v
 
 > **Die Frage ist nicht „wird es passieren", sondern „wer wird das GitLab dieses Bereichs".** Die Open-Source-AIOps-Führungsposition ist derzeit vakant — dies ist ein Winner-takes-most-Markt.
 
-| GitLab damals | ITOps Agent Platform heute |
-|------------|--------------------------|
-| Open-Source-Alternative zu GitHub | Open-Source-Alternative zu PagerDuty + Rundeck + Portainer |
-| Anfangs nur grundlegende CI/CD | 12 KI-Agenten + 68 API-Routen |
+| GitLab damals                                                    | ITOps Agent Platform heute                                                    |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Open-Source-Alternative zu GitHub                                | Open-Source-Alternative zu PagerDuty + Rundeck + Portainer                    |
+| Anfangs nur grundlegende CI/CD                                   | 12 KI-Agenten + 68 API-Routen                                                 |
 | Niemand glaubte, dass Code-Hosting 10 Milliarden Dollar wert ist | **Niemand glaubt, dass eine Betriebsplattform 10 Milliarden Dollar wert ist** |
 
 > Die ITOps Agent Platform steht in einem früheren Stadium eines größeren Marktes.
 
 ### Drei unumkehrbare Rückenwinde
 
-| Rückenwind | Warum unumkehrbar |
-|------|------------|
-| **KI-Fähigkeits-Explosion** | LLM ging in nur 2 Jahren von „Spielzeug" zu „Produktionsreif". Der nächste Schritt ist „autonome Entscheidungsfindung" |
-| **Betriebs-Talent-Lücke** | Welle der Pensionierung von Betriebsexperten der 70er + junge Leute wollen keinen 7×24 Bereitschaftsdienst = KI ist der einzige Ausweg |
+| Rückenwind                                 | Warum unumkehrbar                                                                                                                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **KI-Fähigkeits-Explosion**                | LLM ging in nur 2 Jahren von „Spielzeug" zu „Produktionsreif". Der nächste Schritt ist „autonome Entscheidungsfindung"                                                   |
+| **Betriebs-Talent-Lücke**                  | Welle der Pensionierung von Betriebsexperten der 70er + junge Leute wollen keinen 7×24 Bereitschaftsdienst = KI ist der einzige Ausweg                                   |
 | **Open Source frisst Enterprise-Software** | GitLab, Confluent, Grafana, HashiCorp — Open-Source-IPOs sind 5 Mal passiert, jedes Mal bewiesen, dass Open Source mehr kommerzielle Explosivkraft hat als Closed Source |
 
 > **Dies ist keine Frage des Ob, sondern des Mit-Wem.** Wenn sich die oben genannten drei Kurven schneiden, ist KI-autonomer Betrieb eine mathematische Unvermeidlichkeit.
 
-***
+---
 
 <img alt="platform-screenshot" src="docs-assets/01.png" style="max-width: 100%;" />
 
@@ -190,7 +189,7 @@ Der globale IT-Betriebsmarkt beträgt **40 Milliarden Dollar (2025)** und wird v
 
 <img alt="platform-screenshot" src="docs-assets/22.png" style="max-width: 100%;" />
 
-***
+---
 
 ## Erleben Sie den vollständigen Closed-Loop in 5 Minuten
 
@@ -206,11 +205,11 @@ curl -sL https://gitee.com/IT_Oline/itops-agent-platform/raw/main/deploy.sh -o d
 
 **5 Minuten von Null zum vollständigen KI-Betriebs-Closed-Loop-Erlebnis.**
 
-***
+---
 
 ## Was kann diese Plattform tun?
 
-### Pfad 1️⃣  Intelligenter Alarm → KI-Diagnose → Auto-Reparatur
+### Pfad 1️⃣ Intelligenter Alarm → KI-Diagnose → Auto-Reparatur
 
 ```
 Prometheus / Zabbix-Alarm → Webhook-Eingang
@@ -223,17 +222,17 @@ Prometheus / Zabbix-Alarm → Webhook-Eingang
 <details>
 <summary><b>Aufklappen, um zu sehen, welche Schmerzpunkte dieser Workflow löst</b></summary>
 
-| Traditioneller Ansatz | Diese Plattform |
-| -------------- | -------------------- |
-| Alarm-Sturm, um Mitternacht geweckt | KI-Auto-Deduplizierung und Rauschunterdrückung, ähnliche Alarme aggregiert |
-| Manuelles SSH-Troubleshooting, Raten nach Erfahrung | KI analysiert Logs + Metriken, gibt natürlichsprachliche Diagnose |
-| In Dokumenten nach Reparatur-Schritten suchen | Strukturierte Reparaturbefehle (JSON) automatisch generieren |
-| Keine Genehmigung für Reparatur, niemand übernimmt Verantwortung bei Vorfällen | Menschlicher Genehmigungsknoten, One-Tap-Genehmigung auf dem Handy |
-| Befürchtung von Reparaturfehlern ohne Rollback | Auto-Verifikation der Ergebnisse, Fehlalarme |
+| Traditioneller Ansatz                                                          | Diese Plattform                                                            |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| Alarm-Sturm, um Mitternacht geweckt                                            | KI-Auto-Deduplizierung und Rauschunterdrückung, ähnliche Alarme aggregiert |
+| Manuelles SSH-Troubleshooting, Raten nach Erfahrung                            | KI analysiert Logs + Metriken, gibt natürlichsprachliche Diagnose          |
+| In Dokumenten nach Reparatur-Schritten suchen                                  | Strukturierte Reparaturbefehle (JSON) automatisch generieren               |
+| Keine Genehmigung für Reparatur, niemand übernimmt Verantwortung bei Vorfällen | Menschlicher Genehmigungsknoten, One-Tap-Genehmigung auf dem Handy         |
+| Befürchtung von Reparaturfehlern ohne Rollback                                 | Auto-Verifikation der Ergebnisse, Fehlalarme                               |
 
 </details>
 
-### Pfad 2️⃣  Visueller Workflow → Geplante Auto-Inspektion
+### Pfad 2️⃣ Visueller Workflow → Geplante Auto-Inspektion
 
 ```
 Drag-and-Drop-Workflow-Orchestrierung (Agent + Genehmigung + Bedingungszweige)
@@ -243,7 +242,7 @@ Drag-and-Drop-Workflow-Orchestrierung (Agent + Genehmigung + Bedingungszweige)
         → Auto-Alarm bei Anomalien → Pfad 1️⃣ betreten
 ```
 
-### Pfad 3️⃣  Container- & Virtualisierungs-Unified-Management
+### Pfad 3️⃣ Container- & Virtualisierungs-Unified-Management
 
 ```
 Ein-Klick-Hinzufügen von Docker-Host / VMware vCenter / Proxmox VE / KVM-Knoten
@@ -255,7 +254,7 @@ Ein-Klick-Hinzufügen von Docker-Host / VMware vCenter / Proxmox VE / KVM-Knoten
             → Image-Registry-Integration (Harbor / ACR / Docker Hub)
 ```
 
-### Pfad 4️⃣  Rechenzentrums- & Netzwerkinfrastruktur-Management
+### Pfad 4️⃣ Rechenzentrums- & Netzwerkinfrastruktur-Management
 
 ```
 Netzwerkplanung → IP-Subnetz- und VLAN-Management → IP-Auto-Zuweisung / Reservierung / Rückgewinnung
@@ -264,28 +263,28 @@ Netzwerkplanung → IP-Subnetz- und VLAN-Management → IP-Auto-Zuweisung / Rese
       → Netzwerk-Topologie-Auto-Entdeckung (SNMP / LLDP / ARP)
 ```
 
-***
+---
 
 ## Worin unterscheidet es sich von ähnlichen Open-Source-Projekten?
 
-| Fähigkeit | ITOps Agent | GrafanaOnCall | Portainer | UptimeKuma | Rundeck | Coolify |
-| ----------------- | :---------: | :-----------: | :-------: | :--------: | :-----: | :-----: |
-| Alarm-Eingang + Rauschunterdrückung | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
-| **KI Multi-Agent-Zusammenarbeit** | **✅** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Alarm → Auto-Reparatur-Closed-Loop** | **✅** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Human-in-the-Loop (HITL) Genehmigung** | **✅** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Docker/VM-Visual-Management | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ |
-| K8s-Cluster-Management | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| IP-Subnetz / VLAN-Management | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Rechenzentrumsraum-Modellierung | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Raum-3D-Digital-Twin | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Workflow Drag-and-Drop-Orchestrierung | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
-| Web SSH-Terminal | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| Wissensdatenbank + RAG | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Geplante Inspektion + Auto-Bericht | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| Kostenanalyse + Auto-Scaling | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Lokale KI · Daten bleiben im Haus** | **✅** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Domestische Tech (Xinchuang) freundlich** | **✅** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Fähigkeit                                   | ITOps Agent | GrafanaOnCall | Portainer | UptimeKuma | Rundeck | Coolify |
+| ------------------------------------------- | :---------: | :-----------: | :-------: | :--------: | :-----: | :-----: |
+| Alarm-Eingang + Rauschunterdrückung         |     ✅      |      ✅       |    ❌     |     ✅     |   ❌    |   ❌    |
+| **KI Multi-Agent-Zusammenarbeit**           |   **✅**    |      ❌       |    ❌     |     ❌     |   ❌    |   ❌    |
+| **Alarm → Auto-Reparatur-Closed-Loop**      |   **✅**    |      ❌       |    ❌     |     ❌     |   ❌    |   ❌    |
+| **Human-in-the-Loop (HITL) Genehmigung**    |   **✅**    |      ❌       |    ❌     |     ❌     |   ❌    |   ❌    |
+| Docker/VM-Visual-Management                 |     ✅      |      ❌       |    ✅     |     ❌     |   ❌    |   ✅    |
+| K8s-Cluster-Management                      |     ✅      |      ❌       |    ✅     |     ❌     |   ❌    |   ❌    |
+| IP-Subnetz / VLAN-Management                |     ✅      |      ❌       |    ❌     |     ❌     |   ❌    |   ❌    |
+| Rechenzentrumsraum-Modellierung             |     ✅      |      ❌       |    ❌     |     ❌     |   ❌    |   ❌    |
+| Raum-3D-Digital-Twin                        |     ✅      |      ❌       |    ❌     |     ❌     |   ❌    |   ❌    |
+| Workflow Drag-and-Drop-Orchestrierung       |     ✅      |      ✅       |    ❌     |     ❌     |   ✅    |   ❌    |
+| Web SSH-Terminal                            |     ✅      |      ❌       |    ✅     |     ❌     |   ❌    |   ❌    |
+| Wissensdatenbank + RAG                      |     ✅      |      ❌       |    ❌     |     ❌     |   ❌    |   ❌    |
+| Geplante Inspektion + Auto-Bericht          |     ✅      |      ❌       |    ❌     |     ❌     |   ✅    |   ❌    |
+| Kostenanalyse + Auto-Scaling                |     ✅      |      ❌       |    ❌     |     ❌     |   ❌    |   ❌    |
+| **Lokale KI · Daten bleiben im Haus**       |   **✅**    |      ❌       |    ❌     |     ❌     |   ❌    |   ❌    |
+| **Domestische Tech (Xinchuang) freundlich** |   **✅**    |      ❌       |    ❌     |     ❌     |   ❌    |   ❌    |
 
 > **Zusammenfassung in einem Satz**: Bestehende Open-Source-Tools verwalten jeweils ein Segment — OnCall für Alarme, Portainer für Container, Rundeck für Ausführung. ITOps Agent verbindet all dies, fügt ein **KI Multi-Agent-kollaboratives Gehirn** hinzu und erreicht echtes „Alarm kommt rein, Reparatur ist erledigt."
 
@@ -293,20 +292,20 @@ Netzwerkplanung → IP-Subnetz- und VLAN-Management → IP-Auto-Zuweisung / Rese
 
 Kostenlos und Open Source zu sein ist nicht der einzige Vorteil. Direkter Vergleich mit kostenpflichtigen kommerziellen Produkten:
 
-| Fähigkeit | PagerDuty + Rundeck | ServiceNow ITOM | **ITOps Agent (Open Source & Kostenlos)** |
-|------|:---:|:---:|:---:|
-| Jahreskosten (100 Knoten) | $50.000+ | $100.000+ | **$0** |
-| KI-autonome Diagnose | ❌ Nur Alarm-Routing | ⚠️ Zusätzliche Module erforderlich | **✅ Multi-Agent-kollaborative Schlussfolgerung** |
-| Auto-Reparatur-Closed-Loop | ❌ Manuelle Ausführung erforderlich | ⚠️ Benutzerdefinierte Entwicklung erforderlich | **✅ Integrierte Full-Chain** |
-| Human-in-the-Loop (HITL) | ❌ | ⚠️ Anpassung erforderlich | **✅ Native WeCom/DingTalk-Push** |
-| Container/VM/K8s-Management | ❌ | ❌ | **✅ Integrierte Visualisierung** |
-| Daten bleiben im Haus | ❌ SaaS erzwingt Cloud | ❌ SaaS erzwingt Cloud | **✅ 100% On-Premise-Bereitstellung** |
-| Open Source und kontrollierbar | ❌ Closed-Source-Lock-in | ❌ Closed-Source-Lock-in | **✅ MPL-2.0 Open Source** |
-| Community-getrieben | ❌ | ❌ | **✅** |
+| Fähigkeit                      |         PagerDuty + Rundeck         |                ServiceNow ITOM                 |     **ITOps Agent (Open Source & Kostenlos)**     |
+| ------------------------------ | :---------------------------------: | :--------------------------------------------: | :-----------------------------------------------: |
+| Jahreskosten (100 Knoten)      |              $50.000+               |                   $100.000+                    |                      **$0**                       |
+| KI-autonome Diagnose           |        ❌ Nur Alarm-Routing         |       ⚠️ Zusätzliche Module erforderlich       | **✅ Multi-Agent-kollaborative Schlussfolgerung** |
+| Auto-Reparatur-Closed-Loop     | ❌ Manuelle Ausführung erforderlich | ⚠️ Benutzerdefinierte Entwicklung erforderlich |           **✅ Integrierte Full-Chain**           |
+| Human-in-the-Loop (HITL)       |                 ❌                  |           ⚠️ Anpassung erforderlich            |         **✅ Native WeCom/DingTalk-Push**         |
+| Container/VM/K8s-Management    |                 ❌                  |                       ❌                       |         **✅ Integrierte Visualisierung**         |
+| Daten bleiben im Haus          |       ❌ SaaS erzwingt Cloud        |             ❌ SaaS erzwingt Cloud             |       **✅ 100% On-Premise-Bereitstellung**       |
+| Open Source und kontrollierbar |      ❌ Closed-Source-Lock-in       |            ❌ Closed-Source-Lock-in            |            **✅ MPL-2.0 Open Source**             |
+| Community-getrieben            |                 ❌                  |                       ❌                       |                      **✅**                       |
 
 > **Ein Open-Source-Projekt erreicht, was drei kommerzielle Produkte (PagerDuty + Rundeck + Portainer) zusammen nicht können.** Und es ist kostenlos.
 
-***
+---
 
 ## Architektur-Überblick
 
@@ -328,40 +327,40 @@ graph TB
 
 > 📐 [Vollständiges Architekturdiagramm ansehen →](./docs/ARCHITECTURE_DIAGRAM.md)
 
-***
+---
 
-| Eintrittsbarriere | Erklärung |
-|------|------|
-| **12 Agent-kollaborative Planung** | Kein einzelner KI-API-Aufruf, sondern ein komplexes verteiltes System aus Multi-Agent-Arbeitsteilung + Zusammenarbeit + Schiedsrichter |
-| **Full-Chain-Zustandsmaschine** | Alarm → Diagnose → Entscheidung → Genehmigung → Ausführung → Verifikation, 7-Knoten-Zustandsübergänge technisch umgesetzt und poliert |
-| **Befehlssicherheits-Engine** | 7 Kategorien gefährlicher Befehlsrichtlinien + Rollen-Berechtigungsmatrix, sichert sichere Ausführung KI-generierter Befehle in der Produktion |
-| **Multi-Modell-Degradationskette** | Automatisches Failover auf Backup-Modelle bei Primärmodell-Ausfall, sichert KI-Dienst-Hochverfügbarkeit, kein Single Point of Failure |
-| **32-Versionen-Datenbank-Migrationen** | 32 Schema-Iterationen stabiler Evolution, Engineering-Reife weit über Demo-Level-Projekte hinaus |
+| Eintrittsbarriere                      | Erklärung                                                                                                                                      |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **12 Agent-kollaborative Planung**     | Kein einzelner KI-API-Aufruf, sondern ein komplexes verteiltes System aus Multi-Agent-Arbeitsteilung + Zusammenarbeit + Schiedsrichter         |
+| **Full-Chain-Zustandsmaschine**        | Alarm → Diagnose → Entscheidung → Genehmigung → Ausführung → Verifikation, 7-Knoten-Zustandsübergänge technisch umgesetzt und poliert          |
+| **Befehlssicherheits-Engine**          | 7 Kategorien gefährlicher Befehlsrichtlinien + Rollen-Berechtigungsmatrix, sichert sichere Ausführung KI-generierter Befehle in der Produktion |
+| **Multi-Modell-Degradationskette**     | Automatisches Failover auf Backup-Modelle bei Primärmodell-Ausfall, sichert KI-Dienst-Hochverfügbarkeit, kein Single Point of Failure          |
+| **32-Versionen-Datenbank-Migrationen** | 32 Schema-Iterationen stabiler Evolution, Engineering-Reife weit über Demo-Level-Projekte hinaus                                               |
 
 ### Skalierungsökonomie: Die kommerzielle Explosivkraft des Open-Source-Modells
 
-| Metrik | Traditionelle Betriebs-SaaS | ITOps Agent Open-Source-Modell |
-|------|:---:|:---:|
-| Kundenakquisitionskosten | Vertriebsgetrieben, einzelner Unternehmenskunde $10.000+ | **≈ $0 (community-getrieben + Entwickler-Selbstverbreitung)** |
-| Grenzservicekosten | Wachsen linear mit Benutzerzahl | **Nähern sich Null (Benutzer-Self-Hosting)** |
-| Netzwerkeffekte | Schwach | **Stark (mehr Agenten → stärkere Plattform → größere Community)** |
-| Ökosystem-Lock-in | Migrierbar bei Vertragsende | **Wissensdatenbank + Agent-Marktplatz + Workflow-Templates (tief gebunden)** |
-| Kommerzialisierungsflexibilität | Kann nur Abonnements verkaufen | **Enterprise-Edition / Managed Cloud / Technischer Support / Agent-Marktplatz / Trainingszertifizierung** |
+| Metrik                          |               Traditionelle Betriebs-SaaS                |                                      ITOps Agent Open-Source-Modell                                       |
+| ------------------------------- | :------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------: |
+| Kundenakquisitionskosten        | Vertriebsgetrieben, einzelner Unternehmenskunde $10.000+ |                       **≈ $0 (community-getrieben + Entwickler-Selbstverbreitung)**                       |
+| Grenzservicekosten              |             Wachsen linear mit Benutzerzahl              |                               **Nähern sich Null (Benutzer-Self-Hosting)**                                |
+| Netzwerkeffekte                 |                         Schwach                          |                     **Stark (mehr Agenten → stärkere Plattform → größere Community)**                     |
+| Ökosystem-Lock-in               |               Migrierbar bei Vertragsende                |               **Wissensdatenbank + Agent-Marktplatz + Workflow-Templates (tief gebunden)**                |
+| Kommerzialisierungsflexibilität |              Kann nur Abonnements verkaufen              | **Enterprise-Edition / Managed Cloud / Technischer Support / Agent-Marktplatz / Trainingszertifizierung** |
 
 > Der Kernvorteil des Open-Source-Modells liegt in der Kundenakquisitionseffizienz und Skalierungsfähigkeit, validiert durch branchenübliche Open-Source-Projekte. Dies bietet eine solide Grundlage für die langfristige nachhaltige Entwicklung des Projekts.
 
 ## 🗺️ Zukunfts-Roadmap
 
-| Phase | Kernziel |
-|------|---------|
-| **v3.x Engineering** (Aktuell) | Multi-Host Container/VM/K8s Unified-Management, Alarm → Reparatur Full-Chain-Closed-Loop |
-| **v4.x Intelligenz** | Multi-Agent-autonome Verhandlungs-Entscheidungsfindung, Cross-System-Korrelationsanalyse, KI-Selbstlernstrategie-Optimierung |
-| **v5.x Autonomie** | Zero-Human-Intervention autonomer Betrieb, KI-gesteuerte Kapazitätsplanung und Kostenoptimierung |
-| **v6.x Ökosystem** | Agent-Marktplatz (Community-geteilte Agenten), Multi-Cluster-Föderation, Betriebs-Digital-Twin |
+| Phase                          | Kernziel                                                                                                                     |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| **v3.x Engineering** (Aktuell) | Multi-Host Container/VM/K8s Unified-Management, Alarm → Reparatur Full-Chain-Closed-Loop                                     |
+| **v4.x Intelligenz**           | Multi-Agent-autonome Verhandlungs-Entscheidungsfindung, Cross-System-Korrelationsanalyse, KI-Selbstlernstrategie-Optimierung |
+| **v5.x Autonomie**             | Zero-Human-Intervention autonomer Betrieb, KI-gesteuerte Kapazitätsplanung und Kostenoptimierung                             |
+| **v6.x Ökosystem**             | Agent-Marktplatz (Community-geteilte Agenten), Multi-Cluster-Föderation, Betriebs-Digital-Twin                               |
 
 > **Die Roadmap ist nicht nur ein Zeitplan, sondern ein Versprechen für die Zukunft der Betriebsbranche.** Das Projekt wird kontinuierlich iterieren, jeder Schritt bewegt sich auf das ultimative Ziel „vollständig KI-autonomer Betrieb" zu.
 
-***
+---
 
 ## Kernfunktionen
 
@@ -404,27 +403,27 @@ graph TB
 - **Non-root-Ausführung**: Docker-Container-Least-Privilege-Prinzip
 - **Lokale KI**: Unterstützt Ollama / LM Studio / vLLM, Daten bleiben im Haus
 
-***
+---
 
 ## Unterstützte KI-Modelle
 
 Verwaltet durch einen einheitlichen KI-Modell-Pool, unterstützt primäre/sekundäre Degradationsketten, unabhängige Circuit-Breaker für jeden Anbieter.
 
-| Typ | Anbieter/Modell | Zugriffsmethode | Empfohlenes Szenario |
-| -------- | ---------------------------------- | --------- | --------------- |
-| **Inländische Cloud** | Volcano Engine · Doubao | Native API | Empfohlen für China, stabil und schnell |
-| **Inländische Cloud** | Alibaba Cloud · Qwen | OpenAI-kompatibel | Enterprise-Anwendungen |
-| **Inländische Cloud** | DeepSeek | OpenAI-kompatibel | Code-Generierung, Reasoning |
-| **Inländische Cloud** | Zhipu AI (GLM-4) | OpenAI-kompatibel | Hervorragendes Chinesisch-Verständnis |
-| **Inländische Cloud** | Moonshot · Kimi | OpenAI-kompatibel | Langtext-Verarbeitung |
-| **Inländische Cloud** | Baidu · Wenxin Yiyan | OpenAI-kompatibel | Inländische Unternehmen |
-| **Inländische Cloud** | 01.AI (Yi) / Baichuan | OpenAI-kompatibel | Open-Source-Modelle |
-| **Internationale Cloud** | OpenAI (GPT-4o) / Anthropic Claude | Native API | Externe Netzwerkumgebungen |
-| **Lokale Bereitstellung** | Ollama / LM Studio / vLLM | OpenAI-kompatibel | **Daten 100% im Haus** |
+| Typ                       | Anbieter/Modell                    | Zugriffsmethode   | Empfohlenes Szenario                    |
+| ------------------------- | ---------------------------------- | ----------------- | --------------------------------------- |
+| **Inländische Cloud**     | Volcano Engine · Doubao            | Native API        | Empfohlen für China, stabil und schnell |
+| **Inländische Cloud**     | Alibaba Cloud · Qwen               | OpenAI-kompatibel | Enterprise-Anwendungen                  |
+| **Inländische Cloud**     | DeepSeek                           | OpenAI-kompatibel | Code-Generierung, Reasoning             |
+| **Inländische Cloud**     | Zhipu AI (GLM-4)                   | OpenAI-kompatibel | Hervorragendes Chinesisch-Verständnis   |
+| **Inländische Cloud**     | Moonshot · Kimi                    | OpenAI-kompatibel | Langtext-Verarbeitung                   |
+| **Inländische Cloud**     | Baidu · Wenxin Yiyan               | OpenAI-kompatibel | Inländische Unternehmen                 |
+| **Inländische Cloud**     | 01.AI (Yi) / Baichuan              | OpenAI-kompatibel | Open-Source-Modelle                     |
+| **Internationale Cloud**  | OpenAI (GPT-4o) / Anthropic Claude | Native API        | Externe Netzwerkumgebungen              |
+| **Lokale Bereitstellung** | Ollama / LM Studio / vLLM          | OpenAI-kompatibel | **Daten 100% im Haus**                  |
 
 > ✅ Einheitliche Modell-Pool-Verwaltung ✅ Primäre/sekundäre Degradationskette ✅ Unabhängige Circuit-Breaker ✅ Drag-and-Drop-Sortierung ✅ Konnektivitätstest
 
-***
+---
 
 ## Schnellstart
 
@@ -462,23 +461,23 @@ npm run dev
 
 **Standard-Admin**: `admin` / `admin` (erzwungene Passwortänderung beim ersten Login)
 
-***
+---
 
 ## Tech-Stack
 
-| Schicht | Technologie |
-| ------ | ----------------------------------------------- |
-| Frontend | React 18 + TypeScript + Vite 5 + Tailwind CSS 3 |
-| Zustandsmanagement | Zustand + React Query |
-| Workflow-Editor | @xyflow/react |
-| Backend | Node.js + Express 4 + TypeScript |
-| Datenbank | SQLite (better-sqlite3, WAL-Modus) |
-| Echtzeit-Kommunikation | Socket.io 4 |
-| Remote-Verbindung | SSH2 |
-| Container-Operationen | Dockerode |
-| Bereitstellung | Docker + Docker Compose + Nginx |
+| Schicht                | Technologie                                     |
+| ---------------------- | ----------------------------------------------- |
+| Frontend               | React 18 + TypeScript + Vite 5 + Tailwind CSS 3 |
+| Zustandsmanagement     | Zustand + React Query                           |
+| Workflow-Editor        | @xyflow/react                                   |
+| Backend                | Node.js + Express 4 + TypeScript                |
+| Datenbank              | SQLite (better-sqlite3, WAL-Modus)              |
+| Echtzeit-Kommunikation | Socket.io 4                                     |
+| Remote-Verbindung      | SSH2                                            |
+| Container-Operationen  | Dockerode                                       |
+| Bereitstellung         | Docker + Docker Compose + Nginx                 |
 
-***
+---
 
 ## Projektstruktur
 
@@ -504,23 +503,23 @@ npm run dev
 └── deploy.sh / deploy.ps1        # Ein-Klick-Bereitstellungsskripte
 ```
 
-***
+---
 
 ## Dokumentations-Navigation
 
-| Dokument | Erklärung |
-| --------------------------------------------- | --------- |
-| [Bereitstellungshandbuch](./docs/DEPLOYMENT.md) | Detaillierte Bereitstellungsoperationen |
-| [API-Dokumentation](./docs/API.md) | Vollständige API-Schnittstellen |
-| [Architektur-Design](./docs/ARCHITECTURE.md) | Systemarchitektur-Erklärung |
-| [Entwicklungsleitfaden](./docs/DEVELOPMENT.md) | Lokale Entwicklungsumgebung aufbauen |
-| [Workflow-Leitfaden](./docs/WORKFLOW_GUIDE.md) | Workflow-Orchestrierungsnutzung |
-| [Auto-Reparatur-Design](./docs/AUTO_REMEDIATION_DESIGN.md) | Alarm-Auto-Reparatur |
-| [Netzwerkgerät-Inspektion](./docs/NETWORK_DEVICE_INSPECTION.md) | Netzwerkgerät-Funktionen |
-| [Testleitfaden](./docs/TEST_GUIDE.md) | Funktionale Test-Erklärung |
-| [Projektvision](./项目愿景与社区共建.md) | Vision und Gemeinschaftsaufbau |
+| Dokument                                                        | Erklärung                               |
+| --------------------------------------------------------------- | --------------------------------------- |
+| [Bereitstellungshandbuch](./docs/DEPLOYMENT.md)                 | Detaillierte Bereitstellungsoperationen |
+| [API-Dokumentation](./docs/API.md)                              | Vollständige API-Schnittstellen         |
+| [Architektur-Design](./docs/ARCHITECTURE.md)                    | Systemarchitektur-Erklärung             |
+| [Entwicklungsleitfaden](./docs/DEVELOPMENT.md)                  | Lokale Entwicklungsumgebung aufbauen    |
+| [Workflow-Leitfaden](./docs/WORKFLOW_GUIDE.md)                  | Workflow-Orchestrierungsnutzung         |
+| [Auto-Reparatur-Design](./docs/AUTO_REMEDIATION_DESIGN.md)      | Alarm-Auto-Reparatur                    |
+| [Netzwerkgerät-Inspektion](./docs/NETWORK_DEVICE_INSPECTION.md) | Netzwerkgerät-Funktionen                |
+| [Testleitfaden](./docs/TEST_GUIDE.md)                           | Funktionale Test-Erklärung              |
+| [Projektvision](./项目愿景与社区共建.md)                        | Vision und Gemeinschaftsaufbau          |
 
-***
+---
 
 ## Autor
 
@@ -535,22 +534,22 @@ npm run dev
   <img src="./frontend/public/wechaterweima.png" width="200" alt="IT Online WeChat-Offizieller-Account">
 </p>
 
-***
+---
 
 ## 🙏 Dank an Mitwirkende
 
-| Avatar | Name / Benutzername | Rolle | Hauptbeitrag |
-| :-----------------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------: | :--------: | :----------- |
+|                                                            Avatar                                                             |       Name / Benutzername       |        Rolle        | Hauptbeitrag  |
+| :---------------------------------------------------------------------------------------------------------------------------: | :-----------------------------: | :-----------------: | :------------ |
 | <img src="./docs-assets/contributors/微信图片_2026-06-12_143259_183.jpg" width="60" height="60" style="border-radius:50%;" /> | **Engagierter Bürger Herr Gao** | WeChat-Mitwirkender | Test-Feedback |
-| <img src="./docs-assets/contributors/微信图片_2026-06-12_143226_852.jpg" width="60" height="60" style="border-radius:50%;" /> | **@Lin** | WeChat-Mitwirkender | Test-Feedback |
-| <img src="./docs-assets/contributors/11.jpg" width="60" height="60" style="border-radius:50%;" /> | **Er Dongchen** | WeChat-Mitwirkender | Testen |
-| <img src="https://avatars.githubusercontent.com/u/68582645?v=4" width="60" height="60" style="border-radius:50%;" /> | **xiezhiliang89** | GitHub-Mitwirkender | Testen |
+| <img src="./docs-assets/contributors/微信图片_2026-06-12_143226_852.jpg" width="60" height="60" style="border-radius:50%;" /> |            **@Lin**             | WeChat-Mitwirkender | Test-Feedback |
+|               <img src="./docs-assets/contributors/11.jpg" width="60" height="60" style="border-radius:50%;" />               |         **Er Dongchen**         | WeChat-Mitwirkender | Testen        |
+|     <img src="https://avatars.githubusercontent.com/u/68582645?v=4" width="60" height="60" style="border-radius:50%;" />      |        **xiezhiliang89**        | GitHub-Mitwirkender | Testen        |
 
 <a href="https://github.com/qinshihu/itops-agent-platform/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=qinshihu/itops-agent-platform" />
 </a>
 
-***
+---
 
 ## 🌍 Gemeinschaftsvision: Dies ist nicht nur Code, es ist eine Bewegung
 
@@ -577,7 +576,7 @@ Wir glauben:
 >
 > Das Projekt befindet sich in kontinuierlicher Iteration. Folgen Sie uns. Jeder Star ist eine Stimme für die Zukunft.
 
-***
+---
 
 ## 🤝 Mitwirken
 
@@ -590,7 +589,7 @@ Wir begrüßen Beiträge jeglicher Art!
 
 Details siehe [Mitwirkungsleitfaden](CONTRIBUTING.md).
 
-***
+---
 
 ## ⭐ Projekt unterstützen
 
@@ -608,7 +607,7 @@ Wenn dieses Projekt Ihnen geholfen hat, geben Sie uns bitte einen **Star** ⭐, 
 
 > 🌟 **Je mehr Stars, desto wahrscheinlicher wird das Projekt von GitHub Trending empfohlen, und desto mehr Entwickler werden sich dem gemeinsamen Aufbau anschließen. Jeder Star ist die größte Ermutigung für das Projekt!**
 
-***
+---
 
 ## 📄 Lizenz
 
