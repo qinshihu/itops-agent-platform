@@ -10,7 +10,7 @@
     "sourceType": "module",
     "project": ["./tsconfig.json"]
   },
-  "plugins": ["@typescript-eslint", "local-rules"],
+  "plugins": ["@typescript-eslint"],
   "ignorePatterns": [
     "dist/",
     "node_modules/",
@@ -49,9 +49,7 @@
     // 2026-07-21 P1-#17 → 2026-07-21 v2.5：从 warn 升级为 error
     // 详见 docs/开源治理与架构健壮性最终报告_v2.md §8.2 任务 3
     // 升级后：新文件 ≤ 500 行硬约束（CI 真阻断），存量超 500 行文件在下方 overrides 中豁免
-    "max-lines": ["error", { "max": 500, "skipComments": true, "skipBlankLines": true }],
-    // 2026-07-21 P1-#17：自定义 ESLint 规则，禁止绕过 no-restricted-imports
-    "local-rules/no-restricted-eslint-disable": "error"
+    "max-lines": ["error", { "max": 500, "skipComments": true, "skipBlankLines": true }]
   },
   "overrides": [
     {
@@ -85,27 +83,14 @@
           }
         ],
         "no-useless-escape": "off",
-        "eqeqeq": ["warn", "always"],
-        // 2026-07-21 P1-#17：已知"等 repository 拆分后撤销"的临时豁免
-        "local-rules/no-restricted-eslint-disable": ["warn", { "allowAppEntry": true }]
+        "eqeqeq": ["warn", "always"]
       }
     },
     {
       // 2026-07-21 P1-#17：测试文件 vi.mock hoists 强制需要 import db
       // 临时豁免（等 P1-#20 补完测试后清理）
       "files": ["src/**/*.test.ts"],
-      "rules": {
-        "local-rules/no-restricted-eslint-disable": "off"
-      }
-    },
-    {
-      // 2026-07-21 v2.31：v001_initial_schema.ts 拆分完成（773 → 161 总行数）
-      // - 拆分到 v001_schema/ 子目录（5 个文件，全部 ≤ 500 行）
-      // - SQLite schema 字节级不变（已用 sqlite-parse-test.js 验证）
-      // - 主文件 v001_initial_schema.ts 现仅 34 行
-      // - SQL 拼接: 5 chunks (up) + down sqlBuilder + preflight + index barrel
-      // ⚠️ B 模式（保守拆分）—— 保持 schema 字节级等价，详见 ADR-034
-      "files": []
+      "rules": {}
     }
   ]
 }

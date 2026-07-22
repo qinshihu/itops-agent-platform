@@ -15,6 +15,7 @@
 
 import type { Request, Response } from 'express';
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import { logger } from '../../../../utils/logger';
 import { requireRole } from '../../../../middleware/auth';
 import { validateBody, validateParams, validateQuery } from '../../../../middleware/validation';
@@ -128,7 +129,7 @@ router.post(
         primary_model_id,
         fallback_model_id,
       } = req.body;
-      const id = (req as Request & { generateId?: () => string }).generateId?.() || require('crypto').randomUUID();
+      const id = (req as Request & { generateId?: () => string }).generateId?.() || randomUUID();
 
       agentCrudService.createAgent({
         id,
