@@ -1,5 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
-import { Bot, GitBranch, Play, Bell, TrendingUp, TrendingDown, Minus, Clock, Server, BookOpen, Zap, Activity, Shield } from 'lucide-react';
+import {
+  Bot,
+  GitBranch,
+  Play,
+  Bell,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Clock,
+  Server,
+  BookOpen,
+  Zap,
+  Activity,
+  Shield,
+} from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../../../lib/api';
@@ -138,7 +152,13 @@ export default function Dashboard() {
     staleTime: 30000,
   });
 
-  const isLoading = agentsLoading || serversLoading || workflowsLoading || knowledgeLoading || tasksLoading || alertsLoading;
+  const isLoading =
+    agentsLoading ||
+    serversLoading ||
+    workflowsLoading ||
+    knowledgeLoading ||
+    tasksLoading ||
+    alertsLoading;
 
   const stats = [
     {
@@ -217,76 +237,86 @@ export default function Dashboard() {
             ))}
           </div>
         ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">
-          {/* 左侧：6个统计卡片 */}
-          <div className="lg:col-span-4 grid grid-cols-3 gap-3">
-            {stats.map((stat) => (
-              <div
-                key={stat.id}
-                className="bg-surface rounded-lg px-3 py-3 border border-border hover:border-primary/50 hover:shadow-md transition-all cursor-pointer"
-                onClick={() => {
-                  if (stat.id === 'servers') navigate('/servers');
-                  else if (stat.id === 'agents') navigate('/agents');
-                  else if (stat.id === 'workflowTemplates') navigate('/workflows');
-                  else if (stat.id === 'runningTasks') navigate('/tasks');
-                  else if (stat.id === 'activeAlerts') navigate('/alerts');
-                  else if (stat.id === 'knowledge') navigate('/knowledge');
-                }}
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <div className={`p-1.5 rounded-md ${stat.bg}`}>
-                    <stat.icon className={`w-3.5 h-3.5 ${stat.color}`} />
-                  </div>
-                  <span className="text-[11px] text-text-tertiary">{t(`dashboard.${stat.id}`)}</span>
-                </div>
-                <p className="text-xl font-bold text-text-primary">{stat.value}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* 右侧：最新告警 */}
-          <div className="lg:col-span-3 bg-surface rounded-xl p-4 border border-border">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
-                <Bell className="w-4 h-4 text-red-500" />
-                {t('dashboard.latestAlerts')}
-              </h2>
-              <Link to="/alerts" className="text-xs text-primary hover:underline">
-                {t('dashboard.viewAll')} →
-              </Link>
-            </div>
-            <div className="space-y-2">
-              {alerts?.slice(0, 6).map((alert) => (
+          <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">
+            {/* 左侧：6个统计卡片 */}
+            <div className="lg:col-span-4 grid grid-cols-3 gap-3">
+              {stats.map((stat) => (
                 <div
-                  key={alert.id}
-                  className="p-2.5 rounded-lg bg-background hover:bg-background/80 transition-all"
+                  key={stat.id}
+                  className="bg-surface rounded-lg px-3 py-3 border border-border hover:border-primary/50 hover:shadow-md transition-all cursor-pointer"
+                  onClick={() => {
+                    if (stat.id === 'servers') navigate('/servers');
+                    else if (stat.id === 'agents') navigate('/agents');
+                    else if (stat.id === 'workflowTemplates') navigate('/workflows');
+                    else if (stat.id === 'runningTasks') navigate('/tasks');
+                    else if (stat.id === 'activeAlerts') navigate('/alerts');
+                    else if (stat.id === 'knowledge') navigate('/knowledge');
+                  }}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-medium text-text-primary text-xs leading-tight truncate">{alert.title}</h3>
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${
-                        alert.severity === 'critical'
-                          ? 'bg-status-failed/10 text-status-failed'
-                          : alert.severity === 'high'
-                          ? 'bg-status-warning/10 text-status-warning'
-                          : 'bg-status-pending/10 text-status-pending'
-                      }`}
-                    >
-                      {alert.severity}
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className={`p-1.5 rounded-md ${stat.bg}`}>
+                      <stat.icon className={`w-3.5 h-3.5 ${stat.color}`} />
+                    </div>
+                    <span className="text-[11px] text-text-tertiary">
+                      {t(`dashboard.${stat.id}`)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-[10px] text-text-secondary mt-1">
-                    <Clock className="w-3 h-3" />
-                    {safeFormatDistance(alert.created_at)}
-                  </div>
+                  <p className="text-xl font-bold text-text-primary">{stat.value}</p>
                 </div>
               ))}
-              {!alerts || alerts.length === 0 ? (
-                <div className="text-center py-6 text-text-secondary text-xs">{t('dashboard.noAlerts')}</div>
-              ) : null}
+            </div>
+
+            {/* 右侧：最新告警 */}
+            <div className="lg:col-span-3 bg-surface rounded-xl p-4 border border-border">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
+                  <Bell className="w-4 h-4 text-red-500" />
+                  {t('dashboard.latestAlerts')}
+                </h2>
+                <Link to="/alerts" className="text-xs text-primary hover:underline">
+                  {t('dashboard.viewAll')} →
+                </Link>
+              </div>
+              <div className="space-y-2">
+                {alerts?.slice(0, 6).map((alert) => (
+                  <div
+                    key={alert.id}
+                    className="p-2.5 rounded-lg bg-background hover:bg-background/80 transition-all"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-medium text-text-primary text-xs leading-tight truncate">
+                        {alert.title}
+                      </h3>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${
+                          alert.severity === 'critical'
+                            ? 'bg-status-failed/10 text-status-failed'
+                            : alert.severity === 'high'
+                              ? 'bg-status-warning/10 text-status-warning'
+                              : alert.severity === 'low'
+                                ? 'bg-status-success/10 text-status-success'
+                                : alert.severity === 'info'
+                                  ? 'bg-status-info/10 text-status-info'
+                                  : 'bg-status-pending/10 text-status-pending'
+                        }`}
+                      >
+                        {alert.severity}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[10px] text-text-secondary mt-1">
+                      <Clock className="w-3 h-3" />
+                      {safeFormatDistance(alert.created_at)}
+                    </div>
+                  </div>
+                ))}
+                {!alerts || alerts.length === 0 ? (
+                  <div className="text-center py-6 text-text-secondary text-xs">
+                    {t('dashboard.noAlerts')}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
-        </div>
         )}
 
         <div className="bg-surface rounded-xl p-5 border border-border">
@@ -303,10 +333,14 @@ export default function Dashboard() {
                 onClick={action.action}
                 className="p-3 rounded-xl bg-background hover:bg-background/80 border border-border hover:border-primary/50 transition-all text-left group"
               >
-                <div className={`w-10 h-10 rounded-lg ${action.bg} flex items-center justify-center mb-2 group-hover:scale-110 transition-transform`}>
+                <div
+                  className={`w-10 h-10 rounded-lg ${action.bg} flex items-center justify-center mb-2 group-hover:scale-110 transition-transform`}
+                >
                   <action.icon className={`w-5 h-5 ${action.color}`} />
                 </div>
-                <h3 className="font-semibold text-text-primary text-sm mb-0.5">{t(`dashboard.${action.id}`)}</h3>
+                <h3 className="font-semibold text-text-primary text-sm mb-0.5">
+                  {t(`dashboard.${action.id}`)}
+                </h3>
                 <p className="text-xs text-text-secondary">{t(`dashboard.${action.id}Desc`)}</p>
               </button>
             ))}
@@ -320,7 +354,9 @@ export default function Dashboard() {
                 <Server className="w-4 h-4 text-purple-500" />
                 {t('dashboard.servers')}
               </h2>
-              <Link to="/servers" className="text-xs text-primary hover:underline">{t('dashboard.viewAll')}</Link>
+              <Link to="/servers" className="text-xs text-primary hover:underline">
+                {t('dashboard.viewAll')}
+              </Link>
             </div>
             <div className="space-y-2">
               {(Array.isArray(servers) ? servers : []).slice(0, 5).map((server) => (
@@ -328,11 +364,17 @@ export default function Dashboard() {
                   key={server.id}
                   className="flex items-center gap-2 p-2 rounded-lg bg-background hover:bg-background/80 transition-all"
                 >
-                  <div className={`p-1.5 rounded-md ${server.enabled ? 'bg-purple-500/10' : 'bg-status-failed/10'}`}>
-                    <Server className={`w-4 h-4 ${server.enabled ? 'text-purple-500' : 'text-text-secondary'}`} />
+                  <div
+                    className={`p-1.5 rounded-md ${server.enabled ? 'bg-purple-500/10' : 'bg-status-failed/10'}`}
+                  >
+                    <Server
+                      className={`w-4 h-4 ${server.enabled ? 'text-purple-500' : 'text-text-secondary'}`}
+                    />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-text-primary text-xs truncate">{server.name}</h3>
+                    <h3 className="font-medium text-text-primary text-xs truncate">
+                      {server.name}
+                    </h3>
                     <p className="text-[10px] text-text-secondary truncate">{server.hostname}</p>
                   </div>
                   <span
@@ -347,18 +389,22 @@ export default function Dashboard() {
                 </div>
               ))}
               {!servers || servers.length === 0 ? (
-                <div className="text-center py-6 text-text-secondary text-xs">{t('dashboard.noServers')}</div>
+                <div className="text-center py-6 text-text-secondary text-xs">
+                  {t('dashboard.noServers')}
+                </div>
               ) : null}
             </div>
           </div>
-          
+
           <div className="bg-surface rounded-xl p-4 border border-border">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
                 <Bot className="w-4 h-4 text-primary" />
                 {t('dashboard.onlineAgents')}
               </h2>
-              <Link to="/agents" className="text-xs text-primary hover:underline">{t('dashboard.viewAll')}</Link>
+              <Link to="/agents" className="text-xs text-primary hover:underline">
+                {t('dashboard.viewAll')}
+              </Link>
             </div>
             <div className="space-y-2">
               {agents?.slice(0, 5).map((agent) => (
@@ -391,7 +437,9 @@ export default function Dashboard() {
                 <BookOpen className="w-4 h-4 text-cyan-500" />
                 {t('dashboard.knowledge')}
               </h2>
-              <Link to="/knowledge" className="text-xs text-primary hover:underline">{t('dashboard.viewAll')}</Link>
+              <Link to="/knowledge" className="text-xs text-primary hover:underline">
+                {t('dashboard.viewAll')}
+              </Link>
             </div>
             <div className="space-y-2">
               {knowledge?.slice(0, 5).map((item) => (
@@ -406,13 +454,18 @@ export default function Dashboard() {
                     <h3 className="font-medium text-text-primary text-xs truncate">{item.title}</h3>
                     <div className="flex items-center justify-between mt-0.5">
                       <span className="text-[10px] text-text-secondary">{item.category}</span>
-                      <span className="text-[10px] text-status-success">{item.usage_count || 0}{t('dashboard.timesUsed')}</span>
+                      <span className="text-[10px] text-status-success">
+                        {item.usage_count || 0}
+                        {t('dashboard.timesUsed')}
+                      </span>
                     </div>
                   </div>
                 </div>
               ))}
               {!knowledge || knowledge.length === 0 ? (
-                <div className="text-center py-6 text-text-secondary text-xs">{t('dashboard.noKnowledge')}</div>
+                <div className="text-center py-6 text-text-secondary text-xs">
+                  {t('dashboard.noKnowledge')}
+                </div>
               ) : null}
             </div>
           </div>
@@ -423,7 +476,9 @@ export default function Dashboard() {
                 <Play className="w-4 h-4 text-green-500" />
                 {t('dashboard.recentTasks')}
               </h2>
-              <Link to="/tasks" className="text-xs text-primary hover:underline">{t('dashboard.viewAll')}</Link>
+              <Link to="/tasks" className="text-xs text-primary hover:underline">
+                {t('dashboard.viewAll')}
+              </Link>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -431,7 +486,7 @@ export default function Dashboard() {
                   <tr className="text-left text-xs text-text-secondary border-b border-border">
                     <th className="pb-2 font-medium">{t('dashboard.taskName')}</th>
                     <th className="pb-2 font-medium">{t('dashboard.status')}</th>
-                    <th className="pb-2 font-medium">{t('dashboard.executionTime')}</th>
+                    <th className="pb-2 font-medium">{t('dashboard.createdAt')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -444,10 +499,10 @@ export default function Dashboard() {
                             task.status === 'completed'
                               ? 'bg-status-success/10 text-status-success'
                               : task.status === 'running'
-                              ? 'bg-status-running/10 text-status-running'
-                              : task.status === 'failed'
-                              ? 'bg-status-failed/10 text-status-failed'
-                              : 'bg-status-pending/10 text-status-pending'
+                                ? 'bg-status-running/10 text-status-running'
+                                : task.status === 'failed'
+                                  ? 'bg-status-failed/10 text-status-failed'
+                                  : 'bg-status-pending/10 text-status-pending'
                           }`}
                         >
                           {task.status}
