@@ -21,6 +21,7 @@
     "postinstall": "node -e \"try{require('better-sqlite3')}catch(e){console.warn('better-sqlite3 需要 Node.js 20 编译,当前版本: '+process.version)}\""
   },
   "dependencies": {
+    "@kubernetes/client-node": "^0.22.3",
     "@socket.io/component-emitter": "^3.1.2",
     "@swc/helpers": "^0.5.23",
     "axios": "^1.6.2",
