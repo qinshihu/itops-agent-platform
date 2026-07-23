@@ -1,24 +1,27 @@
 # 导航菜单体检记录（NAV-AUDIT）
 
-> 按 `frontend/src/config/navigation.ts` 顺序逐组体检的持续跟踪文档。
-> 每次体检/修复后更新对应行；新增 bug 在「待修复」段登记。
+> 按 `frontend/src/config/navigation.ts` 顺序**逐组、逐页、逐功能**深体检。
+> 每组体检完毕即修复问题 → tsc/test → commit → push → 等用户确认 → 下一组。
+> 实时状态写在本总账；过程性记录写在「过程记录」段。
 >
-> 最后更新：2026-07-23（v5 — 第 5 组 nav.autoExecution 深度修复完成）
+> 最后更新：2026-07-23（v6 — 逐页逐功能重检开始）
 
 ## 总账
 
 | # | 分组 | 菜单项 | 状态 | 备注 |
 |---|------|--------|------|------|
-| 1 | nav.home | dashboard, bigScreen | ✅ | docs 已更新；体验问题（severity 多档、表头命名）已修 |
-| 2 | nav.serverMgmt | servers, networkDevices, networks, snmp, networkDiscovery, dbConnections, sshKeys, terminal, remoteDesktop | ✅ | 本轮第二组深度体检 + 修复：snmpRoutes 改统一格式 / dbConnections routes→service 抽象 / serverGroup+ManagementRoutes RBAC 漏洞 / networkSubnetRoutes catch logger / 4 处死代码删除 / RemoteDesktop Socket auth token |
-| 3 | nav.containersVirtualization | containers, containerMonitor, containerLogs, images, volumes, virtualMachines, compose, snapshotPolicies, vmMigrations, imageRegistry, kubernetes, costAnalysis, autoScale | ✅ | 本轮第三组深度修复：vmManagement 全部 RBAC + containerMonitor 字段对齐 + images/snapshots snapshotPolicies total + cron 校验 + containerVMRuntime shutdown 钩子（4 运行时）+ compose validate async + K8s 读端点 RBAC + logger |
-| 4 | nav.dataCenter | dcManage, dataRoom | ✅ | 本轮第四组深度修复：slots routes 业务规则下沉到 dcSlotService + 13 routes 全部加 RBAC + 13 routes catch 加 logger + dcCrudService 暴露 slotsBusiness |
-| 5 | nav.autoExecution | agents, agents/tools, workflows, workflows/providers, tasks, approvals, scripts, scheduledTasks, configTemplates | ✅ | tasks/retry、scripts/execute、config-templates total 均已修复 |
-| 6 | nav.alertsAI | alerts, alertMappings, alertNoise, alertCorrelation, rootCauseAnalysis, aiRootCause, topology, aiInsights, alertAutoAnalysis, inspectionCenter, alerts/providers, zabbix, prometheus | ✅ | alert-provider-configs 完整 CRUD 已补；多个解包错已修 |
-| 7 | nav.mcp | mcpOverview, mcpTools, mcpExternalServers, mcpTester | ✅ | 全 4 项无 bug（仅风格建议） |
-| 8 | nav.autoRemediation | remediationPolicies, remediationDashboard, remediationExecutions, remediationWorkbench, aiRemediations | ✅ | aiRemediations approve/reject 已补；workbench 子代理误判 |
-| 9 | nav.knowledgeReports | knowledge, audit, notifications, reports | ✅ | audit JOIN users + notifications/retry 已修；reports type 写死为 'inspection'（体验问题待后续） |
-| 10 | nav.systemUsers | users, frontendTests, toolLinks, settings | ✅ | tool-links 3 端点已补 |
+| 1 | nav.home | dashboard, bigScreen | ✅ | v6 体检+修复：useBigScreenData setTimeout cleanup + 2 空 catch → logger.warn + Dashboard 6 useQuery queryFn 内 try/catch logger.error + dashboardRoutes parseInt NaN 防 + dashboardStats/operationalAnalytics 8 处 parseFloat Number.isFinite + useBigScreenData 6 处 data as Array.isArray 兜底 + callZabbix typeof === 'object' 校验 + BigScreenRecentTasksList/RightColumn Invalid Date → '--' |
+| 2 | nav.serverMgmt | servers, networkDevices, networks, snmp, networkDiscovery, dbConnections, sshKeys, terminal, remoteDesktop | ⏳ | 待重检 |
+| 3 | nav.containersVirtualization | containers, containerMonitor, containerLogs, images, volumes, virtualMachines, compose, snapshotPolicies, vmMigrations, imageRegistry, kubernetes, costAnalysis, autoScale | ⏳ | 待重检 |
+| 4 | nav.dataCenter | dcManage, dataRoom | ⏳ | 待重检 |
+| 5 | nav.autoExecution | agents, agents/tools, workflows, workflows/providers, tasks, approvals, scripts, scheduledTasks, configTemplates | ⏳ | 待重检 |
+| 6 | nav.alertsAI | alerts, alertMappings, alertNoise, alertCorrelation, rootCauseAnalysis, aiRootCause, topology, aiInsights, alertAutoAnalysis, inspectionCenter, alerts/providers, zabbix, prometheus | ⏳ | 待重检 |
+| 7 | nav.mcp | mcpOverview, mcpTools, mcpExternalServers, mcpTester | ⏳ | 待重检 |
+| 8 | nav.autoRemediation | remediationPolicies, remediationDashboard, remediationExecutions, remediationWorkbench, aiRemediations | ⏳ | 待重检 |
+| 9 | nav.knowledgeReports | knowledge, audit, notifications, reports | ⏳ | 待重检 |
+| 10 | nav.systemUsers | users, frontendTests, toolLinks, settings | ⏳ | 待重检 |
+
+> 图例：⏳ 待体检 / 🔄 体检中 / ✅ 体检+修复完成
 
 ## 已修复 bug 总账（c01c217 commit 范围）
 

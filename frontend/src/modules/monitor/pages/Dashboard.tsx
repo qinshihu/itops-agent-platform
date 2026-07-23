@@ -18,6 +18,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../../../lib/api';
 import { safeFormatDistance } from '../../../lib/date';
+import { logger } from '../../../lib/logger';
 
 interface Agent {
   id: string;
@@ -101,8 +102,14 @@ export default function Dashboard() {
   const { data: agents, isLoading: agentsLoading } = useQuery({
     queryKey: ['agents'],
     queryFn: async () => {
-      const { data } = await api.get('/agents');
-      return (data || []) as Agent[];
+      // 2026-07-23 P1：失败时记录日志，避免完全无提示（react-query V5 在 queryFn 内 try/catch 是推荐方式）
+      try {
+        const { data } = await api.get('/agents');
+        return (data || []) as Agent[];
+      } catch (err) {
+        logger.error('Dashboard: GET /agents failed', err);
+        return [];
+      }
     },
     staleTime: 60000,
   });
@@ -110,8 +117,13 @@ export default function Dashboard() {
   const { data: servers, isLoading: serversLoading } = useQuery({
     queryKey: ['servers'],
     queryFn: async () => {
-      const { data } = await api.get('/servers');
-      return (data || []) as Server[];
+      try {
+        const { data } = await api.get('/servers');
+        return (data || []) as Server[];
+      } catch (err) {
+        logger.error('Dashboard: GET /servers failed', err);
+        return [];
+      }
     },
     staleTime: 60000,
   });
@@ -119,8 +131,13 @@ export default function Dashboard() {
   const { data: workflows, isLoading: workflowsLoading } = useQuery({
     queryKey: ['workflows'],
     queryFn: async () => {
-      const { data } = await api.get('/workflows');
-      return (data || []) as Workflow[];
+      try {
+        const { data } = await api.get('/workflows');
+        return (data || []) as Workflow[];
+      } catch (err) {
+        logger.error('Dashboard: GET /workflows failed', err);
+        return [];
+      }
     },
     staleTime: 120000,
   });
@@ -128,8 +145,13 @@ export default function Dashboard() {
   const { data: knowledge, isLoading: knowledgeLoading } = useQuery({
     queryKey: ['knowledge'],
     queryFn: async () => {
-      const { data } = await api.get('/knowledge');
-      return (data || []) as Knowledge[];
+      try {
+        const { data } = await api.get('/knowledge');
+        return (data || []) as Knowledge[];
+      } catch (err) {
+        logger.error('Dashboard: GET /knowledge failed', err);
+        return [];
+      }
     },
     staleTime: 120000,
   });
@@ -137,8 +159,13 @@ export default function Dashboard() {
   const { data: tasks, isLoading: tasksLoading } = useQuery({
     queryKey: ['tasks', { limit: 5 }],
     queryFn: async () => {
-      const { data } = await api.get('/tasks', { params: { limit: 5 } });
-      return (data || []) as Task[];
+      try {
+        const { data } = await api.get('/tasks', { params: { limit: 5 } });
+        return (data || []) as Task[];
+      } catch (err) {
+        logger.error('Dashboard: GET /tasks failed', err);
+        return [];
+      }
     },
     staleTime: 30000,
   });
@@ -146,8 +173,13 @@ export default function Dashboard() {
   const { data: alerts, isLoading: alertsLoading } = useQuery({
     queryKey: ['alerts', { limit: 5 }],
     queryFn: async () => {
-      const { data } = await api.get('/alerts', { params: { limit: 5 } });
-      return (data || []) as Alert[];
+      try {
+        const { data } = await api.get('/alerts', { params: { limit: 5 } });
+        return (data || []) as Alert[];
+      } catch (err) {
+        logger.error('Dashboard: GET /alerts failed', err);
+        return [];
+      }
     },
     staleTime: 30000,
   });

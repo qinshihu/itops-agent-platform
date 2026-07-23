@@ -19,7 +19,9 @@ router.get('/stats', (_req: Request, res: Response) => {
 router.get('/alert-trends', (req: Request, res: Response) => {
   try {
     const { hours = '24' } = req.query;
-    const hoursNum = parseInt(hours as string, 10);
+    const parsed = parseInt(hours as string, 10);
+    // 2026-07-23 P2：限制范围 1-8760（一年），防 NaN/负数/极大值
+    const hoursNum = Number.isFinite(parsed) && parsed > 0 && parsed <= 8760 ? parsed : 24;
     const alerts = dashboardCrudService.getAlertTrends(hoursNum);
     res.json({ success: true, data: alerts });
   } catch (error) {
@@ -31,7 +33,8 @@ router.get('/alert-trends', (req: Request, res: Response) => {
 router.get('/task-trends', (req: Request, res: Response) => {
   try {
     const { hours = '24' } = req.query;
-    const hoursNum = parseInt(hours as string, 10);
+    const parsed = parseInt(hours as string, 10);
+    const hoursNum = Number.isFinite(parsed) && parsed > 0 && parsed <= 8760 ? parsed : 24;
     const tasks = dashboardCrudService.getTaskTrends(hoursNum);
     res.json({ success: true, data: tasks });
   } catch (error) {

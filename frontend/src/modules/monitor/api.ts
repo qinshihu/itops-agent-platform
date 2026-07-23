@@ -244,11 +244,36 @@ export interface ZabbixResponse<T = unknown> {
   error?: string;
 }
 
-export interface ZabbixHost { hostid: string; host: string; name: string; status?: string; }
-export interface ZabbixItem { itemid: string; hostid: string; name: string; key_: string; }
-export interface ZabbixTrigger { triggerid: string; description: string; priority: string; value?: string; }
-export interface ZabbixProblem { eventid: string; name: string; severity: string; acknowledged?: string; }
-export interface ZabbixHistoryRow { itemid: string; value: string; clock: string; ns?: string; }
+export interface ZabbixHost {
+  hostid: string;
+  host: string;
+  name: string;
+  status?: string;
+}
+export interface ZabbixItem {
+  itemid: string;
+  hostid: string;
+  name: string;
+  key_: string;
+}
+export interface ZabbixTrigger {
+  triggerid: string;
+  description: string;
+  priority: string;
+  value?: string;
+}
+export interface ZabbixProblem {
+  eventid: string;
+  name: string;
+  severity: string;
+  acknowledged?: string;
+}
+export interface ZabbixHistoryRow {
+  itemid: string;
+  value: string;
+  clock: string;
+  ns?: string;
+}
 
 // ============================================================
 // API 封装
@@ -290,7 +315,9 @@ export const monitorApi = {
    * 服务器资源监控数据
    * @param serverId 'auto' = 后端自动选本机；'__all__' 或 undefined = 全部聚合；具体 id = 单服务器
    */
-  async getServerMetrics(serverId: 'auto' | '__all__' | string = '__all__'): Promise<ServerMetricsData> {
+  async getServerMetrics(
+    serverId: 'auto' | '__all__' | string = '__all__',
+  ): Promise<ServerMetricsData> {
     let url = '/dashboard/server-metrics';
     if (serverId === 'auto') {
       url += '?autoSelectLocal=1';
@@ -333,7 +360,9 @@ export const monitorApi = {
     return data || [];
   },
 
-  async createReportTemplate(template: Omit<ReportTemplate, 'id' | 'is_preset'>): Promise<ReportTemplate> {
+  async createReportTemplate(
+    template: Omit<ReportTemplate, 'id' | 'is_preset'>,
+  ): Promise<ReportTemplate> {
     const { data } = await api.post('/reports/templates', template);
     return data;
   },
@@ -352,12 +381,20 @@ export const monitorApi = {
     variables: Record<string, string>;
     format?: 'markdown' | 'pdf' | 'word';
   }): Promise<GeneratedReport> {
-    const { data } = await api.post('/reports/generate', { ...params, format: params.format || 'markdown' });
+    const { data } = await api.post('/reports/generate', {
+      ...params,
+      format: params.format || 'markdown',
+    });
     return data;
   },
 
-  async exportReport(reportId: string, format: 'markdown' | 'pdf' | 'word' = 'markdown'): Promise<Blob> {
-    const response = await api.get(`/reports/${reportId}/export?format=${format}`, { responseType: 'blob' });
+  async exportReport(
+    reportId: string,
+    format: 'markdown' | 'pdf' | 'word' = 'markdown',
+  ): Promise<Blob> {
+    const response = await api.get(`/reports/${reportId}/export?format=${format}`, {
+      responseType: 'blob',
+    });
     return response.data;
   },
 
@@ -405,11 +442,12 @@ export const monitorApi = {
     payload: Record<string, unknown>,
   ): Promise<T[]> {
     const { data } = await api.post(`/monitor/zabbix/${endpoint}`, payload);
-    // axios 拦截器已解包 → data 本身就是 ZabbixResponse
-    const body = data as ZabbixResponse<T>;
-    if (!body) {
-      throw new Error('Zabbix 请求失败：响应为空');
+    // 2026-07-23 P2：拦截器失败路径下 data 可能是 error 字符串，原类型断言绕过检查会导致
+    // "Zabbix 无数据" 而不是 "凭据错误"。运行时校验对象结构。
+    if (data === null || typeof data !== 'object') {
+      throw new Error('Zabbix 响应格式异常：非对象');
     }
+    const body = data as ZabbixResponse<T>;
     if (body.error) {
       throw new Error(body.error);
     }

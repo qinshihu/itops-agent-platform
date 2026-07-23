@@ -17,9 +17,15 @@ import type {
 
 /** 仪表盘概览统计 */
 export function getDashboardStats(): DashboardStats {
-  const serverStats = db.prepare('SELECT COUNT(*) as total, SUM(enabled) as enabled FROM servers').get() as { total: number; enabled: number } | undefined;
-  const agentStats = db.prepare('SELECT COUNT(*) as total, SUM(enabled) as enabled FROM agents').get() as { total: number; enabled: number } | undefined;
-  const taskStats = db.prepare(`
+  const serverStats = db
+    .prepare('SELECT COUNT(*) as total, SUM(enabled) as enabled FROM servers')
+    .get() as { total: number; enabled: number } | undefined;
+  const agentStats = db
+    .prepare('SELECT COUNT(*) as total, SUM(enabled) as enabled FROM agents')
+    .get() as { total: number; enabled: number } | undefined;
+  const taskStats = db
+    .prepare(
+      `
     SELECT
       COUNT(*) as total,
       SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) as running,
@@ -27,21 +33,35 @@ export function getDashboardStats(): DashboardStats {
       SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
       SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending
     FROM tasks
-  `).get() as { total: number; running: number; completed: number; failed: number; pending: number } | undefined;
-  const alertStats = db.prepare(`
+  `,
+    )
+    .get() as
+    | { total: number; running: number; completed: number; failed: number; pending: number }
+    | undefined;
+  const alertStats = db
+    .prepare(
+      `
     SELECT
       COUNT(*) as total,
       SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END) as active,
       SUM(CASE WHEN severity = 'critical' AND status = 'new' THEN 1 ELSE 0 END) as critical,
       SUM(CASE WHEN severity = 'high' AND status = 'new' THEN 1 ELSE 0 END) as high
     FROM alerts
-  `).get() as { total: number; active: number; critical: number; high: number } | undefined;
-  const workflowCount = db.prepare('SELECT COUNT(*) as total, SUM(is_template) as templates FROM workflows').get() as { total: number; templates: number } | undefined;
-  const knowledgeCount = db.prepare('SELECT COUNT(*) as total FROM knowledge_base').get() as { total: number } | undefined;
+  `,
+    )
+    .get() as { total: number; active: number; critical: number; high: number } | undefined;
+  const workflowCount = db
+    .prepare('SELECT COUNT(*) as total, SUM(is_template) as templates FROM workflows')
+    .get() as { total: number; templates: number } | undefined;
+  const knowledgeCount = db.prepare('SELECT COUNT(*) as total FROM knowledge_base').get() as
+    { total: number } | undefined;
 
-  const successRate = (taskStats?.total || 0) > 0
-    ? parseFloat((((taskStats?.completed || 0) / (taskStats?.total || 1)) * 100).toFixed(1))
-    : 0;
+  const _rawSuccessRate =
+    (taskStats?.total || 0) > 0
+      ? parseFloat((((taskStats?.completed || 0) / (taskStats?.total || 1)) * 100).toFixed(1))
+      : 0;
+  // 2026-07-23 P2：Number.isFinite 兜底（防御 schema 变 REAL 默认 NaN）
+  const successRate = Number.isFinite(_rawSuccessRate) ? _rawSuccessRate : 0;
 
   return {
     servers: { total: serverStats?.total || 0, enabled: serverStats?.enabled || 0 },
@@ -67,7 +87,9 @@ export function getDashboardStats(): DashboardStats {
 
 /** 告警趋势（按小时聚合） */
 export function getAlertTrends(hours: number): AlertTrendPoint[] {
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT
       strftime('%Y-%m-%d %H:00:00', created_at) as time_bucket,
       COUNT(*) as total,
@@ -79,12 +101,16 @@ export function getAlertTrends(hours: number): AlertTrendPoint[] {
     WHERE created_at >= datetime('now', ? || ' hours')
     GROUP BY time_bucket
     ORDER BY time_bucket ASC
-  `).all(`-${hours}`) as AlertTrendPoint[];
+  `,
+    )
+    .all(`-${hours}`) as AlertTrendPoint[];
 }
 
 /** 任务趋势（按小时聚合） */
 export function getTaskTrends(hours: number): TaskTrendPoint[] {
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT
       strftime('%Y-%m-%d %H:00:00', created_at) as time_bucket,
       COUNT(*) as total,
@@ -95,12 +121,16 @@ export function getTaskTrends(hours: number): TaskTrendPoint[] {
     WHERE created_at >= datetime('now', ? || ' hours')
     GROUP BY time_bucket
     ORDER BY time_bucket ASC
-  `).all(`-${hours}`) as TaskTrendPoint[];
+  `,
+    )
+    .all(`-${hours}`) as TaskTrendPoint[];
 }
 
 /** Agent 统计（含执行次数和成功率） */
 export function getAgentStats(): AgentStatsResult {
-  const agents = db.prepare(`
+  const agents = db
+    .prepare(
+      `
     SELECT
       a.id, a.name, a.avatar, a.role, a.enabled, a.usage_count,
       (SELECT COUNT(*) FROM agent_executions ae WHERE ae.agent_id = a.id) as total_executions,
@@ -108,25 +138,35 @@ export function getAgentStats(): AgentStatsResult {
       (SELECT COUNT(*) FROM agent_executions ae WHERE ae.agent_id = a.id AND ae.status = 'error') as error_count
     FROM agents a
     ORDER BY a.usage_count DESC
-  `).all() as Array<{ total_executions?: number; success_count?: number; [key: string]: unknown }>;
+  `,
+    )
+    .all() as Array<{ total_executions?: number; success_count?: number; [key: string]: unknown }>;
 
-  const agentsWithRates: AgentStatItem[] = agents.map(a => ({
-    ...(a as unknown as AgentStatItem),
-    successRate: (a.total_executions || 0) > 0
-      ? parseFloat((((a.success_count || 0) / (a.total_executions || 1)) * 100).toFixed(1))
-      : null,
-  }));
+  const agentsWithRates: AgentStatItem[] = agents.map((a) => {
+    const raw =
+      (a.total_executions || 0) > 0
+        ? parseFloat((((a.success_count || 0) / (a.total_executions || 1)) * 100).toFixed(1))
+        : null;
+    return {
+      ...(a as unknown as AgentStatItem),
+      successRate: raw !== null && Number.isFinite(raw) ? raw : null,
+    };
+  });
 
   const totalExecutions = agentsWithRates.reduce((sum, a) => sum + (a.total_executions || 0), 0);
   const totalSuccess = agentsWithRates.reduce((sum, a) => sum + (a.success_count || 0), 0);
-  const overallSuccessRate = totalExecutions > 0
-    ? parseFloat(((totalSuccess / totalExecutions) * 100).toFixed(1))
-    : 0;
+  const _rawOverall =
+    totalExecutions > 0 ? parseFloat(((totalSuccess / totalExecutions) * 100).toFixed(1)) : 0;
+  const overallSuccessRate = Number.isFinite(_rawOverall) ? _rawOverall : 0;
 
-  const todayExecutions = db.prepare(`
+  const todayExecutions = db
+    .prepare(
+      `
     SELECT COUNT(*) as count FROM agent_executions
     WHERE created_at >= datetime('now', 'start of day')
-  `).get() as { count: number } | undefined;
+  `,
+    )
+    .get() as { count: number } | undefined;
 
   return {
     agents: agentsWithRates,
@@ -141,18 +181,26 @@ export function getAgentStats(): AgentStatsResult {
 
 /** 任务分布（按状态 + 按工作流） */
 export function getTaskDistribution(): TaskDistribution {
-  const byStatus = db.prepare(`
+  const byStatus = db
+    .prepare(
+      `
     SELECT status, COUNT(*) as count FROM tasks GROUP BY status
-  `).all() as Array<{ status: string; count: number }>;
+  `,
+    )
+    .all() as Array<{ status: string; count: number }>;
 
-  const byWorkflow = db.prepare(`
+  const byWorkflow = db
+    .prepare(
+      `
     SELECT w.name, COUNT(*) as count
     FROM tasks t
     JOIN workflows w ON t.workflow_id = w.id
     GROUP BY t.workflow_id
     ORDER BY count DESC
     LIMIT 10
-  `).all() as Array<{ name: string; count: number }>;
+  `,
+    )
+    .all() as Array<{ name: string; count: number }>;
 
   return { byStatus, byWorkflow };
 }
@@ -161,17 +209,27 @@ export function getTaskDistribution(): TaskDistribution {
 export function getFullDashboard(): FullDashboard {
   const stats = getDashboardStats();
 
-  const recentTasks = db.prepare(`
+  const recentTasks = db
+    .prepare(
+      `
     SELECT id, name, status, created_at, workflow_id, execution_order, node_results, current_node_id
     FROM tasks ORDER BY created_at DESC LIMIT 10
-  `).all() as Array<AnalyticsRow>;
+  `,
+    )
+    .all() as Array<AnalyticsRow>;
 
-  const recentAlerts = db.prepare(`
+  const recentAlerts = db
+    .prepare(
+      `
     SELECT id, title, severity, status, created_at
     FROM alerts WHERE status = 'new' ORDER BY created_at DESC LIMIT 10
-  `).all() as Array<AnalyticsRow>;
+  `,
+    )
+    .all() as Array<AnalyticsRow>;
 
-  const servers = db.prepare('SELECT id, name, hostname, enabled, last_connected FROM servers ORDER BY name').all() as Array<AnalyticsRow>;
+  const servers = db
+    .prepare('SELECT id, name, hostname, enabled, last_connected FROM servers ORDER BY name')
+    .all() as Array<AnalyticsRow>;
 
   return {
     stats,
