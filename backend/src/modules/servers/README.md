@@ -5,9 +5,11 @@
 > **最后刷新**：2026-07-22
 
 ## 职责
+
 服务器生命周期管理：资产登记、SSH 连接池、远程桌面、终端、密钥管理、合规扫描、AI 命令。
 
 ## 内部结构（2026-07-22 实测）
+
 ```
 servers/
 ├── routes.ts                  # 模块路由聚合（5 个子路由）
@@ -22,20 +24,21 @@ servers/
 │   ├── serverCrudService.ts   ← routes 层抽象（ADR-016）
 │   ├── sshKeyCrudService.ts   ← 凭证 routes 抽象
 │   ├── serverInfoCollector.ts ← 采集 OS / IP / CPU / 内存 / 磁盘
-│   ├── aiCommandService.ts    ← AI 生成命令
+│   ├── serverImportService.ts ← CSV/JSON 批量导入
 │   └── ...
 ```
 
 ## 路由端点（受保护）
 
-| 前缀 | 来源 | 说明 |
-|------|------|------|
-| `/servers/*` | `serverRoutes.ts` | 服务器 CRUD + command-history + compliance-history |
-| `/server-commands/*` | `serverCommandRoutes.ts` | SSH 命令执行 + 合规检查 |
-| `/server-groups/*` | `serverGroupRoutes.ts` | 服务器分组树 |
-| `/server-management/*` | `serverManagementRoutes.ts` | 资产采集 + 性能采集 + 导入 |
-| `/ssh-keys/*` | `sshKeyRoutes.ts` | SSH 凭证 CRUD + usage |
+| 前缀                   | 来源                        | 说明                                               |
+| ---------------------- | --------------------------- | -------------------------------------------------- |
+| `/servers/*`           | `serverRoutes.ts`           | 服务器 CRUD + command-history + compliance-history |
+| `/server-commands/*`   | `serverCommandRoutes.ts`    | SSH 命令执行 + 合规检查                            |
+| `/server-groups/*`     | `serverGroupRoutes.ts`      | 服务器分组树                                       |
+| `/server-management/*` | `serverManagementRoutes.ts` | 资产采集 + 性能采集 + 导入                         |
+| `/ssh-keys/*`          | `sshKeyRoutes.ts`           | SSH 凭证 CRUD + usage                              |
 
 ## 依赖关系
+
 - 被 `containers/`（Docker host）、`network/`（snmp credential）、`monitor/`（metrics 采集）依赖
 - 仓储层：`serverRepository/` 5 子仓储

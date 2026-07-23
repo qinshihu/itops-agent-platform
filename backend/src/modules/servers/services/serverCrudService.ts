@@ -106,6 +106,15 @@ export const serverCrudService = {
       encryptedPrivateKey = input.private_key ? encrypt(input.private_key) : null;
     }
 
+    // description 三态语义（与 password/private_key 一致）：
+    //   undefined → 不更新（保留旧值）
+    //   null/''   → 清空（写 NULL）
+    //   string    → 原样写入
+    let description: string | null | undefined;
+    if (input.description !== undefined) {
+      description = input.description === '' ? null : input.description;
+    }
+
     serverRepository.servers.update(id, {
       name: input.name,
       hostname: input.hostname,
@@ -114,7 +123,7 @@ export const serverCrudService = {
       password: encryptedPassword,
       private_key: encryptedPrivateKey,
       use_ssh_key: input.use_ssh_key !== undefined ? (input.use_ssh_key ? 1 : 0) : undefined,
-      description: input.description !== undefined ? input.description : null,
+      description,
       tags: tagsJson,
       enabled: input.enabled,
       os_type: input.os_type,
