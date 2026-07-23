@@ -155,13 +155,16 @@ export function useNetworkDevices() {
       return;
     }
     try {
+      // 2026-07-23 snmpRoutes 改为 {success, data, message} 格式后，
+      // axios 拦截器（lib/api.ts:57）解包 → response.data 本身是 {reachable, ...} 业务对象
+      // （拦截器后还可能命中 success/message 字段一并暴露）
       const response = await api.post(`/snmp/credentials/${device.snmp_credential_id}/test`, {
         host: device.ip_address,
       });
-      if (response.data.code === 0) {
+      if (response.data?.reachable || (response.data as { success?: boolean })?.success) {
         toast.success('SNMP 连接成功 ✅');
       } else {
-        toast.error('SNMP 连接失败: ' + (response.data.message || ''));
+        toast.error('SNMP 连接失败: ' + ((response.data as { message?: string })?.message || '未知错误'));
       }
     } catch (error) {
       const e = error as { response?: { data?: { message?: string } }; message?: string };

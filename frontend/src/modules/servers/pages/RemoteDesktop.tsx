@@ -99,7 +99,12 @@ export default function RemoteDesktop() {
       }
 
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const socket = io(`${wsProtocol}//${window.location.host}/vnc`);
+      const socket = io(`${wsProtocol}//${window.location.host}/vnc`, {
+        // 必须传 token；后端 vncProxyService 在 /vnc namespace 上挂鉴权中间件
+        // （vncProxyService.ts:55-72），无 token 会触发 UNAUTHORIZED
+        auth: { token: token ?? '' },
+        transports: ['websocket', 'polling'],
+      });
       socketRef.current = socket;
 
       socket.on('connect', () => {

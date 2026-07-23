@@ -10,7 +10,7 @@
 | # | 分组 | 菜单项 | 状态 | 备注 |
 |---|------|--------|------|------|
 | 1 | nav.home | dashboard, bigScreen | ✅ | docs 已更新；体验问题（severity 多档、表头命名）已修 |
-| 2 | nav.serverMgmt | servers, networkDevices, networks, snmp, networkDiscovery, dbConnections, sshKeys, terminal, remoteDesktop | ✅ | 主要 404/解包问题已在 c01c217 修复 |
+| 2 | nav.serverMgmt | servers, networkDevices, networks, snmp, networkDiscovery, dbConnections, sshKeys, terminal, remoteDesktop | ✅ | 本轮第二组深度体检 + 修复：snmpRoutes 改统一格式 / dbConnections routes→service 抽象 / serverGroup+ManagementRoutes RBAC 漏洞 / networkSubnetRoutes catch logger / 4 处死代码删除 / RemoteDesktop Socket auth token |
 | 3 | nav.containersVirtualization | containers, containerMonitor, containerLogs, images, volumes, virtualMachines, compose, snapshotPolicies, vmMigrations, imageRegistry, kubernetes, costAnalysis, autoScale | ✅ | compose 路径归属组织问题（不影响功能） |
 | 4 | nav.dataCenter | dcManage, dataRoom | ✅ | `/slots/batch` 已补；`DataRoom.tsx` import 路径过深（建议后续清理） |
 | 5 | nav.autoExecution | agents, agents/tools, workflows, workflows/providers, tasks, approvals, scripts, scheduledTasks, configTemplates | ✅ | tasks/retry、scripts/execute、config-templates total 均已修复 |
