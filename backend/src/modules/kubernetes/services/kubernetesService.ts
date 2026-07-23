@@ -49,6 +49,7 @@ interface K8sClientBundle {
   kc: K8sResource;
   coreApi: K8sResource;
   appsApi: K8sResource;
+  customObjectsApi: K8sResource;
 }
 
 interface K8sNamespaceInfo {
@@ -150,6 +151,7 @@ class KubernetesService {
             kc,
             coreApi: kc.makeApiClient(k8s.CoreV1Api),
             appsApi: kc.makeApiClient(k8s.AppsV1Api),
+            customObjectsApi: kc.makeApiClient(k8s.CustomObjectsApi),
           });
           this.contexts.set(row.id, {
             id: row.id, name: row.name, clusterUrl: row.cluster_url || '',
@@ -218,6 +220,7 @@ class KubernetesService {
         kc,
         coreApi: kc.makeApiClient(k8s.CoreV1Api),
         appsApi: kc.makeApiClient(k8s.AppsV1Api),
+        customObjectsApi: kc.makeApiClient(k8s.CustomObjectsApi),
       });
 
       // 更新集群信息
