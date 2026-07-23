@@ -58,6 +58,9 @@ import { autoScaleService } from './modules/auto/services/autoScaleService';
 import { vmSnapshotSchedulerService } from './modules/containers/services/vmSnapshotSchedulerService';
 import { vmManagementService } from './modules/containers/services/vmManagement';
 import { multiHostDockerService } from './modules/containers/services/multiHostDockerService';
+import { containerMonitorService } from './modules/containers/services/containerMonitorService';
+import { containerLogService } from './modules/containers/services/containerLogService';
+import { vmMigrationService } from './modules/containers/services/vmMigrationService';
 import { initTokenBlacklist } from './modules/auth/services/tokenBlacklist';
 import { migrateEncryptionKeys } from './modules/auth/services/encryptionService';
 import { startCircuitBreakerCleanup } from './modules/ai/services/llm/llmService';
@@ -403,7 +406,18 @@ export function registerAllServices(): void {
       vmManagementService.init();
       vmSnapshotSchedulerService.initialize();
       multiHostDockerService.initialize();
-      return { name: 'containerVMRuntime' };
+      return {
+        name: 'containerVMRuntime',
+        // 2026-07-23 修复：graceful restart 时清掉 setInterval / setTimeout / AbortController
+        // 之前 4 个页面（containerMonitor / containerLogs / snapshotPolicies / vmMigrations）对应的
+        // 后端运行时全被遗忘停止，会泄漏定时器与 stream 句柄
+        shutdown: () => {
+          containerMonitorService.stopAll();
+          containerLogService.stopAll();
+          vmSnapshotSchedulerService.stopAll();
+          vmMigrationService.stopAll();
+        },
+      };
     },
     [],
   );

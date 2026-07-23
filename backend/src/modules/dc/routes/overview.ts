@@ -4,6 +4,8 @@ import { dcCrudService } from '../services/dcCrudService';
 import { Router } from 'express';
 
 import { getErrorMessage } from '../../../utils/errorHelpers';
+import { requireRole } from '../../../middleware/auth';
+import { logger } from '../../../utils/logger';
 
 const router = Router();
 
@@ -85,8 +87,9 @@ router.get('/', (_req: Request, res: Response) => {
       }
     });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc overview', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
-  }
-});
+    }
+  });
 
 export default router;

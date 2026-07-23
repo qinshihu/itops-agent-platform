@@ -37,9 +37,10 @@ export default function SnapshotPolicies() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      // 后端返回 { success, data: { items, total } }；axios 拦截器已解包
       const { data } = await api.get('/snapshot-policies', { params: { page, pageSize, search } });
-      setData(data || []);
-      setTotal(data.total || 0);
+      setData(data?.items || []);
+      setTotal(data?.total || 0);
     } catch { message.error('加载失败'); }
     finally { setLoading(false); }
   };

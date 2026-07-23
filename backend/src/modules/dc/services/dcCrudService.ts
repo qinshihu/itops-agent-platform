@@ -15,9 +15,13 @@
  *
  * 实现策略：直接暴露 dcRepository 的子对象引用（rooms/racks/slots/devices/pdus/cables/power），
  *           通过类型标注使 routes 调用风格保持不变：dcCrudService.slots.list() === dcRepository.slots.list()
+ *
+ * 2026-07-23 修复：同时暴露 slotsBusiness service（专门处理 U 位冲突/容量/生命周期），
+ * 让 routes/slots.ts 内联的业务规则全部下沉到 dcSlotService，避免两个版本不同步。
  */
 
 import { dcRepository } from '../../../repositories';
+import { dcSlotService } from './dcSlotService';
 
 // 透传子对象引用（确保 routes 调用方式不变，仅改变来源）
 export const dcCrudService = {
@@ -28,6 +32,8 @@ export const dcCrudService = {
   pdus: dcRepository.pdus,
   cables: dcRepository.cables,
   power: dcRepository.power,
+  // 2026-07-23 新增：暴露复杂 U 位业务，让 routes/slots.ts 不再内联
+  slotsBusiness: dcSlotService,
 };
 
 export default dcCrudService;

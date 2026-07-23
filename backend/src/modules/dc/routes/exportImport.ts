@@ -3,6 +3,8 @@ import { dcCrudService } from '../services/dcCrudService';
 import { Router } from 'express';
 
 import { getErrorMessage } from '../../../utils/errorHelpers';
+import { requireRole } from '../../../middleware/auth';
+import { logger } from '../../../utils/logger';
 
 const exportRouter = Router();
 const importRouter = Router();
@@ -25,9 +27,10 @@ exportRouter.get('/', (_req: Request, res: Response) => {
     };
     res.json({ success: true, data });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc exportImport', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
-  }
-});
+    }
+  });
 
 // ====== 导入 ======
 
@@ -47,6 +50,7 @@ importRouter.post('/', (req: Request, res: Response) => {
 
     res.json({ success: true, message: `导入完成: ${rooms.length}机房, ${racks.length}机柜, ${slots.length}U位, ${pdus.length}PDU` });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc exportImport', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });

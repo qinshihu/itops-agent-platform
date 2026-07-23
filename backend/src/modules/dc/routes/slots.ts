@@ -1,9 +1,10 @@
 import type { Request, Response } from 'express';
 import { dcCrudService } from '../services/dcCrudService';
+import { DcSlotBusinessError } from '../services/dcSlotService';
 import { Router } from 'express';
-import crypto from 'crypto';
-
 import { getErrorMessage } from '../../../utils/errorHelpers';
+import { requireRole } from '../../../middleware/auth';
+import { logger } from '../../../utils/logger';
 
 const router = Router();
 
@@ -13,6 +14,7 @@ router.get('/', (_req: Request, res: Response) => {
     const slots = dcCrudService.slots.listWithDeviceInfo();
     res.json({ success: true, data: slots });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc slots', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
@@ -26,6 +28,7 @@ router.get('/batch', (_req: Request, res: Response) => {
     const rooms = dcCrudService.rooms.list();
     res.json({ success: true, data: { slots, racks, rooms } });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc slots', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
@@ -36,147 +39,65 @@ router.get('/:rackId', (req: Request, res: Response) => {
     const slots = dcCrudService.slots.listByRackWithDeviceInfo(req.params.rackId);
     res.json({ success: true, data: slots });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc slots', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
-// POST /slots — 分配U位
-router.post('/', (req: Request, res: Response) => {
+// POST /slots — 分配U位（2026-07-23 改调 dcSlotService.assignSlot，业务规则下沉到 service）
+router.post('/', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
-    const {
-      rack_id,
-      device_id,
-      device_type,
-      device_type_id,
-      start_u,
-      end_u,
-      position_face,
-      lifecycle_notes,
-    } = req.body;
-
-    // 检查冲突
-    const conflict = dcCrudService.slots.findConflict(rack_id, start_u, end_u);
-    if (conflict) {
-      return res.status(409).json({ success: false, message: 'U位冲突：该U位已被占用' });
-    }
-
-    // 检查总U数
-    const rack = dcCrudService.racks.getById(rack_id);
-    if (rack && end_u > (rack.total_u ?? 42)) {
-      return res
-        .status(400)
-        .json({ success: false, message: `超出机柜容量(最大${rack.total_u}U)` });
-    }
-
-    // 如果有 device_type_id，自动从型号继承 u_height
-    let resolvedEndU = end_u;
-    if (device_type_id) {
-      const uHeight = dcCrudService.devices.getDeviceTypeUHeight(device_type_id);
-      if (uHeight && uHeight > 0) {
-        resolvedEndU = start_u + Math.ceil(uHeight) - 1;
-      }
-    }
-
-    const id = crypto.randomUUID();
-    dcCrudService.slots.create({
-      id,
-      rack_id,
-      device_id,
-      device_type,
-      device_type_id,
-      start_u,
-      end_u: resolvedEndU,
-      position_face,
+    const result = await dcCrudService.slotsBusiness.assignSlot({
+      rack_id: req.body.rack_id,
+      device_id: req.body.device_id,
+      device_type: req.body.device_type,
+      device_type_id: req.body.device_type_id,
+      start_u: req.body.start_u,
+      end_u: req.body.end_u,
+      position_face: req.body.position_face,
+      lifecycle_notes: req.body.lifecycle_notes,
     });
-
-    // 生命周期记录
-    dcCrudService.devices.createLifecycle({
-      id: crypto.randomUUID(),
-      device_id,
-      device_type,
-      action: 'mounted',
-      to_rack_id: rack_id,
-      to_slot_start: start_u,
-      to_slot_end: end_u,
-      notes: lifecycle_notes || '',
-    });
-
-    res.json({ success: true, data: { id } });
+    res.json({ success: true, data: { id: result.id, end_u: result.end_u } });
   } catch (error: unknown) {
+    if (error instanceof DcSlotBusinessError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    logger.error('Failed to assign slot:', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
-// PUT /slots/:id — 更新/移位U位
-router.put('/:id', (req: Request, res: Response) => {
+// PUT /slots/:id — 更新/移位U位（2026-07-23 改调 dcSlotService.moveSlot）
+router.put('/:id', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
-    const { rack_id, start_u, end_u, position_face, lifecycle_notes } = req.body;
-    const oldSlot = dcCrudService.slots.getById(req.params.id);
-    if (!oldSlot) return res.status(404).json({ success: false, message: 'U位记录不存在' });
-
-    // 检查冲突（排除自身）
-    const effectiveRackId = rack_id || oldSlot.rack_id;
-    const conflict = dcCrudService.slots.findConflict(
-      effectiveRackId,
-      start_u,
-      end_u,
-      req.params.id,
-    );
-    if (conflict) {
-      return res.status(409).json({ success: false, message: 'U位冲突' });
-    }
-
-    dcCrudService.slots.update(req.params.id, {
-      rack_id: effectiveRackId,
-      start_u,
-      end_u,
-      position_face,
+    await dcCrudService.slotsBusiness.moveSlot({
+      id: req.params.id,
+      rack_id: req.body.rack_id,
+      start_u: req.body.start_u,
+      end_u: req.body.end_u,
+      position_face: req.body.position_face,
+      lifecycle_notes: req.body.lifecycle_notes,
     });
-
-    // 记录生命周期
-    if (rack_id && rack_id !== oldSlot.rack_id) {
-      dcCrudService.devices.createLifecycle({
-        id: crypto.randomUUID(),
-        device_id: String(oldSlot.device_id ?? ''),
-        device_type: String(oldSlot.device_type_id ?? ''),
-        action: 'moved',
-        from_rack_id: oldSlot.rack_id,
-        to_rack_id: rack_id,
-        from_slot_start: Number(oldSlot.start_u),
-        from_slot_end: Number(oldSlot.end_u),
-        to_slot_start: start_u,
-        to_slot_end: end_u,
-        notes: lifecycle_notes || '',
-      });
-    }
-
     res.json({ success: true });
   } catch (error: unknown) {
+    if (error instanceof DcSlotBusinessError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    logger.error('Failed to move slot:', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
-// DELETE /slots/:id — 移除U位（下架设备）
-router.delete('/:id', (req: Request, res: Response) => {
+// DELETE /slots/:id — 移除U位（2026-07-23 改调 dcSlotService.removeSlot）
+router.delete('/:id', requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const slot = dcCrudService.slots.getById(req.params.id);
-    if (!slot) return res.status(404).json({ success: false, message: 'U位记录不存在' });
-
-    // 生命周期记录
-    dcCrudService.devices.createLifecycle({
-      id: crypto.randomUUID(),
-      device_id: String(slot.device_id ?? ''),
-      device_type: String(slot.device_type_id ?? ''),
-      action: 'unmounted',
-      from_rack_id: slot.rack_id,
-      from_slot_start: Number(slot.start_u),
-      from_slot_end: Number(slot.end_u),
-      notes: '',
-    });
-
-    dcCrudService.slots.delete(req.params.id);
+    await dcCrudService.slotsBusiness.removeSlot(req.params.id);
     res.json({ success: true });
   } catch (error: unknown) {
+    if (error instanceof DcSlotBusinessError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    logger.error('Failed to remove slot:', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });

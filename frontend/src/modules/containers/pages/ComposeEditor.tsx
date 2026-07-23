@@ -55,8 +55,10 @@ export default function ComposeEditor() {
     setLoading(true);
     try {
       const result = await containersApi.listCompose({ page, pageSize, search });
-      setData(result.data || []);
-      setTotal(result.total || 0);
+      // 后端返回 { success, data: { items, total } }；axios 拦截器已解包
+      // containersApi.listCompose 直接 return data 自身（service 包装）
+      setData(result?.items || result?.data || []);
+      setTotal(result?.total || result?.data?.total || 0);
     } catch { message.error('加载失败'); }
     finally { setLoading(false); }
   };
