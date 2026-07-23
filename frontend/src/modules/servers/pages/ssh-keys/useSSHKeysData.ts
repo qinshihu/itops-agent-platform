@@ -252,7 +252,7 @@ export function useSSHKeysData(): UseSSHKeysDataResult {
         key.name.toLowerCase().includes(q) ||
         (key.description || '').toLowerCase().includes(q) ||
         (key.fingerprint || '').toLowerCase().includes(q) ||
-        key.key_type.toLowerCase().includes(q),
+        (key.key_type ?? '').toLowerCase().includes(q),
     );
   }, [sshKeys, searchQuery]);
 

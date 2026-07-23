@@ -256,7 +256,8 @@ router.get('/', async (req: Request, res: Response) => {
     }
     const total = filtered.length;
     const data = filtered.slice((page - 1) * pageSize, page * pageSize);
-    res.json({ success: true, data, total });
+    // 2026-07-23 把 total 嵌入 data.items（避免被前端 axios 拦截器剥掉兄弟字段）
+    res.json({ success: true, data: { items: data, total } });
   } catch (err: unknown) {
     res.status(500).json({ success: false, message: getErrorMessage(err) });
   }

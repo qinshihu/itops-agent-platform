@@ -64,48 +64,7 @@ router.get('/:id', validateParams(agentSchemas.agentId), (req: Request, res: Res
   }
 });
 
-// GET /:id/executions - 执行历史列表
-router.get(
-  '/:id/executions',
-  validateParams(agentSchemas.agentId),
-  validateQuery(agentSchemas.listExecutions),
-  (req: Request, res: Response) => {
-    try {
-      const { limit = 20, offset = 0, status } = req.query;
-      const limitNum = parseInt(limit as string);
-      const offsetNum = parseInt(offset as string);
-
-      const executions = agentCrudService.listExecutionsByAgent(req.params.id, {
-        status: status as string | undefined,
-        limit: limitNum,
-        offset: offsetNum,
-      });
-
-      const totalCount = agentCrudService.countExecutionsByAgent(
-        req.params.id,
-        status as string | undefined,
-      );
-
-      res.json({
-        success: true,
-        data: {
-          executions,
-          pagination: {
-            total: totalCount,
-            limit: limitNum,
-            offset: offsetNum,
-          },
-        },
-      });
-    } catch (error) {
-      logger.error('Failed to fetch agent executions:', error);
-      res.status(500).json({
-        success: false,
-        error: (error as Error).message || 'Failed to fetch agent executions',
-      });
-    }
-  },
-);
+// 注：2026-07-23 删除 GET /:id/executions（前端无消费者）
 
 // POST / - 创建
 router.post(

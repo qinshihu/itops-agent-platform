@@ -138,33 +138,4 @@ router.post(
   },
 );
 
-router.post(
-  '/:id/run',
-  requireRole('admin', 'operator'),
-  validateParams(scheduledTaskSchemas.taskId),
-  (req: Request, res: Response) => {
-    try {
-      const task = scheduledTaskCrudService.getScheduledTaskById(req.params.id);
-      if (!task) {
-        return res.status(404).json({ success: false, error: 'Scheduled task not found' });
-      }
-      const result = scheduledTaskCrudService.runScheduledTaskManually(req.params.id);
-      if (!result.success) {
-        return res.status(500).json({ success: false, error: result.error });
-      }
-      createAuditLog({
-        user_id: getCurrentUserId(req),
-        action: 'manual_run_scheduled_task',
-        resource_type: 'scheduled_task',
-        resource_id: req.params.id,
-        details: { name: (task as { name: string }).name, manual_run: 'true' },
-      });
-      res.json({ success: true, message: 'Task triggered manually' });
-    } catch (error) {
-      logger.error('POST /scheduled-tasks/:id/run failed:', error);
-      res.status(500).json({ success: false, error: errMsg(error) });
-    }
-  },
-);
-
 export default router;

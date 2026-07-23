@@ -25,7 +25,10 @@ router.get('/', (req: Request, res: Response) => {
     const type = (req.query.type as string) || '';
 
     const result = storageVolumeCrudService.listVolumes({ page, pageSize, search, host, type });
-    res.json({ success: true, data: (result as { data?: unknown }).data ?? result, total: (result as { total?: number }).total });
+    const items = (result as { data?: unknown }).data ?? result;
+    const total = (result as { total?: number }).total ?? (Array.isArray(items) ? items.length : 0);
+    // 2026-07-23 把 total 嵌入 data.items（避免被前端 axios 拦截器剥掉兄弟字段）
+    res.json({ success: true, data: { items, total } });
   } catch (error: unknown) {
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }

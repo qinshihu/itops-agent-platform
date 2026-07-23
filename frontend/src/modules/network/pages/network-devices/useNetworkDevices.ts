@@ -139,7 +139,7 @@ export function useNetworkDevices() {
     try {
       const response = await api.post(`/network-devices/${device.id}/inspect-snmp`);
       // axios 拦截器已解包 → response.data 才是业务对象
-      const data = response.data as { _deviceName?: string } & Record<string, unknown>;
+      const data = response.data as SnmpInspectionData;
       data._deviceName = device.name;
       setSnmpInspectionResult(data);
       queryClient.invalidateQueries({ queryKey: ['network-devices'] });
@@ -164,7 +164,9 @@ export function useNetworkDevices() {
       if (response.data?.reachable || (response.data as { success?: boolean })?.success) {
         toast.success('SNMP 连接成功 ✅');
       } else {
-        toast.error('SNMP 连接失败: ' + ((response.data as { message?: string })?.message || '未知错误'));
+        toast.error(
+          'SNMP 连接失败: ' + ((response.data as { message?: string })?.message || '未知错误'),
+        );
       }
     } catch (error) {
       const e = error as { response?: { data?: { message?: string } }; message?: string };

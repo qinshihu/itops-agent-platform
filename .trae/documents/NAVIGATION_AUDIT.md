@@ -52,13 +52,19 @@
 
 | 优先级 | 项 | 位置 | 描述 |
 |--------|----|------|------|
-| P2 | Approvals 评论丢失 | `frontend/src/modules/change-management/pages/Approvals.tsx:45` | approve 硬编码 '审批通过'，应加可选意见 modal |
 | P2 | RemediationExecutions 分页无封顶 | `frontend/src/modules/auto/pages/RemediationExecutions.tsx:309-321` | 下一页按钮无 disabled + 限上界 |
 | P2 | Reports type 写死 'inspection' | `backend/src/modules/monitor/services/reportService.ts:227,243` | getTemplates/getTemplate 丢失真实 type |
 | P3 | lint-staged Windows 路径 bug | `scripts/lint-staged.cjs:31-39` | Windows 上 path.join 把绝对路径当相对路径处理 → ENOENT |
-| P3 | frontend/src/modules/servers/api.ts + network/api.ts 死代码 | 含错误 `data.data` 解包且无调用方 | 建议删除 |
-| P3 | DataRoom.tsx import 路径过深 | `frontend/src/modules/dc/pages/DataRoom.tsx:5` | `../../../modules/dc/...` 应为 `../components/...` |
 | P3 | ComposeEditor 归属错配 | `frontend/src/modules/containers/...` | compose 实际属 config-management，不影响功能 |
+
+### 2026-07-23 v5+ 完结：遗留 P2/P3 全部解决
+- ✅ ssh-keys consumer 5 处 `?? 0/?? ''` fallback
+- ✅ useNetworkDevices `_deviceName` 改用 `SnmpInspectionData` 显式断言（消除污染）
+- ✅ ComposeEditor PaginatedResult 类型统一为 `{items, total}`（5 个 list 方法对齐）
+- ✅ containerRoutes `/containers` / volumeRoutes `/volvolumes` 改为 `{items, total}` 嵌套格式
+- ✅ Approvals 评论 modal（已在 v5 完成）
+- ✅ 3 个真死路由删除：agents/:id/test-input、agents/:id/executions、scheduled-tasks/:id/run
+- ✅ presetTestInputs.ts 删除（只被 test-input 引用）
 
 ## 体检方法
 
