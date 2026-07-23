@@ -4,6 +4,8 @@ import { Router } from 'express';
 import crypto from 'crypto';
 
 import { getErrorMessage } from '../../../utils/errorHelpers';
+import { requireRole } from '../../../middleware/auth';
+import { logger } from '../../../utils/logger';
 
 const router = Router();
 
@@ -15,9 +17,10 @@ router.get('/', (_req: Request, res: Response) => {
     const list = dcCrudService.power.listPanels();
     res.json({ success: true, data: list });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc powerPanels', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
-  }
-});
+    }
+  });
 
 /**
  * GET /power-panels/:id — 单个配电柜详情（含供电线路）
@@ -30,6 +33,7 @@ router.get('/:id', (req: Request, res: Response) => {
     const feeds = dcCrudService.power.listFeedsByPanel(req.params.id);
     res.json({ success: true, data: { ...panel, feeds } });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc powerPanels', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
@@ -37,7 +41,7 @@ router.get('/:id', (req: Request, res: Response) => {
 /**
  * POST /power-panels — 创建配电柜
  */
-router.post('/', (req: Request, res: Response) => {
+router.post('/', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { room_id, name, location_label, panel_type, voltage, amperage, phase_count, description, sort_order } = req.body;
     if (!room_id || !name) return res.status(400).json({ success: false, message: 'room_id and name required' });
@@ -47,6 +51,7 @@ router.post('/', (req: Request, res: Response) => {
     });
     res.json({ success: true, data: { id } });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc powerPanels', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
@@ -54,7 +59,7 @@ router.post('/', (req: Request, res: Response) => {
 /**
  * PUT /power-panels/:id — 更新配电柜
  */
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { name, location_label, panel_type, voltage, amperage, phase_count, description, sort_order } = req.body;
     dcCrudService.power.updatePanel(req.params.id, {
@@ -62,6 +67,7 @@ router.put('/:id', (req: Request, res: Response) => {
     });
     res.json({ success: true });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc powerPanels', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
@@ -69,7 +75,7 @@ router.put('/:id', (req: Request, res: Response) => {
 /**
  * DELETE /power-panels/:id — 删除配电柜（有关联馈线时禁止）
  */
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', requireRole('admin'), (req: Request, res: Response) => {
   try {
     const cnt = dcCrudService.power.countFeedsByPanel(req.params.id);
     if (cnt > 0) {
@@ -78,6 +84,7 @@ router.delete('/:id', (req: Request, res: Response) => {
     dcCrudService.power.deletePanel(req.params.id);
     res.json({ success: true });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc powerPanels', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });

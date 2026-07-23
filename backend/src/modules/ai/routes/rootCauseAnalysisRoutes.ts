@@ -2,6 +2,7 @@ import express from 'express';
 import { rootCauseAnalysisService } from '../services/rca/rootCauseAnalysisService';
 import { rcaJobManager } from '../services/rca/rcaJobManager';
 import { logger } from '../../../utils/logger';
+import { requireRole } from '../../../middleware/auth';
 
 const router = express.Router();
 
@@ -18,13 +19,15 @@ router.get('/', (_req, res) => {
       recommendations: rca.recommendations ? JSON.parse(rca.recommendations) : []
     }));
     res.json({ success: true, data: parsedRcas });
-  } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+  } catch (error: unknown) {
+    logger.error('GET /root-cause-analysis failed:', error);
+    const message = error instanceof Error ? error.message : 'Failed to list RCA';
+    res.status(500).json({ success: false, message });
   }
 });
 
 // 创建新的根因分析
-router.post('/', (req, res) => {
+router.post('/', requireRole('admin', 'operator'), (req, res) => {
   try {
     const { alert_id, title, description } = req.body;
     if (!title) {
@@ -32,8 +35,10 @@ router.post('/', (req, res) => {
     }
     const rca = rootCauseAnalysisService.create({ alert_id, title, description });
     res.json({ success: true, data: rca });
-  } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+  } catch (error: unknown) {
+    logger.error('POST /root-cause-analysis failed:', error);
+    const message = error instanceof Error ? error.message : 'Failed to create RCA';
+    res.status(500).json({ success: false, message });
   }
 });
 
@@ -44,8 +49,10 @@ router.get('/stats', (_req, res) => {
   try {
     const stats = rootCauseAnalysisService.getStats();
     res.json({ success: true, data: stats });
-  } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+  } catch (error: unknown) {
+    logger.error('GET /root-cause-analysis/stats failed:', error);
+    const message = error instanceof Error ? error.message : 'Failed to get stats';
+    res.status(500).json({ success: false, message });
   }
 });
 
@@ -66,13 +73,15 @@ router.get('/alert/:alertId', (req, res) => {
       recommendations: rca.recommendations ? JSON.parse(rca.recommendations) : []
     };
     res.json({ success: true, data: parsedRca });
-  } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+  } catch (error: unknown) {
+    logger.error('GET /root-cause-analysis/alert/:alertId failed:', error);
+    const message = error instanceof Error ? error.message : 'Failed to get RCA';
+    res.status(500).json({ success: false, message });
   }
 });
 
 // 手动触发自动根因分析
-router.post('/auto-analyze/:alertId', async (req, res) => {
+router.post('/auto-analyze/:alertId', requireRole('admin', 'operator'), async (req, res) => {
   try {
     const { alertId } = req.params;
     const rca = await rootCauseAnalysisService.autoAnalyze(alertId);
@@ -87,8 +96,10 @@ router.post('/auto-analyze/:alertId', async (req, res) => {
       recommendations: rca.recommendations ? JSON.parse(rca.recommendations) : []
     };
     res.json({ success: true, data: parsedRca });
-  } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+  } catch (error: unknown) {
+    logger.error('POST /root-cause-analysis/auto-analyze/:alertId failed:', error);
+    const message = error instanceof Error ? error.message : 'Auto-analyze failed';
+    res.status(500).json({ success: false, message });
   }
 });
 
@@ -111,13 +122,15 @@ router.get('/:id', (req, res) => {
       recommendations: rca.recommendations ? JSON.parse(rca.recommendations) : []
     };
     res.json({ success: true, data: parsedRca });
-  } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+  } catch (error: unknown) {
+    logger.error('GET /root-cause-analysis/:id failed:', error);
+    const message = error instanceof Error ? error.message : 'Failed to get RCA';
+    res.status(500).json({ success: false, message });
   }
 });
 
 // 更新根因分析
-router.put('/:id', (req, res) => {
+router.put('/:id', requireRole('admin', 'operator'), (req, res) => {
   try {
     const { id } = req.params;
     const updatedRca = rootCauseAnalysisService.update(id, req.body);
@@ -125,13 +138,15 @@ router.put('/:id', (req, res) => {
       return res.status(404).json({ success: false, message: '根因分析不存在' });
     }
     res.json({ success: true, data: updatedRca });
-  } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+  } catch (error: unknown) {
+    logger.error('PUT /root-cause-analysis/:id failed:', error);
+    const message = error instanceof Error ? error.message : 'Failed to update RCA';
+    res.status(500).json({ success: false, message });
   }
 });
 
 // 执行根因分析（v4 新增：异步版本，立即返回 202 + jobId）
-router.post('/:id/analyze-async', (req, res) => {
+router.post('/:id/analyze-async', requireRole('admin', 'operator'), (req, res) => {
   try {
     const { id } = req.params;
     const existing = rootCauseAnalysisService.get(id);
@@ -149,9 +164,10 @@ router.post('/:id/analyze-async', (req, res) => {
       },
       message: '分析任务已提交，请轮询 /jobs/:jobId 查询结果',
     });
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Failed to start async RCA job:', error);
-    res.status(500).json({ success: false, message: (error as Error).message });
+    const message = error instanceof Error ? error.message : 'Failed to start analyze-async';
+    res.status(500).json({ success: false, message });
   }
 });
 
@@ -164,13 +180,15 @@ router.get('/jobs/:jobId', (req, res) => {
       return res.status(404).json({ success: false, message: '任务不存在或已过期' });
     }
     res.json({ success: true, data: job });
-  } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+  } catch (error: unknown) {
+    logger.error('GET /root-cause-analysis/jobs/:jobId failed:', error);
+    const message = error instanceof Error ? error.message : 'Failed to get job';
+    res.status(500).json({ success: false, message });
   }
 });
 
 // 执行根因分析
-router.post('/:id/analyze', async (req, res) => {
+router.post('/:id/analyze', requireRole('admin', 'operator'), async (req, res) => {
   try {
     const { id } = req.params;
     const analyzedRca = await rootCauseAnalysisService.analyze(id);
@@ -186,13 +204,15 @@ router.post('/:id/analyze', async (req, res) => {
       recommendations: analyzedRca.recommendations ? JSON.parse(analyzedRca.recommendations) : []
     };
     res.json({ success: true, data: parsedRca });
-  } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+  } catch (error: unknown) {
+    logger.error('POST /root-cause-analysis/:id/analyze failed:', error);
+    const message = error instanceof Error ? error.message : 'Analyze failed';
+    res.status(500).json({ success: false, message });
   }
 });
 
 // 删除根因分析
-router.delete('/:id', (req, res) => {
+router.delete('/:id', requireRole('admin', 'operator'), (req, res) => {
   try {
     const { id } = req.params;
     const deleted = rootCauseAnalysisService.delete(id);
@@ -200,8 +220,10 @@ router.delete('/:id', (req, res) => {
       return res.status(404).json({ success: false, message: '根因分析不存在' });
     }
     res.json({ success: true, message: '删除成功' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+  } catch (error: unknown) {
+    logger.error('DELETE /root-cause-analysis/:id failed:', error);
+    const message = error instanceof Error ? error.message : 'Failed to delete RCA';
+    res.status(500).json({ success: false, message });
   }
 });
 

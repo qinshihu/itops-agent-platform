@@ -98,12 +98,21 @@ class ContainerMonitorService {
       });
       
       return {
+        // 2026-07-23 字段名与前端 ClusterSnapshot 对齐：
+        // containerCount/totalMemUsage/totalMemLimit → 与前端 totalContainers/totalMemoryUsage/totalMemoryLimit 不匹配
+        // （axios 拦截器已解包 → 前端拿到的就是本对象）
+        // 改为前端字段名（全栈对齐），同时保留旧字段作为 alias 以防其他调用方
         containerCount: containers.length,
         runningCount: containers.filter(c => c.state === 'running').length,
+        totalContainers: containers.length,
+        runningContainers: containers.filter(c => c.state === 'running').length,
         totalCpuPercent: totalCpu.toFixed(2),
         totalMemUsage,
         totalMemLimit,
+        totalMemoryUsage: totalMemUsage,
+        totalMemoryLimit: totalMemLimit,
         totalMemPercent: totalMemLimit > 0 ? ((totalMemUsage / totalMemLimit) * 100).toFixed(2) : '0',
+        totalMemoryPercent: totalMemLimit > 0 ? ((totalMemUsage / totalMemLimit) * 100).toFixed(2) : '0',
         containers: results,
         timestamp: new Date().toISOString(),
       };

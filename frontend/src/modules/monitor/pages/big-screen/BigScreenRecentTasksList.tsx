@@ -7,8 +7,23 @@
  * 拆分原则遵循 architecture.md §3.4.1 + 第 3 条「向后兼容的 import 路径」
  */
 import { formatDistanceToNow } from 'date-fns';
+import { logger } from '@/lib/logger';
 import { getStatusColor } from './BigScreenStatCard';
 import type { TaskWithProgress } from './types';
+
+// 2026-07-23 P3：Invalid Date 兜底；created_at 为空/无效时显示 '--'
+const formatTaskTimeSafe = (createdAt: string | undefined | null): string => {
+  if (!createdAt) return '--';
+  const d = new Date(createdAt);
+  if (isNaN(d.getTime())) {
+    logger.warn('big-screen: BigScreenRecentTasksList received invalid created_at', {
+      createdAt,
+      taskId: undefined,
+    });
+    return '--';
+  }
+  return formatDistanceToNow(d, { addSuffix: true });
+};
 
 export interface BigScreenRecentTasksListProps {
   tasks: TaskWithProgress[];
@@ -48,9 +63,7 @@ export default function BigScreenRecentTasksList({
                 <div
                   className={`w-2 h-2 rounded-full ${task.status === 'running' ? 'bg-status-running animate-pulse' : task.status === 'completed' ? 'bg-status-success' : task.status === 'failed' ? 'bg-status-failed' : 'bg-status-pending'}`}
                 />
-                <span className="text-sm text-white truncate max-w-[200px]">
-                  {task.name}
-                </span>
+                <span className="text-sm text-white truncate max-w-[200px]">{task.name}</span>
               </div>
               <span
                 className={`px-2 py-0.5 rounded text-xs font-medium capitalize ${getStatusColor(task.status)} bg-slate-700/50`}
@@ -64,9 +77,7 @@ export default function BigScreenRecentTasksList({
                   <span className="text-slate-400">
                     {task.completedNodes}/{task.totalNodes} 节点完成
                   </span>
-                  <span className="text-sky-300 font-mono font-bold">
-                    {task.progress}%
-                  </span>
+                  <span className="text-sky-300 font-mono font-bold">{task.progress}%</span>
                 </div>
                 <div className="relative h-1.5 bg-slate-700/60 rounded-full overflow-hidden ring-1 ring-inset ring-white/15">
                   <div
@@ -77,9 +88,7 @@ export default function BigScreenRecentTasksList({
               </div>
             )}
             <div className="flex items-center justify-end mt-1">
-              <span className="text-xs text-slate-400">
-                {formatDistanceToNow(new Date(task.created_at), { addSuffix: true })}
-              </span>
+              <span className="text-xs text-slate-400">{formatTaskTimeSafe(task.created_at)}</span>
             </div>
           </div>
         ))}

@@ -12,6 +12,7 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { logger } from '../../../../utils/logger';
+import { requireRole } from '../../../../middleware/auth';
 import { validateBody, validateParams } from '../../../../middleware/validation';
 import { agentSchemas } from '../../../../shared/schemas/apiValidation';
 import { agentCrudService } from '../../services/agentCrudService';
@@ -20,9 +21,10 @@ import { executeAgentNode } from '../../services/agents/agentExecutor';
 
 const router = Router();
 
-// POST /:id/test - 测试 Agent 执行
+// POST /:id/test - 测试 Agent 执行（高风险：实际执行 LLM/工具链）
 router.post(
   '/:id/test',
+  requireRole('admin', 'operator'),
   validateParams(agentSchemas.agentId),
   validateBody(agentSchemas.testAgent),
   async (req: Request, res: Response) => {
@@ -62,10 +64,11 @@ router.post(
           // 其他Agent用LLM执行
           output = await executeAgentWithLLM(agent.id, input);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         status = 'error';
-        errorMessage = (error as Error).message;
+        errorMessage = error instanceof Error ? error.message : String(error);
         output = `Agent "${agentName}" 执行失败: ${errorMessage}`;
+        logger.error(`Agent execution failed for ${agentName}:`, error);
       }
 
       const executionTime = Date.now() - startTime;

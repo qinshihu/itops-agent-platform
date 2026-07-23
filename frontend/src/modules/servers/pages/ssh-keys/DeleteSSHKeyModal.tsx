@@ -8,7 +8,7 @@
  */
 import clsx from 'clsx';
 import { AlertTriangle, Trash2 } from 'lucide-react';
-import { SshKey } from '../../api';
+import type { SshKey } from './types';
 
 export interface DeleteSSHKeyModalProps {
   keyData: SshKey | null;
@@ -16,11 +16,7 @@ export interface DeleteSSHKeyModalProps {
   onConfirm: () => void;
 }
 
-export function DeleteSSHKeyModal({
-  keyData,
-  onClose,
-  onConfirm,
-}: DeleteSSHKeyModalProps) {
+export function DeleteSSHKeyModal({ keyData, onClose, onConfirm }: DeleteSSHKeyModalProps) {
   if (!keyData) return null;
 
   return (
@@ -34,13 +30,12 @@ export function DeleteSSHKeyModal({
         </div>
         <div className="text-sm text-text-secondary mb-4">
           <p>
-            确定要删除密钥{' '}
-            <strong className="text-text-primary">{keyData.name}</strong> 吗？
+            确定要删除密钥 <strong className="text-text-primary">{keyData.name}</strong> 吗？
           </p>
-          {keyData.usage_count > 0 && (
+          {(keyData.usage_count ?? 0) > 0 && (
             <p className="mt-2 text-red-400 flex items-center gap-1.5">
               <AlertTriangle className="w-4 h-4" />
-              该密钥正被 <strong>{keyData.usage_count}</strong> 台服务器使用，无法删除
+              该密钥正被 <strong>{keyData.usage_count ?? 0}</strong> 台服务器使用，无法删除
             </p>
           )}
         </div>
@@ -53,10 +48,10 @@ export function DeleteSSHKeyModal({
           </button>
           <button
             onClick={onConfirm}
-            disabled={keyData.usage_count > 0}
+            disabled={(keyData.usage_count ?? 0) > 0}
             className={clsx(
               'flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2',
-              keyData.usage_count > 0
+              (keyData.usage_count ?? 0) > 0
                 ? 'bg-red-500/20 text-red-400/50 cursor-not-allowed'
                 : 'bg-red-500 text-white hover:bg-red-600',
             )}

@@ -3,6 +3,9 @@ import { Router } from 'express';
 import { changeService } from '../services/changeService';
 import { validateBody, validateParams } from '../../../middleware/validation';
 import { changeSchemas, commonSchemas } from '../../../shared/schemas/apiValidation';
+import { requireRole } from '../../../middleware/auth';
+import { logger } from '../../../utils/logger';
+import { getErrorMessage } from '../../../utils/errorHelpers';
 
 const router = Router();
 
@@ -19,12 +22,13 @@ router.get('/', (req: Request, res: Response) => {
     });
 
     res.json({ success: true, data: result.records, pagination: { page: result.page, limit: result.limit, total: result.total } });
-  } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+  } catch (error: unknown) {
+    logger.error('GET /changes failed:', error);
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
-router.post('/', validateBody(changeSchemas.createChange), (req: Request, res: Response) => {
+router.post('/', validateBody(changeSchemas.createChange), requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { server_id, change_type, description, changed_by, status, related_alert_id, metadata } = req.body;
 
@@ -39,8 +43,9 @@ router.post('/', validateBody(changeSchemas.createChange), (req: Request, res: R
     });
 
     res.status(201).json({ success: true, data: record });
-  } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+  } catch (error: unknown) {
+    logger.error('POST /changes failed:', error);
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
@@ -48,35 +53,38 @@ router.get('/:id', (req: Request, res: Response) => {
   try {
     const record = changeService.get(req.params.id);
     if (!record) {
-      return res.status(404).json({ success: false, error: 'Change record not found' });
+      return res.status(404).json({ success: false, message: 'Change record not found' });
     }
     res.json({ success: true, data: record });
-  } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+  } catch (error: unknown) {
+    logger.error('GET /changes/:id failed:', error);
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
-router.patch('/:id', (req: Request, res: Response) => {
+router.patch('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const record = changeService.update(req.params.id, req.body);
     if (!record) {
-      return res.status(404).json({ success: false, error: 'Change record not found' });
+      return res.status(404).json({ success: false, message: 'Change record not found' });
     }
     res.json({ success: true, data: record });
-  } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+  } catch (error: unknown) {
+    logger.error('PATCH /changes/:id failed:', error);
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 
-router.post('/:id/root-cause', validateParams(commonSchemas.idParam), (req: Request, res: Response) => {
+router.post('/:id/root-cause', validateParams(commonSchemas.idParam), requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const record = changeService.markAsRootCause(req.params.id);
     if (!record) {
-      return res.status(404).json({ success: false, error: 'Change record not found' });
+      return res.status(404).json({ success: false, message: 'Change record not found' });
     }
     res.json({ success: true, data: record });
-  } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+  } catch (error: unknown) {
+    logger.error('POST /changes/:id/root-cause failed:', error);
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
 

@@ -4,6 +4,8 @@ import { Router } from 'express';
 import crypto from 'crypto';
 
 import { getErrorMessage } from '../../../utils/errorHelpers';
+import { requireRole } from '../../../middleware/auth';
+import { logger } from '../../../utils/logger';
 
 const router = Router();
 
@@ -15,9 +17,10 @@ router.get('/', (_req: Request, res: Response) => {
     const list = dcCrudService.devices.listManufacturersOrdered();
     res.json({ success: true, data: list });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc manufacturers', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
-  }
-});
+    }
+  });
 
 /**
  * GET /manufacturers/:id — 获取单个制造商（含设备型号数量）
@@ -29,6 +32,7 @@ router.get('/:id', (req: Request, res: Response) => {
     const typeCount = dcCrudService.devices.countDeviceTypesByManufacturer(req.params.id);
     res.json({ success: true, data: { ...mfg, device_type_count: typeCount } });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc manufacturers', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
@@ -36,7 +40,7 @@ router.get('/:id', (req: Request, res: Response) => {
 /**
  * POST /manufacturers — 创建制造商
  */
-router.post('/', (req: Request, res: Response) => {
+router.post('/', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { name, slug, description, logo_url, sort_order } = req.body;
     if (!name || !slug) return res.status(400).json({ success: false, message: 'name and slug required' });
@@ -44,6 +48,7 @@ router.post('/', (req: Request, res: Response) => {
     dcCrudService.devices.createManufacturer({ id, name, slug, description, logo_url, sort_order });
     res.json({ success: true, data: { id } });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc manufacturers', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
@@ -51,12 +56,13 @@ router.post('/', (req: Request, res: Response) => {
 /**
  * PUT /manufacturers/:id — 更新制造商
  */
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { name, slug, description, logo_url, sort_order } = req.body;
     dcCrudService.devices.updateManufacturer(req.params.id, { id: req.params.id, name, slug, description, logo_url, sort_order });
     res.json({ success: true });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc manufacturers', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
@@ -64,7 +70,7 @@ router.put('/:id', (req: Request, res: Response) => {
 /**
  * DELETE /manufacturers/:id — 删除制造商（有关联设备型号时禁止删除）
  */
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', requireRole('admin'), (req: Request, res: Response) => {
   try {
     const typeCount = dcCrudService.devices.countDeviceTypesByManufacturer(req.params.id);
     if (typeCount > 0) {
@@ -76,6 +82,7 @@ router.delete('/:id', (req: Request, res: Response) => {
     dcCrudService.devices.deleteManufacturer(req.params.id);
     res.json({ success: true });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc manufacturers', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });

@@ -28,6 +28,11 @@ export interface AuditLogInsertInput {
   ip_address?: string | null;
 }
 
+/** 列表查询返回（含 username JOIN） */
+export interface AuditLogRecordWithUsername extends AuditLogRecord {
+  username: string | null;
+}
+
 export interface AuditLogListFilters {
   action?: string;
   resource_type?: string;
@@ -41,56 +46,64 @@ export interface AuditLogListFilters {
 export const auditLogRepository = {
   /** 插入审计日志 */
   insert(input: AuditLogInsertInput): void {
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, details, ip_address)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `,
+    ).run(
       input.id,
       input.user_id ?? null,
       input.action,
       input.resource_type,
       input.resource_id ?? null,
       input.details ?? null,
-      input.ip_address ?? null
+      input.ip_address ?? null,
     );
   },
 
   /** 按 ID 查询 */
   getById(id: string): AuditLogRecord | undefined {
-    return db.prepare('SELECT * FROM audit_logs WHERE id = ?').get(id) as AuditLogRecord | undefined;
+    return db.prepare('SELECT * FROM audit_logs WHERE id = ?').get(id) as
+      AuditLogRecord | undefined;
   },
 
-  /** 列表查询（带过滤+分页） */
-  list(filters: AuditLogListFilters = {}): AuditLogRecord[] {
-    let query = 'SELECT * FROM audit_logs WHERE 1=1';
+  /** 列表查询（带过滤+分页，LEFT JOIN users 取 username） */
+  list(filters: AuditLogListFilters = {}): AuditLogRecordWithUsername[] {
+    let query = `
+      SELECT al.*, u.username
+      FROM audit_logs al
+      LEFT JOIN users u ON al.user_id = u.id
+      WHERE 1=1
+    `;
     const params: unknown[] = [];
 
     if (filters.action) {
-      query += ' AND action = ?';
+      query += ' AND al.action = ?';
       params.push(filters.action);
     }
     if (filters.resource_type) {
-      query += ' AND resource_type = ?';
+      query += ' AND al.resource_type = ?';
       params.push(filters.resource_type);
     }
     if (filters.user_id) {
-      query += ' AND user_id = ?';
+      query += ' AND al.user_id = ?';
       params.push(filters.user_id);
     }
     if (filters.start_date) {
-      query += ' AND created_at >= ?';
+      query += ' AND al.created_at >= ?';
       params.push(filters.start_date);
     }
     if (filters.end_date) {
-      query += ' AND created_at <= ?';
+      query += ' AND al.created_at <= ?';
       params.push(filters.end_date);
     }
 
-    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    query += ' ORDER BY al.created_at DESC LIMIT ? OFFSET ?';
     params.push(filters.limit ?? 50);
     params.push(filters.offset ?? 0);
 
-    return db.prepare(query).all(...params) as AuditLogRecord[];
+    return db.prepare(query).all(...params) as AuditLogRecordWithUsername[];
   },
 
   /** 计数（带过滤） */
@@ -124,46 +137,64 @@ export const auditLogRepository = {
 
   /** 按动作类型统计（最近 7 天） */
   getActionStats(): Array<{ action: string; count: number }> {
-    return db.prepare(`
+    return db
+      .prepare(
+        `
       SELECT action, COUNT(*) as count
       FROM audit_logs
       WHERE created_at >= datetime('now', '-7 days')
       GROUP BY action
       ORDER BY count DESC
-    `).all() as Array<{ action: string; count: number }>;
+    `,
+      )
+      .all() as Array<{ action: string; count: number }>;
   },
 
   /** 按资源类型统计（最近 7 天） */
   getResourceStats(): Array<{ resource_type: string; count: number }> {
-    return db.prepare(`
+    return db
+      .prepare(
+        `
       SELECT resource_type, COUNT(*) as count
       FROM audit_logs
       WHERE created_at >= datetime('now', '-7 days')
       GROUP BY resource_type
       ORDER BY count DESC
-    `).all() as Array<{ resource_type: string; count: number }>;
+    `,
+      )
+      .all() as Array<{ resource_type: string; count: number }>;
   },
 
   /** 今日操作数 */
   getTodayCount(): number {
-    return (db.prepare(`
+    return (
+      db
+        .prepare(
+          `
       SELECT COUNT(*) as count
       FROM audit_logs
       WHERE created_at >= datetime('now', 'start of day')
-    `).get() as { count: number }).count;
+    `,
+        )
+        .get() as { count: number }
+    ).count;
   },
 
   /**
    * 导出审计日志（JOIN users 获取用户名，限 10000 条，供 importExportService 使用）
    */
   listAllWithUsernameForExport(): Array<Record<string, unknown>> {
-    return db.prepare(`
-      SELECT al.id, u.username, al.action, al.resource_type, al.resource_id, 
+    return db
+      .prepare(
+        `
+      SELECT al.id, u.username, al.action, al.resource_type, al.resource_id,
              al.details, al.ip_address, al.created_at
       FROM audit_logs al
       LEFT JOIN users u ON al.user_id = u.id
       ORDER BY al.created_at DESC
       LIMIT 10000
-    `).all() as Array<Record<string, unknown>>;
+    `,
+      )
+      .all() as Array<Record<string, unknown>>;
   },
 };

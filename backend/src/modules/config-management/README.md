@@ -2,7 +2,7 @@
 
 > **DDD 限界上下文**：配置管理与编排
 > **聚合根**：`ConfigTemplate`、`ComposeProject`
-> **最后刷新**：2026-07-22
+> **最后刷新**：2026-07-23（nav.autoExecution 第 5 轮：configTemplateRoutes POST/PUT/render RBAC + configRepairRoutes 5 高风险端点 RBAC）
 
 ## 职责
 配置管理与编排：配置模板、配置修复、Docker Compose 编排。

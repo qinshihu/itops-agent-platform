@@ -46,12 +46,12 @@ monitor/
 
 | 前缀 | 来源 routes 文件 | HTTP 端点 | 说明 |
 |------|------------------|-----------|------|
-| `/dashboard/*` | `dashboardRoutes.ts` | GET stats / alert-trends / task-trends / agent-stats / task-distribution / remediation-stats / server-metrics / sla-stats / full | 大屏 Dashboard 数据聚合 |
+| `/dashboard/*` | `dashboardRoutes.ts` | GET stats / alert-trends / task-trends / agent-stats / task-distribution / remediation-stats / server-metrics / sla-stats / full / alert-source-stats / report-analytics | 大屏 Dashboard 数据聚合 |
 | `/docker-monitor/*` | `monitorRoutes.ts` | GET containers / :id / :id/stats / :id/stats-stream | Docker 容器实时监控（WebSocket） |
-| `/cost-analysis/*` | `costAnalysisRoutes.ts` | GET/POST 成本分析 | 成本统计 |
+| `/cost-analysis/*` | `costAnalysisRoutes.ts` | GET containers / vms / recommendations / summary（items + totalMonthly/Saving 嵌入 data） | 成本统计 |
 | `/reports/*` | `reportRoutes.ts` | GET/POST 报表 | 报告模板 / 生成 / 历史 |
-| `/monitor/prometheus/*` | `prometheusRoutes.ts` ⚠️未挂载 | POST query / query-range / series / test | PromQL 主动查询（已存在但 404） |
-| `/monitor/zabbix/*` | `zabbixRoutes.ts` ⚠️未挂载 | POST test / hosts / items / history / triggers / problems | Zabbix JSON-RPC 主动查询（已存在但 404） |
+| `/monitor/prometheus/*` | `prometheusRoutes.ts` | POST query / query-range / series / test | PromQL 主动查询 |
+| `/monitor/zabbix/*` | `zabbixRoutes.ts` | POST test / hosts / items / history / triggers / problems | Zabbix JSON-RPC 主动查询 |
 
 ## 依赖关系
 - 依赖 `servers/`、`containers/`、`network/` 采集数据

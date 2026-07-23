@@ -2,11 +2,13 @@ import { Router } from 'express';
 import { serverInfoCollector } from '../services/serverInfoCollector';
 import { serverImportService } from '../services/serverImportService';
 import { validateBody } from '../../../middleware/validation';
+import { requireRole } from '../../../middleware/auth';
+import { logger } from '../../../utils/logger';
 import { serverImportSchemas } from '../../../shared/schemas/apiValidation';
 
 const router = Router();
 
-router.post('/:id/collect-info', async (req, res) => {
+router.post('/:id/collect-info', requireRole('admin', 'operator'), async (req, res) => {
   try {
     const result = await serverInfoCollector.collectServerInfo(req.params.id);
     if (result.success) {
@@ -15,20 +17,24 @@ router.post('/:id/collect-info', async (req, res) => {
       res.status(400).json({ success: false, error: result.error });
     }
   } catch (err) {
-    res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });
+    res
+      .status(500)
+      .json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });
   }
 });
 
-router.post('/collect-all', async (_req, res) => {
+router.post('/collect-all', requireRole('admin', 'operator'), async (_req, res) => {
   try {
     const result = await serverInfoCollector.collectAllServers();
     res.json({ success: true, data: result });
   } catch (err) {
-    res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });
+    res
+      .status(500)
+      .json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });
   }
 });
 
-router.post('/:id/collect-metrics', async (req, res) => {
+router.post('/:id/collect-metrics', requireRole('admin', 'operator'), async (req, res) => {
   try {
     const result = await serverInfoCollector.collectServerMetrics(req.params.id);
     if (result.success) {
@@ -37,53 +43,73 @@ router.post('/:id/collect-metrics', async (req, res) => {
       res.status(400).json({ success: false, error: result.error });
     }
   } catch (err) {
-    res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });
+    res
+      .status(500)
+      .json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });
   }
 });
 
-router.post('/collect-all-metrics', async (_req, res) => {
+router.post('/collect-all-metrics', requireRole('admin', 'operator'), async (_req, res) => {
   try {
     const result = await serverInfoCollector.collectAllServerMetrics();
     res.json({ success: true, data: result });
   } catch (err) {
-    res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });
+    res
+      .status(500)
+      .json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });
   }
 });
 
-router.post('/import', validateBody(serverImportSchemas.importServers), async (req, res) => {
-  try {
-    const { servers, test_connection } = req.body as {
-      servers: Array<{
-        name: string;
-        hostname: string;
-        port?: number;
-        username: string;
-        password?: string;
-        private_key?: string;
-        use_ssh_key?: number;
-        description?: string;
-        tags?: string[];
-        group_id?: string;
-      }>;
-      test_connection?: boolean;
-    };
+router.post(
+  '/import',
+  requireRole('admin', 'operator'),
+  validateBody(serverImportSchemas.importServers),
+  async (req, res) => {
+    try {
+      const { servers, test_connection } = req.body as {
+        servers: Array<{
+          name: string;
+          hostname: string;
+          port?: number;
+          username: string;
+          password?: string;
+          private_key?: string;
+          use_ssh_key?: number;
+          description?: string;
+          tags?: string[];
+          group_id?: string;
+        }>;
+        test_connection?: boolean;
+      };
 
-    const validation = serverImportService.validateServers(servers);
-    if (!validation.valid) {
-      res.status(400).json({ success: false, error: '数据验证失败', details: validation.errors });
-      return;
+      const validation = serverImportService.validateServers(servers);
+      if (!validation.valid) {
+        res.status(400).json({ success: false, error: '数据验证失败', details: validation.errors });
+        return;
+      }
+
+      const result = await serverImportService.importServers(servers, test_connection !== false);
+      res.json({ success: true, data: result });
+    } catch (err) {
+      res
+        .status(500)
+        .json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });
     }
-
-    const result = await serverImportService.importServers(servers, test_connection !== false);
-    res.json({ success: true, data: result });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });
-  }
-});
+  },
+);
 
 router.get('/import-template', (_req, res) => {
   const template = {
-    columns: ['name', 'hostname', 'port', 'username', 'password', 'use_ssh_key', 'description', 'tags'],
+    columns: [
+      'name',
+      'hostname',
+      'port',
+      'username',
+      'password',
+      'use_ssh_key',
+      'description',
+      'tags',
+    ],
     example: [
       {
         name: 'Web服务器-01',
@@ -93,9 +119,9 @@ router.get('/import-template', (_req, res) => {
         password: 'password123',
         use_ssh_key: 0,
         description: '生产环境Web服务器',
-        tags: 'production,web'
-      }
-    ]
+        tags: 'production,web',
+      },
+    ],
   };
   res.json({ success: true, data: template });
 });

@@ -27,10 +27,7 @@ export function useKubernetes() {
   const [searchText, setSearchText] = useState('');
 
   // ==================== 获取集群上下文 ====================
-  const {
-    data: contexts = [],
-    isLoading: contextsLoading,
-  } = useQuery({
+  const { data: contexts = [], isLoading: contextsLoading } = useQuery({
     queryKey: ['kubernetes-contexts'],
     queryFn: async () => {
       const { data } = await api.get('/kubernetes/contexts');
@@ -63,9 +60,15 @@ export function useKubernetes() {
       if (!effectiveContext) return { nodes: 0, pods: 0, services: 0, deployments: 0 };
       const [nodesRes, podsRes, servicesRes, deploymentsRes] = await Promise.all([
         api.get('/kubernetes/nodes', { params: { context: effectiveContext } }),
-        api.get('/kubernetes/pods', { params: { namespace: effectiveNamespace || undefined, context: effectiveContext } }),
-        api.get('/kubernetes/services', { params: { namespace: effectiveNamespace || undefined, context: effectiveContext } }),
-        api.get('/kubernetes/deployments', { params: { namespace: effectiveNamespace || undefined, context: effectiveContext } }),
+        api.get('/kubernetes/pods', {
+          params: { namespace: effectiveNamespace || undefined, context: effectiveContext },
+        }),
+        api.get('/kubernetes/services', {
+          params: { namespace: effectiveNamespace || undefined, context: effectiveContext },
+        }),
+        api.get('/kubernetes/deployments', {
+          params: { namespace: effectiveNamespace || undefined, context: effectiveContext },
+        }),
       ]);
       return {
         nodes: ((nodesRes.data?.data ?? nodesRes.data) || []).length,
@@ -182,7 +185,10 @@ export function useKubernetes() {
         message: data?.message || (data?.success ? '连接成功' : '连接失败'),
       });
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { error?: string; message?: string } }; message?: string };
+      const e = err as {
+        response?: { data?: { error?: string; message?: string } };
+        message?: string;
+      };
       setTestResult({
         success: false,
         message: e.response?.data?.error || e.response?.data?.message || '测试连接失败',
@@ -206,7 +212,10 @@ export function useKubernetes() {
       toast.success('集群已删除');
     },
     onError: (err: unknown) => {
-      const e = err as { response?: { data?: { error?: string; message?: string } }; message?: string };
+      const e = err as {
+        response?: { data?: { error?: string; message?: string } };
+        message?: string;
+      };
       toast.error(e.response?.data?.error || e.response?.data?.message || '删除集群失败');
     },
   });
@@ -225,7 +234,10 @@ export function useKubernetes() {
       toast.success('Pod 已删除');
     },
     onError: (err: unknown) => {
-      const e = err as { response?: { data?: { error?: string; message?: string } }; message?: string };
+      const e = err as {
+        response?: { data?: { error?: string; message?: string } };
+        message?: string;
+      };
       toast.error(e.response?.data?.error || e.response?.data?.message || '删除 Pod 失败');
     },
   });
@@ -233,8 +245,9 @@ export function useKubernetes() {
   // ==================== 扩缩容 ====================
   const scaleMutation = useMutation({
     mutationFn: async ({ dep, replicas }: { dep: Deployment; replicas: number }) => {
+      // 注意：axios baseURL 已是 '/api/v1'，不要再加 /api 前缀（否则 → /api/v1/api/kubernetes/...）
       await api.put(
-        `/api/kubernetes/deployments/${dep.namespace}/${dep.name}/scale`,
+        `/kubernetes/deployments/${dep.namespace}/${dep.name}/scale`,
         { replicas },
         { params: { context: effectiveContext } },
       );
@@ -246,7 +259,10 @@ export function useKubernetes() {
       toast.success('扩缩容成功');
     },
     onError: (err: unknown) => {
-      const e = err as { response?: { data?: { error?: string; message?: string } }; message?: string };
+      const e = err as {
+        response?: { data?: { error?: string; message?: string } };
+        message?: string;
+      };
       toast.error(e.response?.data?.error || e.response?.data?.message || '扩缩容失败');
     },
   });
@@ -254,14 +270,15 @@ export function useKubernetes() {
   // ==================== 重启 Deployment ====================
   const restartMutation = useMutation({
     mutationFn: async (dep: Deployment) => {
+      // 同 scaleMutation：去掉 /api 前缀（baseURL 已含 /api/v1）
       await api.put(
-        `/api/kubernetes/deployments/${dep.namespace}/${dep.name}/scale`,
+        `/kubernetes/deployments/${dep.namespace}/${dep.name}/scale`,
         { replicas: 0 },
         { params: { context: effectiveContext } },
       );
       setTimeout(async () => {
         await api.put(
-          `/api/kubernetes/deployments/${dep.namespace}/${dep.name}/scale`,
+          `/kubernetes/deployments/${dep.namespace}/${dep.name}/scale`,
           { replicas: dep.replicas },
           { params: { context: effectiveContext } },
         );
@@ -272,7 +289,10 @@ export function useKubernetes() {
       toast.success('重启指令已下发');
     },
     onError: (err: unknown) => {
-      const e = err as { response?: { data?: { error?: string; message?: string } }; message?: string };
+      const e = err as {
+        response?: { data?: { error?: string; message?: string } };
+        message?: string;
+      };
       toast.error(e.response?.data?.error || e.response?.data?.message || '重启失败');
     },
   });
@@ -280,15 +300,23 @@ export function useKubernetes() {
   // ==================== 刷新当前 Tab ====================
   const refreshCurrentTab = useCallback(() => {
     switch (activeTab) {
-      case 'pods': refetchPods(); break;
-      case 'deployments': refetchDeployments(); break;
-      case 'services': refetchServices(); break;
-      case 'nodes': refetchNodes(); break;
+      case 'pods':
+        refetchPods();
+        break;
+      case 'deployments':
+        refetchDeployments();
+        break;
+      case 'services':
+        refetchServices();
+        break;
+      case 'nodes':
+        refetchNodes();
+        break;
     }
   }, [activeTab, refetchPods, refetchDeployments, refetchServices, refetchNodes]);
 
-  const filteredDeployments = deployments.filter(d =>
-    !searchText || d.name.toLowerCase().includes(searchText.toLowerCase())
+  const filteredDeployments = deployments.filter(
+    (d) => !searchText || d.name.toLowerCase().includes(searchText.toLowerCase()),
   );
 
   const handleCloseImport = () => {
@@ -315,34 +343,61 @@ export function useKubernetes() {
 
   return {
     // state
-    selectedContext, effectiveContext,
-    namespace, setNamespace, effectiveNamespace,
-    activeTab, setActiveTab,
-    importModalOpen, setImportModalOpen,
+    selectedContext,
+    effectiveContext,
+    namespace,
+    setNamespace,
+    effectiveNamespace,
+    activeTab,
+    setActiveTab,
+    importModalOpen,
+    setImportModalOpen,
     kubeconfigContent,
     testingConfig,
     testResult,
-    deletePodTarget, setDeletePodTarget,
-    deleteContextTarget, setDeleteContextTarget,
-    scaleOpen, setScaleOpen,
+    deletePodTarget,
+    setDeletePodTarget,
+    deleteContextTarget,
+    setDeleteContextTarget,
+    scaleOpen,
+    setScaleOpen,
     scaleTarget,
-    scaleReplicas, setScaleReplicas,
-    searchText, setSearchText,
+    scaleReplicas,
+    setScaleReplicas,
+    searchText,
+    setSearchText,
     // data
-    contexts, contextsLoading, hasContexts,
-    namespaces, namespacesLoading,
+    contexts,
+    contextsLoading,
+    hasContexts,
+    namespaces,
+    namespacesLoading,
     overview,
-    pods, podsLoading, podsError,
-    deployments, deploymentsLoading, deploymentsError,
-    services, servicesLoading, servicesError,
-    nodes, nodesLoading, nodesError,
+    pods,
+    podsLoading,
+    podsError,
+    deployments,
+    deploymentsLoading,
+    deploymentsError,
+    services,
+    servicesLoading,
+    servicesError,
+    nodes,
+    nodesLoading,
+    nodesError,
     filteredDeployments,
     // refetch
-    refetchPods, refetchDeployments, refetchServices, refetchNodes,
+    refetchPods,
+    refetchDeployments,
+    refetchServices,
+    refetchNodes,
     refreshCurrentTab,
     // mutations
-    importMutation, deleteContextMutation,
-    deletePodMutation, scaleMutation, restartMutation,
+    importMutation,
+    deleteContextMutation,
+    deletePodMutation,
+    scaleMutation,
+    restartMutation,
     // handlers
     testConfig,
     handleCloseImport,

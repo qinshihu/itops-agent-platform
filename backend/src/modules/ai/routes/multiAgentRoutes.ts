@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { logger } from '../../../utils/logger';
+import { requireRole } from '../../../middleware/auth';
 import {
   executeTask,
   getCoordinator,
@@ -18,7 +19,7 @@ const router = Router();
  * POST /api/multi-agent/task
  * 执行运维任务（使用双层 Agent 架构）
  */
-router.post('/task', async (req: Request, res: Response) => {
+router.post('/task', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const { input, userId, context } = req.body;
 
@@ -101,7 +102,8 @@ router.get('/specialists', (req: Request, res: Response) => {
       success: true,
       data,
     });
-  } catch (_error) {
+  } catch (error) {
+    logger.error('GET /multi-agent/specialists failed:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to get specialists',
@@ -141,7 +143,8 @@ router.get('/specialists/select', (req: Request, res: Response) => {
         capabilities: specialist.capabilities,
       },
     });
-  } catch (_error) {
+  } catch (error) {
+    logger.error('GET /multi-agent/specialists/select failed:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to select specialist',
@@ -153,7 +156,7 @@ router.get('/specialists/select', (req: Request, res: Response) => {
  * POST /api/multi-agent/specialists/:id/execute
  * 直接执行某个 Specialist
  */
-router.post('/specialists/:id/execute', async (req: Request, res: Response) => {
+router.post('/specialists/:id/execute', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { input, context } = req.body;
@@ -200,7 +203,8 @@ router.post('/specialists/:id/execute', async (req: Request, res: Response) => {
         executionTime: Date.now() - startTime,
       },
     });
-  } catch (_error) {
+  } catch (error) {
+    logger.error('POST /multi-agent/specialists/:id/execute failed:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to execute specialist',
@@ -235,7 +239,8 @@ router.get('/status', (req: Request, res: Response) => {
         },
       },
     });
-  } catch (_error) {
+  } catch (error) {
+    logger.error('GET /multi-agent/status failed:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to get system status',

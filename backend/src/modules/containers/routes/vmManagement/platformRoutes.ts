@@ -7,12 +7,13 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { logger } from '../../../../utils/logger';
+import { requireRole } from '../../../../middleware/auth';
 import { vmManagementService } from '../../services/vmManagement';
 import type { HypervisorType, VMPlatformConfig } from '../../../../types/vmManagement';
 
 const router = Router();
 
-// 获取平台列表
+// 获取平台列表（viewer 可读）
 router.get('/platforms', (req: Request, res: Response) => {
   try {
     const platforms = vmManagementService.listPlatformConfigs();
@@ -23,7 +24,7 @@ router.get('/platforms', (req: Request, res: Response) => {
   }
 });
 
-// 获取单个平台
+// 获取单个平台（viewer 可读）
 router.get('/platforms/:platformId', (req: Request, res: Response) => {
   try {
     const platform = vmManagementService.getPlatformConfig(req.params.platformId);
@@ -37,15 +38,15 @@ router.get('/platforms/:platformId', (req: Request, res: Response) => {
   }
 });
 
-// 添加平台
-router.post('/platforms', async (req: Request, res: Response) => {
+// 添加平台（admin/operator）
+router.post('/platforms', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const { name, hypervisorType, host, port, username, password, config, tags } = req.body;
-    
+
     if (!name || !hypervisorType || !host) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
-    
+
     const platformData: Omit<VMPlatformConfig, 'id' | 'createdAt' | 'updatedAt'> = {
       name,
       hypervisorType: hypervisorType as HypervisorType,
@@ -57,7 +58,7 @@ router.post('/platforms', async (req: Request, res: Response) => {
       status: 'inactive',
       tags
     };
-    
+
     const platform = await vmManagementService.addPlatform(platformData);
     res.json({ success: true, data: platform, message: '平台添加成功' });
   } catch (error) {
@@ -66,8 +67,8 @@ router.post('/platforms', async (req: Request, res: Response) => {
   }
 });
 
-// 更新平台
-router.put('/platforms/:platformId', async (req: Request, res: Response) => {
+// 更新平台（admin/operator）
+router.put('/platforms/:platformId', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const { platformId } = req.params;
     const platform = await vmManagementService.updatePlatform(platformId, req.body);
@@ -78,8 +79,8 @@ router.put('/platforms/:platformId', async (req: Request, res: Response) => {
   }
 });
 
-// 删除平台
-router.delete('/platforms/:platformId', async (req: Request, res: Response) => {
+// 删除平台（admin only — 涉及外部基础设施变更）
+router.delete('/platforms/:platformId', requireRole('admin'), async (req: Request, res: Response) => {
   try {
     await vmManagementService.deletePlatform(req.params.platformId);
     res.json({ success: true, message: '平台删除成功' });
@@ -89,8 +90,8 @@ router.delete('/platforms/:platformId', async (req: Request, res: Response) => {
   }
 });
 
-// 测试平台连接
-router.post('/platforms/:platformId/test', async (req: Request, res: Response) => {
+// 测试平台连接（admin/operator）
+router.post('/platforms/:platformId/test', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const result = await vmManagementService.testPlatformConnection(req.params.platformId);
     res.json({ success: result.success, message: result.message });

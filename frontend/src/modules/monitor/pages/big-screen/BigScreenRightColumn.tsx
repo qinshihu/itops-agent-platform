@@ -9,9 +9,21 @@
  * 拆分原则遵循 architecture.md §3.4.1 + 第 3 条「向后兼容的 import 路径」
  */
 import { formatDistanceToNow } from 'date-fns';
+import { logger } from '@/lib/logger';
 import AnimatedBarChart from '../../components/AnimatedBarChart';
 import { getSeverityBadge } from './BigScreenStatCard';
 import type { Alert, AgentStat } from './types';
+
+// 2026-07-23 P3：Invalid Date 兜底
+const formatAlertTimeSafe = (createdAt: string | undefined | null): string => {
+  if (!createdAt) return '--';
+  const d = new Date(createdAt);
+  if (isNaN(d.getTime())) {
+    logger.warn('big-screen: BigScreenRightColumn received invalid created_at', { createdAt });
+    return '--';
+  }
+  return formatDistanceToNow(d, { addSuffix: true });
+};
 
 export interface BigScreenRightColumnProps {
   stats: unknown;
@@ -83,9 +95,7 @@ export default function BigScreenRightColumn({
                     >
                       {alert.status}
                     </span>
-                    <span>
-                      {formatDistanceToNow(new Date(alert.created_at), { addSuffix: true })}
-                    </span>
+                    <span>{formatAlertTimeSafe(alert.created_at)}</span>
                   </div>
                 </div>
               ))

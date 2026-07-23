@@ -167,7 +167,7 @@ export default function BackupSettings() {
                     <button
                       onClick={async () => {
                         try {
-                          const response = await fetch(`/api/backups/download/${backup.id}`, {
+                          const response = await fetch(`/api/v1/backups/download/${backup.id}`, {
                             headers: {
                               'Authorization': `Bearer ${token}`
                             }

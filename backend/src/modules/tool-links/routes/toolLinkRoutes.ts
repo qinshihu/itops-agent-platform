@@ -15,7 +15,10 @@ const router = Router();
 
 // 延迟加载存储（multer + fs IO 处理保留在 routes 层——属于传输层关注点）
 let upload: ReturnType<typeof multer>;
-const getUploadDir = () => path.resolve(process.env.UPLOAD_DIR || path.join(__dirname, '../../../../data/uploads/tool-icons'));
+const getUploadDir = () =>
+  path.resolve(
+    process.env.UPLOAD_DIR || path.join(__dirname, '../../../../data/uploads/tool-icons'),
+  );
 const ensureUploadDir = () => {
   const uploadDir = getUploadDir();
   if (!fs.existsSync(uploadDir)) {
@@ -61,6 +64,17 @@ router.get('/', requireRole('viewer'), (_req: Request, res: Response) => {
   }
 });
 
+// 按 category 分组聚合（前端 ToolLinks 页消费）
+router.get('/categories', requireRole('viewer'), (_req: Request, res: Response) => {
+  try {
+    const groups = toolLinkCrudService.listLinksByCategory();
+    res.json({ success: true, data: groups });
+  } catch (error) {
+    logger.error('Failed to list tool link categories', error);
+    res.status(500).json({ success: false, message: 'Failed to list tool link categories' });
+  }
+});
+
 const createToolSchema = z.object({
   name: z.string().min(1),
   url: z.string().url(),
@@ -68,55 +82,99 @@ const createToolSchema = z.object({
   category: z.string().optional(),
 });
 
-router.post('/', requireRole('admin'), validateBody(createToolSchema), (req: Request, res: Response) => {
-  try {
-    const created = toolLinkCrudService.createLink(req.body);
-    res.json({ success: true, data: created });
-  } catch (error) {
-    logger.error('Failed to create tool link', error);
-    res.status(500).json({ success: false, message: 'Failed to create tool link' });
-  }
-});
-
-router.put('/:id', requireRole('admin'), validateParams(z.object({ id: z.string().uuid() })), validateBody(createToolSchema.partial()), (req: Request, res: Response) => {
-  try {
-    const result = toolLinkCrudService.updateLink(req.params.id, req.body);
-    if (!result.success) {
-      return res.status(400).json({ success: false, message: result.error });
+router.post(
+  '/',
+  requireRole('admin'),
+  validateBody(createToolSchema),
+  (req: Request, res: Response) => {
+    try {
+      const created = toolLinkCrudService.createLink(req.body);
+      res.json({ success: true, data: created });
+    } catch (error) {
+      logger.error('Failed to create tool link', error);
+      res.status(500).json({ success: false, message: 'Failed to create tool link' });
     }
-    res.json({ success: true, data: result.data });
-  } catch (error) {
-    logger.error('Failed to update tool link', error);
-    res.status(500).json({ success: false, message: 'Failed to update tool link' });
-  }
-});
+  },
+);
 
-router.delete('/:id', requireRole('admin'), validateParams(z.object({ id: z.string().uuid() })), (req: Request, res: Response) => {
-  try {
-    toolLinkCrudService.deleteLink(req.params.id);
-    res.json({ success: true, message: 'Tool link deleted successfully' });
-  } catch (error) {
-    logger.error('Failed to delete tool link', error);
-    res.status(500).json({ success: false, message: 'Failed to delete tool link' });
-  }
-});
+router.put(
+  '/:id',
+  requireRole('admin'),
+  validateParams(z.object({ id: z.string().uuid() })),
+  validateBody(createToolSchema.partial()),
+  (req: Request, res: Response) => {
+    try {
+      const result = toolLinkCrudService.updateLink(req.params.id, req.body);
+      if (!result.success) {
+        return res.status(400).json({ success: false, message: result.error });
+      }
+      res.json({ success: true, data: result.data });
+    } catch (error) {
+      logger.error('Failed to update tool link', error);
+      res.status(500).json({ success: false, message: 'Failed to update tool link' });
+    }
+  },
+);
+
+router.delete(
+  '/:id',
+  requireRole('admin'),
+  validateParams(z.object({ id: z.string().uuid() })),
+  (req: Request, res: Response) => {
+    try {
+      toolLinkCrudService.deleteLink(req.params.id);
+      res.json({ success: true, message: 'Tool link deleted successfully' });
+    } catch (error) {
+      logger.error('Failed to delete tool link', error);
+      res.status(500).json({ success: false, message: 'Failed to delete tool link' });
+    }
+  },
+);
 
 // Icon Upload
-router.post('/:id/icon', requireRole('admin'), validateParams(z.object({ id: z.string().uuid() })), (req: Request, res: Response, next: NextFunction) => {
-  const u = getUpload();
-  u.single('icon')(req, res, next);
-}, (req: Request, res: Response) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: 'No file uploaded' });
+router.post(
+  '/:id/icon',
+  requireRole('admin'),
+  validateParams(z.object({ id: z.string().uuid() })),
+  (req: Request, res: Response, next: NextFunction) => {
+    const u = getUpload();
+    u.single('icon')(req, res, next);
+  },
+  (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded' });
+      }
+      const data = toolLinkCrudService.updateIcon(
+        req.params.id,
+        `/tool-icons/${req.file.filename}`,
+      );
+      res.json({ success: true, data });
+    } catch (error) {
+      logger.error('Failed to upload icon', error);
+      res.status(500).json({ success: false, message: 'Failed to upload icon' });
     }
-    const data = toolLinkCrudService.updateIcon(req.params.id, `/tool-icons/${req.file.filename}`);
-    res.json({ success: true, data });
-  } catch (error) {
-    logger.error('Failed to upload icon', error);
-    res.status(500).json({ success: false, message: 'Failed to upload icon' });
-  }
-});
+  },
+);
+
+// Clear icon（清空 DB 字段，文件保留磁盘上以便恢复）
+router.delete(
+  '/:id/icon',
+  requireRole('admin'),
+  validateParams(z.object({ id: z.string().uuid() })),
+  (req: Request, res: Response) => {
+    try {
+      const data = toolLinkCrudService.clearIcon(req.params.id);
+      if (!data) {
+        return res.status(404).json({ success: false, message: 'Tool link not found' });
+      }
+      res.json({ success: true, data });
+    } catch (error) {
+      logger.error('Failed to clear icon', error);
+      res.status(500).json({ success: false, message: 'Failed to clear icon' });
+    }
+  },
+);
 
 // Serve static icons
 router.get('/icons/:filename', (req: Request, res: Response) => {

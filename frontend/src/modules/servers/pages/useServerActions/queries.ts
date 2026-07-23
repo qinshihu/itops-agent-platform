@@ -41,8 +41,9 @@ export function useServerActionsQueries(
   const { data: agents } = useQuery({
     queryKey: ['agents'],
     queryFn: async () => {
-      const res = await api.get('/agents');
-      return res.data.data as Array<{ id: string; name: string; enabled: number; category?: string }>;
+      // axios 拦截器已把 response.data 解包为内层数组
+      const { data } = await api.get('/agents');
+      return data as Array<{ id: string; name: string; enabled: number; category?: string }>;
     },
     enabled: true,
   });
@@ -50,24 +51,30 @@ export function useServerActionsQueries(
   const { data: sshKeys } = useQuery({
     queryKey: ['ssh-keys'],
     queryFn: async () => {
-      const res = await api.get('/ssh-keys');
-      return res.data.data as Array<{ id: string; name: string; key_type: string; fingerprint: string | null; usage_count: number }>;
+      const { data } = await api.get('/ssh-keys');
+      return data as Array<{
+        id: string;
+        name: string;
+        key_type: string;
+        fingerprint: string | null;
+        usage_count: number;
+      }>;
     },
   });
 
   const { data: groupsData } = useQuery({
     queryKey: ['server-groups'],
     queryFn: async () => {
-      const res = await api.get('/server-groups/tree');
-      return res.data.data as ServerGroup[];
+      const { data } = await api.get('/server-groups/tree');
+      return data as ServerGroup[];
     },
   });
 
   const { data: servers, isLoading } = useQuery({
     queryKey: ['servers'],
     queryFn: async () => {
-      const res = await api.get('/servers');
-      return res.data.data as Server[];
+      const { data } = await api.get('/servers');
+      return data as Server[];
     },
   });
 
@@ -97,17 +104,21 @@ export function useServerActionsQueries(
   // 根据选中的标签或分组筛选服务器
   const safeServers = Array.isArray(servers) ? servers : [];
   const filteredServers = selectedGroupId
-    ? safeServers.filter((server: Server) => (server.groups || []).some((g: { id: string; name: string }) => g.id === selectedGroupId))
+    ? safeServers.filter((server: Server) =>
+        (server.groups || []).some((g: { id: string; name: string }) => g.id === selectedGroupId),
+      )
     : selectedTag
-      ? safeServers.filter((server: Server) => (Array.isArray(server.tags) ? server.tags : []).includes(selectedTag))
+      ? safeServers.filter((server: Server) =>
+          (Array.isArray(server.tags) ? server.tags : []).includes(selectedTag),
+        )
       : safeServers;
 
   const { data: commandHistory, refetch: refetchCommandHistory } = useQuery({
     queryKey: ['commandHistory', selectedServer?.id],
     queryFn: async () => {
       if (!selectedServer) return [];
-      const res = await api.get(`/servers/${selectedServer.id}/command-history`);
-      return res.data.data as CommandHistoryItem[];
+      const { data } = await api.get(`/servers/${selectedServer.id}/command-history`);
+      return data as CommandHistoryItem[];
     },
     enabled: !!selectedServer && activeTab === 'command-history',
   });
@@ -116,16 +127,24 @@ export function useServerActionsQueries(
     queryKey: ['complianceHistory', selectedServer?.id],
     queryFn: async () => {
       if (!selectedServer) return [];
-      const res = await api.get(`/servers/${selectedServer.id}/compliance-history`);
-      return res.data.data as ComplianceCheck[];
+      const { data } = await api.get(`/servers/${selectedServer.id}/compliance-history`);
+      return data as ComplianceCheck[];
     },
     enabled: !!selectedServer && activeTab === 'compliance-history',
   });
 
   return {
-    agents, sshKeys, groupsData, servers, isLoading,
-    allTags, filteredSshKeys, filteredServers,
-    commandHistory, refetchCommandHistory,
-    complianceHistory, refetchComplianceHistory,
+    agents,
+    sshKeys,
+    groupsData,
+    servers,
+    isLoading,
+    allTags,
+    filteredSshKeys,
+    filteredServers,
+    commandHistory,
+    refetchCommandHistory,
+    complianceHistory,
+    refetchComplianceHistory,
   };
 }

@@ -39,8 +39,9 @@ export default function ConfigTemplates() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      // 后端返回 { success, data: { items, total } }；axios 拦截器已解包 → data = { items, total }
       const { data: result } = await api.get('/config-templates', { params: { page, pageSize, search, type: typeFilter } });
-      setData(result?.data || []);
+      setData(result?.items || []);
       setTotal(result?.total || 0);
     } catch { message.error('加载失败'); }
     finally { setLoading(false); }

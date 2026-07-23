@@ -55,19 +55,19 @@ export const configManagementApi = {
   /** 获取配置模板列表 */
   async list(params?: ConfigTemplateListParams): Promise<{ templates: ConfigTemplate[]; total: number }> {
     const { data } = await api.get('/config-templates', { params });
-    return data.data;
+    return data;
   },
 
   /** 创建配置模板 */
   async create(input: ConfigTemplateInput): Promise<ConfigTemplate> {
     const { data } = await api.post('/config-templates', input);
-    return data.data;
+    return data;
   },
 
   /** 更新配置模板 */
   async update(id: string, input: ConfigTemplateInput): Promise<ConfigTemplate> {
     const { data } = await api.put(`/config-templates/${id}`, input);
-    return data.data;
+    return data;
   },
 
   /** 删除配置模板 */

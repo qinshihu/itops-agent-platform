@@ -7,9 +7,12 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { message } from 'antd';
 import { FileCode, Plus, Edit, Trash2, Play, Search, Tag, Code } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import clsx from 'clsx';
+import api from '@/lib/api';
+import { getAxiosErrorMessage } from '@/lib/errorHandler';
 import { scriptsApi, type Script } from '../api';
 
 export default function Scripts() {
@@ -70,13 +73,20 @@ export default function Scripts() {
     setShowExecuteModal(true);
   };
 
-  const runScript = () => {
+  const runScript = async () => {
     if (!executingScript) return;
     setIsExecuting(true);
-    setTimeout(() => {
-      setExecuteResult(`脚本 "${executingScript.name}" 执行模拟成功！\n\n（实际使用时会连接到真实服务器执行）`);
+    try {
+      // 调用后端 execute 端点（2026-07-23 补：之前是前端 setTimeout mock）
+      const { data } = await api.post(`/scripts/${executingScript.id}/execute`, {
+        params: executeParams,
+      });
+      setExecuteResult(data?.output ?? `脚本 "${executingScript.name}" 已提交执行`);
+    } catch (err) {
+      message.error(getAxiosErrorMessage(err, '执行失败'));
+    } finally {
       setIsExecuting(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -116,7 +126,7 @@ export default function Scripts() {
                   'px-3 py-1 rounded-lg text-sm transition-colors flex items-center gap-1',
                   selectedCategory === null
                     ? 'bg-primary text-white'
-                    : 'bg-background border border-border text-text-secondary hover:border-primary'
+                    : 'bg-background border border-border text-text-secondary hover:border-primary',
                 )}
               >
                 <Tag className="w-3 h-3" />
@@ -130,7 +140,7 @@ export default function Scripts() {
                     'px-3 py-1 rounded-lg text-sm transition-colors flex items-center gap-1',
                     selectedCategory === category
                       ? 'bg-primary text-white'
-                      : 'bg-background border border-border text-text-secondary hover:border-primary'
+                      : 'bg-background border border-border text-text-secondary hover:border-primary',
                   )}
                 >
                   <Tag className="w-3 h-3" />
@@ -222,7 +232,9 @@ export default function Scripts() {
           <div className="bg-surface border border-border rounded-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-text-primary">执行脚本: {executingScript.name}</h2>
+                <h2 className="text-xl font-bold text-text-primary">
+                  执行脚本: {executingScript.name}
+                </h2>
                 <button
                   onClick={() => setShowExecuteModal(false)}
                   className="text-text-secondary hover:text-text-primary"
@@ -338,9 +350,7 @@ function ScriptFormModal({ script, categories, onClose, onSaved }: ScriptFormMod
   };
 
   const updateParameter = (index: number, field: string, value: string | boolean) => {
-    setParameters((prev) =>
-      prev.map((p, i) => (i === index ? { ...p, [field]: value } : p))
-    );
+    setParameters((prev) => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
   };
 
   return (
@@ -410,10 +420,7 @@ function ScriptFormModal({ script, categories, onClose, onSaved }: ScriptFormMod
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm text-text-secondary">参数</label>
-                <button
-                  onClick={addParameter}
-                  className="text-sm text-primary hover:underline"
-                >
+                <button onClick={addParameter} className="text-sm text-primary hover:underline">
                   + 添加参数
                 </button>
               </div>

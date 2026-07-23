@@ -82,6 +82,38 @@ export function deleteNotification(id: string): boolean {
 }
 
 /**
+ * 重发通知：复制原通知字段重新走 sendNotification（不修改原记录）。
+ * 返回重发结果（success + message）或 null 表示原通知不存在。
+ */
+export async function retryNotification(
+  id: string,
+): Promise<{ success: boolean; message: string } | null> {
+  const existing = notificationsRepo.getById(id);
+  if (!existing) return null;
+  const { notificationService } = await import('./notificationService');
+  try {
+    const result = await notificationService.sendNotification({
+      type: existing.type,
+      title: existing.title,
+      content: existing.content || '',
+      recipient: existing.recipient || undefined,
+      related_alert_id: existing.related_alert_id || undefined,
+      related_task_id: existing.related_task_id || undefined,
+    });
+    // sendNotification 返回 boolean 表示成功/失败
+    return {
+      success: Boolean(result),
+      message: result ? '通知已重新发送' : '通知重新发送失败',
+    };
+  } catch (err) {
+    return {
+      success: false,
+      message: err instanceof Error ? err.message : '未知错误',
+    };
+  }
+}
+
+/**
  * 获取通知统计（按 type/status 分组 + 待发送数 + 今日已发送数）。
  */
 export function getNotificationStats(): NotificationStats {
@@ -93,6 +125,7 @@ export const notificationCrudService = {
   getNotificationById,
   markNotificationSent,
   deleteNotification,
+  retryNotification,
   getNotificationStats,
 };
 

@@ -166,7 +166,7 @@ export default function AlertAutoAnalysis() {
 
   const { data: analyses = [], isLoading, refetch } = useQuery({
     queryKey: ['alert-auto-analysis'],
-    queryFn: () => api.get('/alert-auto-analysis?limit=100').then(r => r.data.data || []),
+    queryFn: () => api.get('/alert-auto-analysis?limit=100').then(r => r.data || []),
     refetchInterval: 15000,
   });
 

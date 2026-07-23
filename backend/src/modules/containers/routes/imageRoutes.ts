@@ -55,7 +55,7 @@ router.get('/', async (req: Request, res: Response) => {
     const offset = (page - 1) * pageSize;
     const data = filtered.slice(offset, offset + pageSize);
 
-    res.json({ success: true, data, total });
+    res.json({ success: true, data: { items: data, total } });
   } catch (error: unknown) {
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }

@@ -2,12 +2,14 @@
 
 > **DDD 限界上下文**：AI 能力编排（LLM、Agent、RCA、知识库、自动修复）
 > **聚合根**：`Agent`、`LLM Provider`、`Knowledge`
-> **最后刷新**：2026-07-22（基于 12,943 行实测）
+> **最后刷新**：2026-07-23（nav.autoExecution 第 5 轮 RBAC + logger 补全）
 
 ## 职责
+
 AI 能力编排：大语言模型调用、Agent 管理、根因分析、知识库、自动修复建议。
 
 ## 内部结构（2026-07-22 核对代码现状）
+
 ```
 ai/
 ├── routes.ts               # 模块路由聚合入口（挂 9 个 mount，含 /mcp 代理）
@@ -44,25 +46,27 @@ ai/
 
 ## 路由端点（受保护，路径前缀 `/api/v1/*`）
 
-| 前缀 | 来源 routes 文件 | 说明 |
-|------|------------------|------|
-| `/agents/*` | `agentRoutes.ts` → `agent/` 子目录 | Agent CRUD + 执行 + 工具 + 导入导出（详见子目录 README） |
-| `/knowledge/*` | `knowledgeRoutes.ts` | 知识库 CRUD |
-| `/knowledge/qanything/*` | `knowledgeQAnythingRoutes.ts` | QAnything 知识库集成 |
-| `/copilot/*` | `copilotRoutes.ts` | AI Copilot 对话 |
-| `/root-cause-analysis/*` | `rootCauseAnalysisRoutes.ts` | 根因分析 |
-| `/multi-agent/*` | `multiAgentRoutes.ts` | 多 Agent 协作 |
-| `/ai-models/*` | `aiModelRoutes.ts` | AI 模型 CRUD |
-| `/ai-remediations/*` | `aiRemediationRoutes.ts` | AI 修复建议 |
-| `/mcp/*` | `routes.ts` 第 22 行 `router.use('/mcp', mcpGateway)` | **AI 内部使用的 MCP 网关代理**（与 `mcp/` 模块的 `/api/v1/mcp/*` 是不同路径） |
+| 前缀                     | 来源 routes 文件                                      | 说明                                                                          |
+| ------------------------ | ----------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `/agents/*`              | `agentRoutes.ts` → `agent/` 子目录                    | Agent CRUD + 执行 + 工具 + 导入导出（详见子目录 README）                      |
+| `/knowledge/*`           | `knowledgeRoutes.ts`                                  | 知识库 CRUD                                                                   |
+| `/knowledge/qanything/*` | `knowledgeQAnythingRoutes.ts`                         | QAnything 知识库集成                                                          |
+| `/copilot/*`             | `copilotRoutes.ts`                                    | AI Copilot 对话                                                               |
+| `/root-cause-analysis/*` | `rootCauseAnalysisRoutes.ts`                          | 根因分析                                                                      |
+| `/multi-agent/*`         | `multiAgentRoutes.ts`                                 | 多 Agent 协作                                                                 |
+| `/ai-models/*`           | `aiModelRoutes.ts`                                    | AI 模型 CRUD                                                                  |
+| `/ai-remediations/*`     | `aiRemediationRoutes.ts`                              | AI 修复建议                                                                   |
+| `/mcp/*`                 | `routes.ts` 第 22 行 `router.use('/mcp', mcpGateway)` | **AI 内部使用的 MCP 网关代理**（与 `mcp/` 模块的 `/api/v1/mcp/*` 是不同路径） |
 
 > **路径前缀说明**：`ai/routes.ts` 第 22 行的 `router.use('/mcp', mcpGateway)` 与 `_registry.ts` 的 `/api/v1` 组合后实际是 `/api/v1/mcp/*`，**与 `mcp/` 模块独立路由 `/api/v1/mcp/*` 形成两条等价路径**（均指向同一 `services/mcp/gateway.ts`）。前端 mcp 模块通过 `/api/v1/mcp/*` 调用，AI 模块内部 agent 通过 `agentMcpAdapter` 调用相同服务。
 
 ## 依赖关系
+
 - 依赖 `auth/`（鉴权）、`alerts/`（告警数据源）、`mcp/`（AI 内部 tool 调用）
 - 被 `workflow/`、`auto/` 调用
 
 ## 关键说明
+
 - `ai/` 是 **全项目最大模块**（12,943 行 / 83 个 .ts，其中非测试 66 个 .ts / 11,220 行），是所有 AI 能力的聚合点
 - `llm/llmService/` 集成了多模型（Doubao/OpenAI/LocalAI 三个内置 providerAdapters）、熔断器、重试逻辑
 - 单一入口：`llm/llmService/index.ts` 是 barrel，统一导出 `generateCompletion` / `executeAgentWithLLM` 等

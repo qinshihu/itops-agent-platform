@@ -4,6 +4,8 @@ import { Router } from 'express';
 import crypto from 'crypto';
 
 import { getErrorMessage } from '../../../utils/errorHelpers';
+import { requireRole } from '../../../middleware/auth';
+import { logger } from '../../../utils/logger';
 
 const router = Router();
 
@@ -16,9 +18,10 @@ router.get('/', (req: Request, res: Response) => {
     const list = dcCrudService.devices.listDeviceTypesWithManufacturer({ manufacturerId });
     res.json({ success: true, data: list });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc deviceTypes', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
-  }
-});
+    }
+  });
 
 /**
  * GET /device-types/:id — 获取单个型号（含槽位定义和关联设备数量）
@@ -40,6 +43,7 @@ router.get('/:id', (req: Request, res: Response) => {
       }
     });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc deviceTypes', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
@@ -47,7 +51,7 @@ router.get('/:id', (req: Request, res: Response) => {
 /**
  * POST /device-types — 创建设备型号
  */
-router.post('/', (req: Request, res: Response) => {
+router.post('/', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { manufacturer_id, model, slug, part_number, u_height, is_full_depth,
             subdevice_role, airflow, weight_kg, max_power_w, description } = req.body;
@@ -61,6 +65,7 @@ router.post('/', (req: Request, res: Response) => {
     });
     res.json({ success: true, data: { id } });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc deviceTypes', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
@@ -68,7 +73,7 @@ router.post('/', (req: Request, res: Response) => {
 /**
  * PUT /device-types/:id — 更新设备型号
  */
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { manufacturer_id, model, slug, part_number, u_height, is_full_depth,
             subdevice_role, airflow, weight_kg, max_power_w, description } = req.body;
@@ -78,6 +83,7 @@ router.put('/:id', (req: Request, res: Response) => {
     });
     res.json({ success: true });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc deviceTypes', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
@@ -85,7 +91,7 @@ router.put('/:id', (req: Request, res: Response) => {
 /**
  * DELETE /device-types/:id — 删除设备型号
  */
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', requireRole('admin'), (req: Request, res: Response) => {
   try {
     const cnt = dcCrudService.slots.countByDeviceTypeId(req.params.id);
     if (cnt > 0) {
@@ -97,6 +103,7 @@ router.delete('/:id', (req: Request, res: Response) => {
     dcCrudService.devices.deleteDeviceType(req.params.id);
     res.json({ success: true });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc deviceTypes', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });

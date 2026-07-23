@@ -53,14 +53,14 @@ export default function TrendCharts({ deviceId }: TrendChartsProps) {
     queryKey: ['trends-inspection', days, deviceId],
     queryFn: () => api.get('/trends/inspection-history', {
       params: { days, deviceId: deviceId || undefined }
-    }).then(r => r.data.data as TrendData),
+    }).then(r => r.data as TrendData),
   });
 
   const { data: summary } = useQuery({
     queryKey: ['trends-summary', days],
     queryFn: () => api.get('/trends/summary', {
       params: { days }
-    }).then(r => r.data.data as TrendSummary),
+    }).then(r => r.data as TrendSummary),
   });
 
   return (

@@ -45,30 +45,25 @@ export default function SecuritySettings() {
     }
 
     try {
-      const response = await api.post('/auth/change-password', {
+      await api.post('/auth/change-password', {
         currentPassword,
         newPassword,
       });
 
-      if (response.data.success) {
-        setPasswordStatus('saved');
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
+      // axios 拦截器已解包；非 2xx 会抛错走到 catch；走到这里说明成功
+      setPasswordStatus('saved');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
 
-        if (user) {
-          const updatedUser = { ...user, passwordMustChange: false };
-          updateUser(updatedUser);
-        }
-
-        navigate('/settings', { replace: true });
-
-        setTimeout(() => setPasswordStatus('idle'), 3000);
-      } else {
-        setPasswordError(response.data.error || response.data.message || '密码修改失败');
-        setPasswordStatus('error');
-        setTimeout(() => setPasswordStatus('idle'), 3000);
+      if (user) {
+        const updatedUser = { ...user, passwordMustChange: false };
+        updateUser(updatedUser);
       }
+
+      navigate('/settings', { replace: true });
+
+      setTimeout(() => setPasswordStatus('idle'), 3000);
     } catch (err: unknown) {
       setPasswordError(getAxiosErrorMessage(err, '密码修改失败'));
       setPasswordStatus('error');

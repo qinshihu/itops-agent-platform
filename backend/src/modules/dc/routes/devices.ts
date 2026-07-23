@@ -3,6 +3,8 @@ import { dcCrudService } from '../services/dcCrudService';
 import { Router } from 'express';
 
 import { getErrorMessage } from '../../../utils/errorHelpers';
+import { requireRole } from '../../../middleware/auth';
+import { logger } from '../../../utils/logger';
 
 const router = Router();
 
@@ -40,9 +42,10 @@ router.get('/', (_req: Request, res: Response) => {
 
     res.json({ success: true, data: { groups } });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc devices', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
-  }
-});
+    }
+  });
 
 // GET /devices/unallocated — 获取未分配的设备
 router.get('/unallocated', (req: Request, res: Response) => {
@@ -58,6 +61,7 @@ router.get('/unallocated', (req: Request, res: Response) => {
     const combined = [...servers, ...netDevs, ...vms].slice(0, 200);
     res.json({ success: true, data: combined });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc devices', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });

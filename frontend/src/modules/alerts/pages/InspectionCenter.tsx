@@ -52,7 +52,7 @@ export default function InspectionCenter() {
 
   const { data: counts } = useQuery({
     queryKey: ['dashboard-linkage'],
-    queryFn: () => api.get('/dashboard/linkage').then(r => r.data.data || {}),
+    queryFn: () => api.get('/dashboard/linkage').then(r => r.data || {}),
     refetchInterval: 60000,
   });
 
