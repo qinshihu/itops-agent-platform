@@ -11,8 +11,17 @@
 import { useMemo, useState } from 'react';
 import clsx from 'clsx';
 import {
-  Activity, Server, ListChecks, AlertTriangle, Database, Loader2,
-  CheckCircle2, AlertCircle, Play, Plug, type LucideIcon,
+  Activity,
+  Server,
+  ListChecks,
+  AlertTriangle,
+  Database,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  Play,
+  Plug,
+  type LucideIcon,
 } from 'lucide-react';
 import { message } from 'antd';
 import api from '../../../lib/api';
@@ -20,11 +29,21 @@ import { getAxiosErrorMessage } from '../../../lib/errorHandler';
 import { ResultsTable } from './zabbix/ResultsTable';
 import {
   buildPayload,
-  HOST_COLUMNS, ITEM_COLUMNS, TRIGGER_COLUMNS, PROBLEM_COLUMNS, HISTORY_COLUMNS,
+  HOST_COLUMNS,
+  ITEM_COLUMNS,
+  TRIGGER_COLUMNS,
+  PROBLEM_COLUMNS,
+  HISTORY_COLUMNS,
 } from './zabbix/types';
 import type {
-  ConnectionConfig, TabKey, ZabbixResponse,
-  ZabbixHost, ZabbixItem, ZabbixTrigger, ZabbixProblem, ZabbixHistoryRow,
+  ConnectionConfig,
+  TabKey,
+  ZabbixResponse,
+  ZabbixHost,
+  ZabbixItem,
+  ZabbixTrigger,
+  ZabbixProblem,
+  ZabbixHistoryRow,
 } from './zabbix/types';
 
 // ==================== 常量 ====================
@@ -39,23 +58,28 @@ const TABS: Array<{ key: TabKey; label: string; icon: LucideIcon }> = [
 ];
 
 async function callZabbix<T>(endpoint: string, payload: Record<string, unknown>): Promise<T[]> {
+  // axios 拦截器已解包 → data 本身就是后端 data 字段（ZabbixResponse）
   const { data } = await api.post(endpoint, payload);
-  const body = data as { success: boolean; data?: ZabbixResponse<T>; error?: string };
-  if (!body.success || !body.data) {
-    throw new Error(body.error || 'Zabbix 请求失败');
+  const body = data as ZabbixResponse<T>;
+  if (!body) {
+    throw new Error('Zabbix 请求失败：响应为空');
   }
-  if (body.data.error) {
-    throw new Error(body.data.error);
+  if (body.error) {
+    throw new Error(body.error);
   }
-  return body.data.result ?? [];
+  return body.result ?? [];
 }
 
 // ==================== 主组件 ====================
 
 export default function ZabbixQuery() {
   const [cfg, setCfg] = useState<ConnectionConfig>({
-    url: '', username: '', password: '', apiToken: '',
-    authMode: 'password', timeoutMs: 15000,
+    url: '',
+    username: '',
+    password: '',
+    apiToken: '',
+    authMode: 'password',
+    timeoutMs: 15000,
   });
   const [tab, setTab] = useState<TabKey>('hosts');
   const [loading, setLoading] = useState(false);
@@ -75,8 +99,12 @@ export default function ZabbixQuery() {
   const canQuery = useMemo(() => cfg.url.trim().length > 0, [cfg.url]);
 
   const handleTest = async () => {
-    if (!canQuery) { message.warning('请填写 Zabbix URL'); return; }
-    setLoading(true); setError(null);
+    if (!canQuery) {
+      message.warning('请填写 Zabbix URL');
+      return;
+    }
+    setLoading(true);
+    setError(null);
     try {
       await callZabbix<unknown>('/monitor/zabbix/test', buildPayload(cfg));
       message.success('连接成功');
@@ -84,12 +112,18 @@ export default function ZabbixQuery() {
       const msg = getAxiosErrorMessage(err, '连接失败');
       setError(msg);
       message.error(msg);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const runQuery = async () => {
-    if (!canQuery) { message.warning('请填写 Zabbix URL'); return; }
-    setLoading(true); setError(null);
+    if (!canQuery) {
+      message.warning('请填写 Zabbix URL');
+      return;
+    }
+    setLoading(true);
+    setError(null);
     try {
       const payload = buildPayload(cfg);
       switch (tab) {
@@ -97,10 +131,17 @@ export default function ZabbixQuery() {
           setHosts(await callZabbix<ZabbixHost>('/monitor/zabbix/hosts', payload));
           break;
         case 'items': {
-          if (!selectedHostId) { message.warning('请选择 Host'); setLoading(false); return; }
-          setItems(await callZabbix<ZabbixItem>('/monitor/zabbix/items', {
-            ...payload, hostIds: [selectedHostId],
-          }));
+          if (!selectedHostId) {
+            message.warning('请选择 Host');
+            setLoading(false);
+            return;
+          }
+          setItems(
+            await callZabbix<ZabbixItem>('/monitor/zabbix/items', {
+              ...payload,
+              hostIds: [selectedHostId],
+            }),
+          );
           break;
         }
         case 'triggers':
@@ -110,23 +151,32 @@ export default function ZabbixQuery() {
           setProblems(await callZabbix<ZabbixProblem>('/monitor/zabbix/problems', payload));
           break;
         case 'history': {
-          if (!selectedItemId) { message.warning('请选择 Item'); setLoading(false); return; }
-          setHistory(await callZabbix<ZabbixHistoryRow>('/monitor/zabbix/history', {
-            ...payload,
-            itemIds: [selectedItemId],
-            timeFrom: timeFrom || undefined,
-            timeTill: timeTill || undefined,
-            limit: historyLimit,
-          }));
+          if (!selectedItemId) {
+            message.warning('请选择 Item');
+            setLoading(false);
+            return;
+          }
+          setHistory(
+            await callZabbix<ZabbixHistoryRow>('/monitor/zabbix/history', {
+              ...payload,
+              itemIds: [selectedItemId],
+              timeFrom: timeFrom || undefined,
+              timeTill: timeTill || undefined,
+              limit: historyLimit,
+            }),
+          );
           break;
         }
-        default: break;
+        default:
+          break;
       }
     } catch (err) {
       const msg = getAxiosErrorMessage(err, '查询失败');
       setError(msg);
       message.error(msg);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -144,8 +194,12 @@ export default function ZabbixQuery() {
           <h3 className="text-sm font-medium text-text-secondary flex items-center gap-2">
             <Plug size={16} /> 连接配置
           </h3>
-          <button type="button" onClick={handleTest} disabled={!canQuery || loading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 disabled:opacity-50">
+          <button
+            type="button"
+            onClick={handleTest}
+            disabled={!canQuery || loading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 disabled:opacity-50"
+          >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
             测试连接
           </button>
@@ -153,27 +207,49 @@ export default function ZabbixQuery() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <div className="lg:col-span-2">
             <label className="block text-xs text-text-secondary mb-1">Zabbix API URL</label>
-            <input type="text" placeholder="http://zabbix.example.com/api_jsonrpc.php"
-              value={cfg.url} onChange={e => setCfg({ ...cfg, url: e.target.value })}
-              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary/50" />
+            <input
+              type="text"
+              placeholder="http://zabbix.example.com/api_jsonrpc.php"
+              value={cfg.url}
+              onChange={(e) => setCfg({ ...cfg, url: e.target.value })}
+              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary/50"
+            />
           </div>
           <div>
             <label className="block text-xs text-text-secondary mb-1">超时 (ms)</label>
-            <input type="number" min={1000} value={cfg.timeoutMs}
-              onChange={e => setCfg({ ...cfg, timeoutMs: Number(e.target.value) || 15000 })}
-              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary/50" />
+            <input
+              type="number"
+              min={1000}
+              value={cfg.timeoutMs}
+              onChange={(e) => setCfg({ ...cfg, timeoutMs: Number(e.target.value) || 15000 })}
+              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary/50"
+            />
           </div>
         </div>
 
         <div className="flex items-center gap-2 text-xs">
-          <button type="button" onClick={() => setCfg({ ...cfg, authMode: 'password' })}
-            className={clsx('px-3 py-1 rounded-md border',
-              cfg.authMode === 'password' ? 'bg-primary/15 border-primary text-primary' : 'border-border text-text-secondary')}>
+          <button
+            type="button"
+            onClick={() => setCfg({ ...cfg, authMode: 'password' })}
+            className={clsx(
+              'px-3 py-1 rounded-md border',
+              cfg.authMode === 'password'
+                ? 'bg-primary/15 border-primary text-primary'
+                : 'border-border text-text-secondary',
+            )}
+          >
             用户名密码
           </button>
-          <button type="button" onClick={() => setCfg({ ...cfg, authMode: 'token' })}
-            className={clsx('px-3 py-1 rounded-md border',
-              cfg.authMode === 'token' ? 'bg-primary/15 border-primary text-primary' : 'border-border text-text-secondary')}>
+          <button
+            type="button"
+            onClick={() => setCfg({ ...cfg, authMode: 'token' })}
+            className={clsx(
+              'px-3 py-1 rounded-md border',
+              cfg.authMode === 'token'
+                ? 'bg-primary/15 border-primary text-primary'
+                : 'border-border text-text-secondary',
+            )}
+          >
             API Token
           </button>
         </div>
@@ -182,40 +258,53 @@ export default function ZabbixQuery() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-text-secondary mb-1">Username</label>
-              <input type="text" value={cfg.username}
-                onChange={e => setCfg({ ...cfg, username: e.target.value })}
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary/50" />
+              <input
+                type="text"
+                value={cfg.username}
+                onChange={(e) => setCfg({ ...cfg, username: e.target.value })}
+                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary/50"
+              />
             </div>
             <div>
               <label className="block text-xs text-text-secondary mb-1">Password</label>
-              <input type="password" value={cfg.password}
-                onChange={e => setCfg({ ...cfg, password: e.target.value })}
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary/50" />
+              <input
+                type="password"
+                value={cfg.password}
+                onChange={(e) => setCfg({ ...cfg, password: e.target.value })}
+                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary/50"
+              />
             </div>
           </div>
         ) : (
           <div>
             <label className="block text-xs text-text-secondary mb-1">API Token</label>
-            <input type="text" value={cfg.apiToken}
-              onChange={e => setCfg({ ...cfg, apiToken: e.target.value })}
-              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary/50" />
+            <input
+              type="text"
+              value={cfg.apiToken}
+              onChange={(e) => setCfg({ ...cfg, apiToken: e.target.value })}
+              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary/50"
+            />
           </div>
         )}
       </section>
 
       <section className="bg-surface border border-border rounded-xl p-5 space-y-4">
         <div className="flex flex-wrap gap-2">
-          {TABS.map(t => {
+          {TABS.map((t) => {
             const Icon = t.icon;
             const active = tab === t.key;
             return (
-              <button key={t.key} type="button" onClick={() => setTab(t.key)}
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
                 className={clsx(
                   'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition',
                   active
                     ? 'bg-primary/15 border-primary text-primary'
                     : 'border-border text-text-secondary hover:text-text-primary',
-                )}>
+                )}
+              >
                 <Icon size={14} />
                 {t.label}
               </button>
@@ -226,10 +315,17 @@ export default function ZabbixQuery() {
         {tab === 'items' && (
           <div>
             <label className="block text-xs text-text-secondary mb-1">选择 Host</label>
-            <select value={selectedHostId} onChange={e => setSelectedHostId(e.target.value)}
-              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary">
+            <select
+              value={selectedHostId}
+              onChange={(e) => setSelectedHostId(e.target.value)}
+              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary"
+            >
               <option value="">-- 请先获取 Hosts --</option>
-              {hosts.map(h => <option key={h.hostid} value={h.hostid}>{h.host} ({h.name})</option>)}
+              {hosts.map((h) => (
+                <option key={h.hostid} value={h.hostid}>
+                  {h.host} ({h.name})
+                </option>
+              ))}
             </select>
           </div>
         )}
@@ -238,35 +334,58 @@ export default function ZabbixQuery() {
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
             <div className="lg:col-span-2">
               <label className="block text-xs text-text-secondary mb-1">选择 Item</label>
-              <select value={selectedItemId} onChange={e => setSelectedItemId(e.target.value)}
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary">
+              <select
+                value={selectedItemId}
+                onChange={(e) => setSelectedItemId(e.target.value)}
+                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary"
+              >
                 <option value="">-- 请先获取 Items --</option>
-                {items.map(it => <option key={it.itemid} value={it.itemid}>{it.name} ({it.key_})</option>)}
+                {items.map((it) => (
+                  <option key={it.itemid} value={it.itemid}>
+                    {it.name} ({it.key_})
+                  </option>
+                ))}
               </select>
             </div>
             <div>
               <label className="block text-xs text-text-secondary mb-1">timeFrom (Unix)</label>
-              <input type="text" placeholder="0 = 不限" value={timeFrom}
-                onChange={e => setTimeFrom(e.target.value)}
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary" />
+              <input
+                type="text"
+                placeholder="0 = 不限"
+                value={timeFrom}
+                onChange={(e) => setTimeFrom(e.target.value)}
+                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary"
+              />
             </div>
             <div>
               <label className="block text-xs text-text-secondary mb-1">timeTill (Unix)</label>
-              <input type="text" placeholder="留空 = 当前" value={timeTill}
-                onChange={e => setTimeTill(e.target.value)}
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary" />
+              <input
+                type="text"
+                placeholder="留空 = 当前"
+                value={timeTill}
+                onChange={(e) => setTimeTill(e.target.value)}
+                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary"
+              />
             </div>
             <div>
               <label className="block text-xs text-text-secondary mb-1">Limit</label>
-              <input type="number" min={1} value={historyLimit}
-                onChange={e => setHistoryLimit(Number(e.target.value) || 100)}
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary" />
+              <input
+                type="number"
+                min={1}
+                value={historyLimit}
+                onChange={(e) => setHistoryLimit(Number(e.target.value) || 100)}
+                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary"
+              />
             </div>
           </div>
         )}
 
-        <button type="button" onClick={runQuery} disabled={!canQuery || loading}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">
+        <button
+          type="button"
+          onClick={runQuery}
+          disabled={!canQuery || loading}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
+        >
           {loading ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
           执行查询
         </button>
@@ -278,13 +397,37 @@ export default function ZabbixQuery() {
             <AlertCircle size={16} /> {error}
           </div>
         )}
-        {tab === 'hosts' && <ResultsTable<ZabbixHost> rows={hosts} loading={loading} columns={HOST_COLUMNS} />}
-        {tab === 'items' && <ResultsTable<ZabbixItem> rows={items} loading={loading} columns={ITEM_COLUMNS} />}
-        {tab === 'triggers' && <ResultsTable<ZabbixTrigger> rows={triggers} loading={loading} columns={TRIGGER_COLUMNS} />}
-        {tab === 'problems' && <ResultsTable<ZabbixProblem> rows={problems} loading={loading} columns={PROBLEM_COLUMNS} />}
-        {tab === 'history' && <ResultsTable<ZabbixHistoryRow> rows={history} loading={loading} columns={HISTORY_COLUMNS} />}
+        {tab === 'hosts' && (
+          <ResultsTable<ZabbixHost> rows={hosts} loading={loading} columns={HOST_COLUMNS} />
+        )}
+        {tab === 'items' && (
+          <ResultsTable<ZabbixItem> rows={items} loading={loading} columns={ITEM_COLUMNS} />
+        )}
+        {tab === 'triggers' && (
+          <ResultsTable<ZabbixTrigger>
+            rows={triggers}
+            loading={loading}
+            columns={TRIGGER_COLUMNS}
+          />
+        )}
+        {tab === 'problems' && (
+          <ResultsTable<ZabbixProblem>
+            rows={problems}
+            loading={loading}
+            columns={PROBLEM_COLUMNS}
+          />
+        )}
+        {tab === 'history' && (
+          <ResultsTable<ZabbixHistoryRow>
+            rows={history}
+            loading={loading}
+            columns={HISTORY_COLUMNS}
+          />
+        )}
         {tab === 'test' && !loading && (
-          <div className="text-text-secondary text-sm py-4">点击上方「测试连接」按钮验证 Zabbix 配置。</div>
+          <div className="text-text-secondary text-sm py-4">
+            点击上方「测试连接」按钮验证 Zabbix 配置。
+          </div>
         )}
       </section>
     </div>

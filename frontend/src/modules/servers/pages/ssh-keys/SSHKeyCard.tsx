@@ -7,10 +7,8 @@
  * 拆分原则遵循 ADR-031 §二.3 模式 3 + lessons-learned §3.5
  */
 import clsx from 'clsx';
-import {
-  Eye, EyeOff, Edit, Trash2, Server, Lock, Key, Copy, Fingerprint, X,
-} from 'lucide-react';
-import { SshKey } from '../../api';
+import { Eye, EyeOff, Edit, Trash2, Server, Lock, Key, Copy, Fingerprint, X } from 'lucide-react';
+import type { SshKey } from './types';
 import { getKeyTypeColor, getKeyTypeText } from './constants';
 import type { UsageServer } from './types';
 
@@ -44,9 +42,7 @@ export function SSHKeyCard({
   setDeleteConfirmKey,
 }: SSHKeyCardProps) {
   return (
-    <div
-      className="group relative overflow-hidden rounded-xl border border-[#334155]/60 bg-[#1a2236]/90 backdrop-blur-sm p-4 transition-all duration-200 hover:border-[#3b82f6]/50 hover:bg-[#1e2940] hover:shadow-md hover:shadow-blue-500/5"
-    >
+    <div className="group relative overflow-hidden rounded-xl border border-[#334155]/60 bg-[#1a2236]/90 backdrop-blur-sm p-4 transition-all duration-200 hover:border-[#3b82f6]/50 hover:bg-[#1e2940] hover:shadow-md hover:shadow-blue-500/5">
       <div className="relative">
         <div className="flex items-center gap-3">
           <div
@@ -71,27 +67,29 @@ export function SSHKeyCard({
               <span
                 className={clsx(
                   'inline-flex shrink-0 items-center px-1.5 py-0.5 text-[10px] font-semibold rounded',
-                  getKeyTypeColor(keyData.key_type, keyData.auth_type),
+                  getKeyTypeColor(keyData.key_type ?? '', keyData.auth_type),
                 )}
               >
-                {getKeyTypeText(keyData.key_type, keyData.auth_type)}
+                {getKeyTypeText(keyData.key_type ?? '', keyData.auth_type)}
               </span>
             </div>
             <div className="mt-0.5 flex items-center gap-1 text-[11px] text-[#94a3b8]">
               <Server className="h-3 w-3" />
-              <span>{keyData.usage_count} 台设备</span>
+              <span>{keyData.usage_count ?? 0} 台设备</span>
               <span className="mx-1 text-[#4a5568]">·</span>
               <span>
-                {new Date(keyData.created_at).toLocaleDateString('zh-CN', {
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit',
-                })}
+                {keyData.created_at
+                  ? new Date(keyData.created_at).toLocaleDateString('zh-CN', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                    })
+                  : '-'}
               </span>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-0.5 opacity-40 transition-opacity group-hover:opacity-100">
-            {keyData.usage_count > 0 && (
+            {(keyData.usage_count ?? 0) > 0 && (
               <button
                 onClick={() => handleViewUsage(keyData)}
                 className="rounded-md p-1.5 text-[#94a3b8] transition-colors hover:bg-white/5 hover:text-[#60a5fa]"

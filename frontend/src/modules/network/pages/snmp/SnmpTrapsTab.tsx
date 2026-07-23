@@ -9,7 +9,7 @@ export function SnmpTrapsTab() {
 
   const { data: traps = [], isLoading: trapsLoading } = useQuery({
     queryKey: ['snmp-traps'],
-    queryFn: () => api.get('/snmp/traps?limit=50').then(r => r.data.data || []),
+    queryFn: () => api.get('/snmp/traps?limit=50').then(r => r.data || []),
     refetchInterval: 30000,
   });
 

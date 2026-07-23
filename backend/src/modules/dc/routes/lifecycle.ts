@@ -3,6 +3,8 @@ import { dcCrudService } from '../services/dcCrudService';
 import { Router } from 'express';
 
 import { getErrorMessage } from '../../../utils/errorHelpers';
+import { requireRole } from '../../../middleware/auth';
+import { logger } from '../../../utils/logger';
 
 const router = Router();
 
@@ -14,8 +16,9 @@ router.get('/', (req: Request, res: Response) => {
     const records = dcCrudService.devices.listLifecycleFiltered({ action, limit });
     res.json({ success: true, data: records });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc lifecycle', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
-  }
-});
+    }
+  });
 
 export default router;

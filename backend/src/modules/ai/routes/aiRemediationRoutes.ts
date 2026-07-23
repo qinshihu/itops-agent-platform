@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { aiRemediationService } from '../services/remediation/aiRemediationService';
-import { authenticateToken } from '../../../middleware/auth';
+import { authenticateToken, requireRole } from '../../../middleware/auth';
 import { logger } from '../../../utils/logger';
 
 const router = Router();
@@ -17,14 +17,18 @@ router.get('/stats', authenticateToken, (_req: Request, res: Response) => {
         ...stats,
         noiseFilter: noise,
         // 给前端一些便捷字段
-        mttrMinutes: stats.mttrSeconds !== null && stats.mttrSeconds !== undefined ? stats.mttrSeconds / 60 : null,
-        mttrDisplay: stats.mttrSeconds !== null && stats.mttrSeconds !== undefined
-          ? stats.mttrSeconds < 60
-            ? `${Math.round(stats.mttrSeconds)}s`
-            : stats.mttrSeconds < 3600
-              ? `${(stats.mttrSeconds / 60).toFixed(1)} min`
-              : `${(stats.mttrSeconds / 3600).toFixed(1)} h`
-          : null,
+        mttrMinutes:
+          stats.mttrSeconds !== null && stats.mttrSeconds !== undefined
+            ? stats.mttrSeconds / 60
+            : null,
+        mttrDisplay:
+          stats.mttrSeconds !== null && stats.mttrSeconds !== undefined
+            ? stats.mttrSeconds < 60
+              ? `${Math.round(stats.mttrSeconds)}s`
+              : stats.mttrSeconds < 3600
+                ? `${(stats.mttrSeconds / 60).toFixed(1)} min`
+                : `${(stats.mttrSeconds / 3600).toFixed(1)} h`
+            : null,
       },
     });
   } catch (error) {
@@ -64,12 +68,57 @@ router.get('/alert/:alertId', authenticateToken, (req: Request, res: Response) =
   try {
     const record = aiRemediationService.getByAlertId(req.params.alertId);
     if (!record) {
-      return res.status(404).json({ success: false, message: 'AI remediation not found for this alert' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'AI remediation not found for this alert' });
     }
     res.json({ success: true, data: record });
   } catch (error) {
     logger.error('Failed to get AI remediation by alert:', error);
     res.status(500).json({ success: false, message: 'Failed to get AI remediation' });
+  }
+});
+
+// 批准 AI 修复方案（前端 2026-07-06 接入）
+router.post(
+  '/:id/approve',
+  authenticateToken,
+  requireRole('admin', 'operator'),
+  (req: Request, res: Response) => {
+    try {
+      const record = aiRemediationService.getRecord(req.params.id);
+      if (!record) {
+        return res.status(404).json({ success: false, message: 'AI remediation not found' });
+      }
+      aiRemediationService.updateStatus(req.params.id, 'approved');
+      res.json({
+        success: true,
+        message: 'AI 修复方案已批准',
+        data: { id: req.params.id, status: 'approved' },
+      });
+    } catch (error) {
+      logger.error('Failed to approve AI remediation:', error);
+      res.status(500).json({ success: false, message: 'Failed to approve AI remediation' });
+    }
+  },
+);
+
+// 拒绝 AI 修复方案（前端 2026-07-06 接入）
+router.post('/:id/reject', authenticateToken, (req: Request, res: Response) => {
+  try {
+    const record = aiRemediationService.getRecord(req.params.id);
+    if (!record) {
+      return res.status(404).json({ success: false, message: 'AI remediation not found' });
+    }
+    aiRemediationService.updateStatus(req.params.id, 'rejected');
+    res.json({
+      success: true,
+      message: 'AI 修复方案已拒绝',
+      data: { id: req.params.id, status: 'rejected' },
+    });
+  } catch (error) {
+    logger.error('Failed to reject AI remediation:', error);
+    res.status(500).json({ success: false, message: 'Failed to reject AI remediation' });
   }
 });
 

@@ -1,0 +1,74 @@
+# 导航菜单体检记录（NAV-AUDIT）
+
+> 按 `frontend/src/config/navigation.ts` 顺序**逐组、逐页、逐功能**深体检。
+> 每组体检完毕即修复问题 → tsc/test → commit → push → 等用户确认 → 下一组。
+> 实时状态写在本总账；过程性记录写在「过程记录」段。
+>
+> 最后更新：2026-07-23（v6 — 逐页逐功能重检开始）
+
+## 总账
+
+| # | 分组 | 菜单项 | 状态 | 备注 |
+|---|------|--------|------|------|
+| 1 | nav.home | dashboard, bigScreen | ✅ | v6 体检+修复：useBigScreenData setTimeout cleanup + 2 空 catch → logger.warn + Dashboard 6 useQuery queryFn 内 try/catch logger.error + dashboardRoutes parseInt NaN 防 + dashboardStats/operationalAnalytics 8 处 parseFloat Number.isFinite + useBigScreenData 6 处 data as Array.isArray 兜底 + callZabbix typeof === 'object' 校验 + BigScreenRecentTasksList/RightColumn Invalid Date → '--' |
+| 2 | nav.serverMgmt | servers, networkDevices, networks, snmp, networkDiscovery, dbConnections, sshKeys, terminal, remoteDesktop | ⏳ | 待重检 |
+| 3 | nav.containersVirtualization | containers, containerMonitor, containerLogs, images, volumes, virtualMachines, compose, snapshotPolicies, vmMigrations, imageRegistry, kubernetes, costAnalysis, autoScale | ⏳ | 待重检 |
+| 4 | nav.dataCenter | dcManage, dataRoom | ⏳ | 待重检 |
+| 5 | nav.autoExecution | agents, agents/tools, workflows, workflows/providers, tasks, approvals, scripts, scheduledTasks, configTemplates | ⏳ | 待重检 |
+| 6 | nav.alertsAI | alerts, alertMappings, alertNoise, alertCorrelation, rootCauseAnalysis, aiRootCause, topology, aiInsights, alertAutoAnalysis, inspectionCenter, alerts/providers, zabbix, prometheus | ⏳ | 待重检 |
+| 7 | nav.mcp | mcpOverview, mcpTools, mcpExternalServers, mcpTester | ⏳ | 待重检 |
+| 8 | nav.autoRemediation | remediationPolicies, remediationDashboard, remediationExecutions, remediationWorkbench, aiRemediations | ⏳ | 待重检 |
+| 9 | nav.knowledgeReports | knowledge, audit, notifications, reports | ⏳ | 待重检 |
+| 10 | nav.systemUsers | users, frontendTests, toolLinks, settings | ⏳ | 待重检 |
+
+> 图例：⏳ 待体检 / 🔄 体检中 / ✅ 体检+修复完成
+
+## 已修复 bug 总账（c01c217 commit 范围）
+
+### P0 后端缺失端点（5 处）
+- `tool-links`: GET /categories + DELETE /:id/icon
+- `alert-provider-configs`: 完整 CRUD（JSON 持久化）
+- `notifications`: POST /:id/retry
+- `tasks`: POST /:id/retry（创建新 task 并异步执行）
+- `ai-remediations`: POST /:id/approve + /reject
+
+### P0 后端结构（3 处）
+- `audit JOIN users`: list 改 LEFT JOIN 取 username
+- `configTemplates total`: 嵌入 data.items
+- `dc slots/batch`: 新增聚合端点（顺序：/batch 必须在 /:rackId 之前）
+
+### P1 前端 axios 解包统一修复（10+ 处）
+批量改 `const { data } = await api.get(...)` 模式，涉及 servers/queries.ts(4)+handlers(2)、alerts/*(7)、monitor/TrendCharts/ZabbixQuery/api.ts/cost-analysis、network/*(8)、notification/api.ts(3)、settings/SecuritySettings
+
+### P1 前端硬编码 fetch 漏 /v1（3 处）
+- RemoteDesktop.tsx
+- BackupSettings.tsx
+
+### P1 kubernetes 双重 /api 前缀
+- useKubernetes.ts scale/restart 4 处
+
+### P1 业务修复
+- scripts runScript: 前端 setTimeout mock → 真实 POST /scripts/:id/execute
+- Topology handleDiscoverDependencies: catch 吞错 → logger.warn + 失败计数
+
+## 待修复（非阻塞 / 体验问题）
+
+| 优先级 | 项 | 位置 | 描述 |
+|--------|----|------|------|
+| P2 | RemediationExecutions 分页无封顶 | `frontend/src/modules/auto/pages/RemediationExecutions.tsx:309-321` | 下一页按钮无 disabled + 限上界 |
+| P2 | Reports type 写死 'inspection' | `backend/src/modules/monitor/services/reportService.ts:227,243` | getTemplates/getTemplate 丢失真实 type |
+| P3 | lint-staged Windows 路径 bug | `scripts/lint-staged.cjs:31-39` | Windows 上 path.join 把绝对路径当相对路径处理 → ENOENT |
+| P3 | ComposeEditor 归属错配 | `frontend/src/modules/containers/...` | compose 实际属 config-management，不影响功能 |
+
+### 2026-07-23 v5+ 完结：遗留 P2/P3 全部解决
+- ✅ ssh-keys consumer 5 处 `?? 0/?? ''` fallback
+- ✅ useNetworkDevices `_deviceName` 改用 `SnmpInspectionData` 显式断言（消除污染）
+- ✅ ComposeEditor PaginatedResult 类型统一为 `{items, total}`（5 个 list 方法对齐）
+- ✅ containerRoutes `/containers` / volumeRoutes `/volvolumes` 改为 `{items, total}` 嵌套格式
+- ✅ Approvals 评论 modal（已在 v5 完成）
+- ✅ 3 个真死路由删除：agents/:id/test-input、agents/:id/executions、scheduled-tasks/:id/run
+- ✅ presetTestInputs.ts 删除（只被 test-input 引用）
+
+## 体检方法
+
+每组并行启动 1 个 `general-purpose-task` 子代理，做"路由可达 → 后端模块健康 → 已知 bug 信号"快速体检。子代理只回报高置信度问题。问题修复后 commit + push，再进入下一组。

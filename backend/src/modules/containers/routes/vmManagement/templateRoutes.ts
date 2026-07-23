@@ -7,11 +7,12 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { logger } from '../../../../utils/logger';
+import { requireRole } from '../../../../middleware/auth';
 import { vmManagementService } from '../../services/vmManagement';
 
 const router = Router();
 
-// 获取模板列表
+// 获取模板列表（viewer 可读）
 router.get('/platforms/:platformId/templates', async (req: Request, res: Response) => {
   try {
     const templates = await vmManagementService.listTemplates(req.params.platformId);
@@ -25,7 +26,12 @@ router.get('/platforms/:platformId/templates', async (req: Request, res: Respons
 // 创建模板
 router.post('/platforms/:platformId/vms/:vmId/template', async (req: Request, res: Response) => {
   try {
-    const template = await vmManagementService.createTemplate(req.params.platformId, req.params.vmId, req.body.name, req.body.description);
+    const template = await vmManagementService.createTemplate(
+      req.params.platformId,
+      req.params.vmId,
+      req.body.name,
+      req.body.description,
+    );
     res.json({ success: true, data: template, message: '模板创建成功' });
   } catch (error) {
     logger.error('❌ 创建模板失败:', error);
@@ -34,14 +40,18 @@ router.post('/platforms/:platformId/vms/:vmId/template', async (req: Request, re
 });
 
 // 删除模板
-router.delete('/platforms/:platformId/templates/:templateId', async (req: Request, res: Response) => {
-  try {
-    await vmManagementService.deleteTemplate(req.params.platformId, req.params.templateId);
-    res.json({ success: true, message: '模板删除成功' });
-  } catch (error) {
-    logger.error('❌ 删除模板失败:', error);
-    res.status(500).json({ success: false, error: '删除模板失败' });
-  }
-});
+router.delete(
+  '/platforms/:platformId/templates/:templateId',
+  requireRole('admin', 'operator'),
+  async (req: Request, res: Response) => {
+    try {
+      await vmManagementService.deleteTemplate(req.params.platformId, req.params.templateId);
+      res.json({ success: true, message: '模板删除成功' });
+    } catch (error) {
+      logger.error('❌ 删除模板失败:', error);
+      res.status(500).json({ success: false, error: '删除模板失败' });
+    }
+  },
+);
 
 export default router;

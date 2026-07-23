@@ -87,7 +87,8 @@ router.get('/network-discovery/results', (req: Request, res: Response) => {
     const offset = parseInt(req.query.offset as string, 10) || 0;
 
     const { results, total } = networkDiscoveryService.getResults({ jobId, status, limit, offset });
-    res.json({ success: true, data: results, total });
+    // 把 total 嵌入 data 内（避免被前端 axios 拦截器剥掉兄弟字段）
+    res.json({ success: true, data: { results, total } });
   } catch (err: unknown) {
     logger.error('Failed to get discovery results:', err);
     res.status(500).json({ success: false, error: getErrorMessage(err) });

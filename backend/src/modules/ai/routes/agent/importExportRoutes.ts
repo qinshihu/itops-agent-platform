@@ -10,13 +10,14 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { logger } from '../../../../utils/logger';
+import { requireRole } from '../../../../middleware/auth';
 import { validateBody, validateParams } from '../../../../middleware/validation';
 import { agentSchemas } from '../../../../shared/schemas/apiValidation';
 import { agentCrudService } from '../../services/agentCrudService';
 
 const router = Router();
 
-router.post('/import', validateBody(agentSchemas.importAgents), (req: Request, res: Response) => {
+router.post('/import', requireRole('admin'), validateBody(agentSchemas.importAgents), (req: Request, res: Response) => {
   try {
     const agents = req.body.agents;
     if (!Array.isArray(agents)) {

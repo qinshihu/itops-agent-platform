@@ -13,8 +13,9 @@ import type { VirtualMachine as _VirtualMachine, Container as _Container } from 
 // 通用类型
 // ============================================================
 
+// 2026-07-23：后端约定 data 字段名固定为 `items`，与 compose/images/snapshot-policies/config-templates 对齐
 export interface PaginatedResult<T> {
-  data: T[];
+  items: T[];
   total: number;
 }
 

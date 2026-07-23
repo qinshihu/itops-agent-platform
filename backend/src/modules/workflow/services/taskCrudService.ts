@@ -44,7 +44,11 @@ export const taskCrudService = {
   /**
    * 创建任务（pending 状态）；返回 { success, data | error, taskId }
    */
-  createTask(input: { workflow_id: string; name: string; context?: unknown }): { success: true; taskId: string } | { success: false; error: string } {
+  createTask(input: {
+    workflow_id: string;
+    name: string;
+    context?: unknown;
+  }): { success: true; taskId: string } | { success: false; error: string } {
     // 校验 workflow 是否存在
     if (!workflowRepository.workflows.getById(input.workflow_id)) {
       return { success: false, error: 'Workflow not found' };
@@ -54,7 +58,12 @@ export const taskCrudService = {
       id,
       workflow_id: input.workflow_id,
       name: input.name,
-      context: typeof input.context === 'string' ? input.context : input.context ? JSON.stringify(input.context) : null,
+      context:
+        typeof input.context === 'string'
+          ? input.context
+          : input.context
+            ? JSON.stringify(input.context)
+            : null,
     });
     return { success: true, taskId: id };
   },
@@ -64,7 +73,9 @@ export const taskCrudService = {
   /**
    * 暂停任务（running/pending → paused）
    */
-  pauseTask(id: string): { success: true } | { success: false; error: 'not_found' | 'invalid_status' | string } {
+  pauseTask(
+    id: string,
+  ): { success: true } | { success: false; error: 'not_found' | 'invalid_status' | string } {
     const task = workflowRepository.tasks.getById(id);
     if (!task) return { success: false, error: 'not_found' };
     if (!VALID_TRANSITIONS[task.status]?.includes('paused')) {
@@ -77,7 +88,9 @@ export const taskCrudService = {
   /**
    * 恢复任务（paused → running）
    */
-  resumeTask(id: string): { success: true } | { success: false; error: 'not_found' | 'invalid_status' | string } {
+  resumeTask(
+    id: string,
+  ): { success: true } | { success: false; error: 'not_found' | 'invalid_status' | string } {
     const task = workflowRepository.tasks.getById(id);
     if (!task) return { success: false, error: 'not_found' };
     if (!VALID_TRANSITIONS[task.status]?.includes('running')) {
@@ -88,9 +101,44 @@ export const taskCrudService = {
   },
 
   /**
+   * 重投任务（基于原任务创建新任务并启动执行）
+   * - 仅 failed/cancelled/completed 可重投（pending/running 直接拒）
+   * - 新 taskId 返回给前端跳转
+   * - 不修改原任务状态（审计追溯）
+   */
+  retryTask(
+    id: string,
+  ):
+    | { success: true; taskId: string }
+    | { success: false; error: 'not_found' | 'invalid_status' | 'no_workflow' } {
+    const original = workflowRepository.tasks.getById(id);
+    if (!original) return { success: false, error: 'not_found' };
+    // 仅 failed / cancelled / completed 可重投（其他状态直接拒）
+    const RETRYABLE = new Set(['failed', 'cancelled', 'completed']);
+    if (!RETRYABLE.has(original.status)) {
+      return { success: false, error: 'invalid_status' };
+    }
+    const workflow = workflowRepository.workflows.getById(original.workflow_id);
+    if (!workflow) return { success: false, error: 'no_workflow' };
+
+    // 复用 context（已 JSON.stringify 存于 DB）
+    const newId = randomUUID();
+    workflowRepository.tasks.create({
+      id: newId,
+      workflow_id: original.workflow_id,
+      name: `${original.name} (重投)`,
+      context: original.context ?? null,
+    });
+
+    return { success: true, taskId: newId };
+  },
+
+  /**
    * 取消任务（任何 active 状态 → cancelled）
    */
-  cancelTask(id: string): { success: true } | { success: false; error: 'not_found' | 'invalid_status' | string } {
+  cancelTask(
+    id: string,
+  ): { success: true } | { success: false; error: 'not_found' | 'invalid_status' | string } {
     const task = workflowRepository.tasks.getById(id);
     if (!task) return { success: false, error: 'not_found' };
     if (!VALID_TRANSITIONS[task.status]?.includes('cancelled')) {

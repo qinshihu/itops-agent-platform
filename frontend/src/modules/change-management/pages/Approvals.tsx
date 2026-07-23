@@ -28,6 +28,11 @@ export default function Approvals() {
     approvalId: null,
   });
   const [rejectReason, setRejectReason] = useState('');
+  const [approveModal, setApproveModal] = useState<{ open: boolean; approvalId: string | null }>({
+    open: false,
+    approvalId: null,
+  });
+  const [approveComment, setApproveComment] = useState('');
   const toast = useToast();
   const queryClient = useQueryClient();
 
@@ -70,15 +75,33 @@ export default function Approvals() {
 
   const getStatusBadge = (status: string) => {
     const badges = {
-      pending: { icon: Clock, color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30', label: '待审批' },
-      approved: { icon: CheckCircle, color: 'bg-green-500/10 text-green-500 border-green-500/30', label: '已通过' },
-      rejected: { icon: XCircle, color: 'bg-red-500/10 text-red-500 border-red-500/30', label: '已拒绝' },
-      timeout: { icon: AlertCircle, color: 'bg-gray-500/10 text-gray-500 border-gray-500/30', label: '已超时' },
+      pending: {
+        icon: Clock,
+        color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30',
+        label: '待审批',
+      },
+      approved: {
+        icon: CheckCircle,
+        color: 'bg-green-500/10 text-green-500 border-green-500/30',
+        label: '已通过',
+      },
+      rejected: {
+        icon: XCircle,
+        color: 'bg-red-500/10 text-red-500 border-red-500/30',
+        label: '已拒绝',
+      },
+      timeout: {
+        icon: AlertCircle,
+        color: 'bg-gray-500/10 text-gray-500 border-gray-500/30',
+        label: '已超时',
+      },
     };
     const badge = badges[status as keyof typeof badges] || badges.pending;
     const Icon = badge.icon;
     return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border ${badge.color}`}>
+      <span
+        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border ${badge.color}`}
+      >
         <Icon className="w-3 h-3" />
         {badge.label}
       </span>
@@ -183,7 +206,7 @@ export default function Approvals() {
                 {approval.status === 'pending' && (
                   <div className="flex gap-2">
                     <button
-                      onClick={() => approveMutation.mutate(approval.id)}
+                      onClick={() => setApproveModal({ open: true, approvalId: approval.id })}
                       disabled={approveMutation.isPending}
                       className="flex items-center gap-1 px-3 py-1.5 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500/20 transition-colors disabled:opacity-50"
                     >

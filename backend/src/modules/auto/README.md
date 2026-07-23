@@ -2,7 +2,7 @@
 
 > **DDD 限界上下文**：自动修复与自动伸缩
 > **聚合根**：`RemediationPolicy`、`ScaleRule`
-> **最后刷新**：2026-07-22
+> **最后刷新**：2026-07-23（nav.autoExecution 第 5 轮：remediationExecutionRoutes 全 RBAC + autoScaleService shutdown + autoScale 8 catch logger）
 
 ## 职责
 自动修复策略管理、策略编排、修复执行记录、修复大盘、自动伸缩。

@@ -19,7 +19,7 @@ export interface NotificationRecord {
   related_alert_id: string | null;
   related_task_id: string | null;
   sent_at: string | null;
-  error_message: string | null;  // 失败原因（2026-07-06 增）
+  error_message: string | null; // 失败原因（2026-07-06 增）
   created_at: string;
 }
 
@@ -74,15 +74,18 @@ export interface NotificationConfig {
 
 export const notificationApi = {
   /** 获取通知列表 */
-  async list(params?: NotificationListParams): Promise<{ notifications: NotificationRecord[]; total?: number }> {
+  async list(
+    params?: NotificationListParams,
+  ): Promise<{ notifications: NotificationRecord[]; total?: number }> {
+    // axios 拦截器已把 response.data 解包，data 本身就是后端 result
     const { data } = await api.get('/notifications', { params });
-    return data.data;
+    return data;
   },
 
   /** 获取通知统计 */
   async getStats(): Promise<NotificationStats> {
     const { data } = await api.get('/notifications/stats/summary');
-    return data.data;
+    return data;
   },
 
   /** 标记通知为已发送 */
@@ -98,7 +101,7 @@ export const notificationApi = {
   /** 获取通知渠道配置 */
   async getConfig(): Promise<NotificationConfig> {
     const { data } = await api.get('/notification-config');
-    return data.data;
+    return data;
   },
 
   /** 更新通知渠道配置 */
@@ -108,7 +111,10 @@ export const notificationApi = {
   },
 
   /** 测试通知渠道 */
-  async testChannel(channel: string, body?: Record<string, unknown>): Promise<{ success: boolean; message?: string; error?: string }> {
+  async testChannel(
+    channel: string,
+    body?: Record<string, unknown>,
+  ): Promise<{ success: boolean; message?: string; error?: string }> {
     const { data } = await api.post(`/notification-config/test/${channel}`, body);
     return data;
   },

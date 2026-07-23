@@ -2,9 +2,24 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Layers, AlertCircle as _AlertCircle, CheckCircle2, Loader2, Search as _Search,
-  Plus as _Plus, Link2, Unlink as _Unlink, X, Clock as _Clock, Eye as _Eye, ChevronRight,
-  Shield as _Shield, Trash2, Wrench as _Wrench, Bell, ExternalLink, Zap
+  Layers,
+  AlertCircle as _AlertCircle,
+  CheckCircle2,
+  Loader2,
+  Search as _Search,
+  Plus as _Plus,
+  Link2,
+  Unlink as _Unlink,
+  X,
+  Clock as _Clock,
+  Eye as _Eye,
+  ChevronRight,
+  Shield as _Shield,
+  Trash2,
+  Wrench as _Wrench,
+  Bell,
+  ExternalLink,
+  Zap,
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../../lib/api';
@@ -51,9 +66,15 @@ export default function AlertCorrelationGroups() {
   // 关联组列表
   const { data: groupsData, isLoading } = useQuery({
     queryKey: ['alert-correlation-groups', statusFilter],
-    queryFn: () => api.get('/alert-correlation/groups', {
-      params: { status: statusFilter === 'all' ? undefined : statusFilter, limit: 50 }
-    }).then(r => ({ groups: r.data.data as CorrelationGroup[], total: r.data.total as number })),
+    queryFn: () =>
+      api
+        .get('/alert-correlation/groups', {
+          params: { status: statusFilter === 'all' ? undefined : statusFilter, limit: 50 },
+        })
+        .then((r) => ({
+          groups: r.data.groups as CorrelationGroup[],
+          total: r.data.total as number,
+        })),
   });
 
   const groups = groupsData?.groups || [];
@@ -62,13 +83,13 @@ export default function AlertCorrelationGroups() {
   // 统计数据
   const { data: stats } = useQuery({
     queryKey: ['alert-correlation-stats'],
-    queryFn: () => api.get('/alert-correlation/stats').then(r => r.data.data),
+    queryFn: () => api.get('/alert-correlation/stats').then((r) => r.data),
   });
 
   // 选中组详情
   const { data: groupDetail } = useQuery({
     queryKey: ['alert-correlation-group-detail', selectedGroupId],
-    queryFn: () => api.get(`/alert-correlation/groups/${selectedGroupId}`).then(r => r.data.data),
+    queryFn: () => api.get(`/alert-correlation/groups/${selectedGroupId}`).then((r) => r.data),
     enabled: !!selectedGroupId,
   });
 
@@ -151,14 +172,15 @@ export default function AlertCorrelationGroups() {
         {/* 筛选 + 操作 */}
         <div className="flex items-center justify-between">
           <div className="flex gap-2">
-            {['all', 'open', 'resolved'].map(status => (
-              <button key={status}
+            {['all', 'open', 'resolved'].map((status) => (
+              <button
+                key={status}
                 onClick={() => setStatusFilter(status)}
                 className={clsx(
                   'px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
                   statusFilter === status
                     ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
-                    : 'text-text-secondary hover:text-text-primary border border-transparent'
+                    : 'text-text-secondary hover:text-text-primary border border-transparent',
                 )}
               >
                 {status === 'all' ? '全部' : status === 'open' ? '待处理' : '已解决'}
@@ -166,11 +188,16 @@ export default function AlertCorrelationGroups() {
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => triggerAuto.mutate()}
+            <button
+              onClick={() => triggerAuto.mutate()}
               disabled={triggerAuto.isPending}
               className="px-3 py-1.5 text-xs bg-surface border border-border text-text-secondary rounded-lg hover:bg-surface/80 transition-all disabled:opacity-50 flex items-center gap-1.5"
             >
-              {triggerAuto.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+              {triggerAuto.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Zap className="w-3.5 h-3.5" />
+              )}
               立即关联
             </button>
           </div>
@@ -184,43 +211,67 @@ export default function AlertCorrelationGroups() {
         ) : groups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-text-tertiary">
             <Layers className="w-12 h-12 mb-3 opacity-30" />
-            <p className="text-sm">{statusFilter === 'open' ? '暂无待处理的关联组' : '暂无关联组'}</p>
+            <p className="text-sm">
+              {statusFilter === 'open' ? '暂无待处理的关联组' : '暂无关联组'}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3">
             {groups.map((group: CorrelationGroup) => (
-              <div key={group.id}
-                onClick={() => { setSelectedGroupId(group.id); setShowGroupDetail(true); }}
+              <div
+                key={group.id}
+                onClick={() => {
+                  setSelectedGroupId(group.id);
+                  setShowGroupDetail(true);
+                }}
                 className={clsx(
                   'bg-surface rounded-xl border p-4 cursor-pointer transition-all hover:border-purple-400/30',
-                  group.status === 'open' ? 'border-border' : 'border-border/50 opacity-75'
+                  group.status === 'open' ? 'border-border' : 'border-border/50 opacity-75',
                 )}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className={clsx(
-                      'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0',
-                      group.status === 'open' ? 'bg-purple-500/10' : 'bg-slate-500/10'
-                    )}>
+                    <div
+                      className={clsx(
+                        'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0',
+                        group.status === 'open' ? 'bg-purple-500/10' : 'bg-slate-500/10',
+                      )}
+                    >
                       {group.auto_detected ? (
-                        <Zap className={clsx('w-5 h-5', group.status === 'open' ? 'text-purple-400' : 'text-slate-400')} />
+                        <Zap
+                          className={clsx(
+                            'w-5 h-5',
+                            group.status === 'open' ? 'text-purple-400' : 'text-slate-400',
+                          )}
+                        />
                       ) : (
-                        <Link2 className={clsx('w-5 h-5', group.status === 'open' ? 'text-purple-400' : 'text-slate-400')} />
+                        <Link2
+                          className={clsx(
+                            'w-5 h-5',
+                            group.status === 'open' ? 'text-purple-400' : 'text-slate-400',
+                          )}
+                        />
                       )}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-text-primary truncate">{group.title}</p>
-                        <span className={clsx(
-                          'text-xs px-2 py-0.5 rounded-full border',
-                          severityColors[group.severity] || 'bg-slate-500/10 text-slate-400'
-                        )}>
+                        <span
+                          className={clsx(
+                            'text-xs px-2 py-0.5 rounded-full border',
+                            severityColors[group.severity] || 'bg-slate-500/10 text-slate-400',
+                          )}
+                        >
                           {group.severity}
                         </span>
-                        <span className={clsx(
-                          'text-xs px-2 py-0.5 rounded-full',
-                          group.status === 'open' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-emerald-500/10 text-emerald-400'
-                        )}>
+                        <span
+                          className={clsx(
+                            'text-xs px-2 py-0.5 rounded-full',
+                            group.status === 'open'
+                              ? 'bg-yellow-500/10 text-yellow-400'
+                              : 'bg-emerald-500/10 text-emerald-400',
+                          )}
+                        >
                           {group.status === 'open' ? '待处理' : '已解决'}
                         </span>
                         {group.auto_detected === 1 && (
@@ -234,7 +285,9 @@ export default function AlertCorrelationGroups() {
                           <Bell className="w-3 h-3" />
                           {group.member_count || group.alert_count} 条告警
                         </span>
-                        <span>{group.created_at ? new Date(group.created_at).toLocaleString() : ''}</span>
+                        <span>
+                          {group.created_at ? new Date(group.created_at).toLocaleString() : ''}
+                        </span>
                         {group.device_ids && <span>设备: {group.device_ids}</span>}
                       </div>
                     </div>
@@ -260,7 +313,8 @@ export default function AlertCorrelationGroups() {
                   {groupDetail.group?.title}
                 </span>
               </h3>
-              <button onClick={() => setShowGroupDetail(false)}
+              <button
+                onClick={() => setShowGroupDetail(false)}
                 className="p-1 text-text-tertiary hover:text-text-primary transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -270,22 +324,37 @@ export default function AlertCorrelationGroups() {
             <div className="space-y-4">
               {/* 组信息 */}
               <div className="flex flex-wrap gap-3">
-                <span className={clsx(
-                  'text-xs px-2.5 py-1 rounded-full border',
-                  severityColors[groupDetail.group?.severity] || 'bg-slate-500/10 text-slate-400'
-                )}>{groupDetail.group?.severity}</span>
-                <span className={clsx(
-                  'text-xs px-2.5 py-1 rounded-full',
-                  groupDetail.group?.status === 'open' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-emerald-500/10 text-emerald-400'
-                )}>{statusLabels[groupDetail.group?.status] || groupDetail.group?.status}</span>
+                <span
+                  className={clsx(
+                    'text-xs px-2.5 py-1 rounded-full border',
+                    severityColors[groupDetail.group?.severity] || 'bg-slate-500/10 text-slate-400',
+                  )}
+                >
+                  {groupDetail.group?.severity}
+                </span>
+                <span
+                  className={clsx(
+                    'text-xs px-2.5 py-1 rounded-full',
+                    groupDetail.group?.status === 'open'
+                      ? 'bg-yellow-500/10 text-yellow-400'
+                      : 'bg-emerald-500/10 text-emerald-400',
+                  )}
+                >
+                  {statusLabels[groupDetail.group?.status] || groupDetail.group?.status}
+                </span>
                 <span className="text-xs text-text-secondary bg-background px-2.5 py-1 rounded-full">
                   {groupDetail.members?.length || 0} 条告警
                 </span>
                 {groupDetail.group?.auto_detected === 1 && (
-                  <span className="text-xs text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full">自动关联</span>
+                  <span className="text-xs text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full">
+                    自动关联
+                  </span>
                 )}
                 <span className="text-xs text-text-secondary bg-background px-2.5 py-1 rounded-full">
-                  创建于 {groupDetail.group?.created_at ? new Date(groupDetail.group.created_at).toLocaleString() : ''}
+                  创建于{' '}
+                  {groupDetail.group?.created_at
+                    ? new Date(groupDetail.group.created_at).toLocaleString()
+                    : ''}
                 </span>
               </div>
 
@@ -293,10 +362,13 @@ export default function AlertCorrelationGroups() {
               <h4 className="text-sm font-medium text-text-primary mt-4">关联告警</h4>
               <div className="space-y-2">
                 {(groupDetail.members || []).map((member: GroupMember) => (
-                  <div key={member.id}
+                  <div
+                    key={member.id}
                     className={clsx(
                       'p-3 rounded-lg border',
-                      member.is_root ? 'bg-purple-500/5 border-purple-500/30' : 'bg-background border-border/50'
+                      member.is_root
+                        ? 'bg-purple-500/5 border-purple-500/30'
+                        : 'bg-background border-border/50',
                     )}
                   >
                     <div className="flex items-start justify-between">
@@ -306,10 +378,12 @@ export default function AlertCorrelationGroups() {
                             根因
                           </span>
                         )}
-                        <div className={clsx(
-                          'text-xs px-2 py-0.5 rounded-full flex-shrink-0',
-                          severityColors[member.severity || 'low']
-                        )}>
+                        <div
+                          className={clsx(
+                            'text-xs px-2 py-0.5 rounded-full flex-shrink-0',
+                            severityColors[member.severity || 'low'],
+                          )}
+                        >
                           {member.severity}
                         </div>
                         <p className="text-sm text-text-primary truncate">{member.title}</p>
@@ -323,10 +397,14 @@ export default function AlertCorrelationGroups() {
                       </button>
                     </div>
                     {member.content && (
-                      <p className="text-xs text-text-secondary mt-1 ml-1 line-clamp-2">{member.content}</p>
+                      <p className="text-xs text-text-secondary mt-1 ml-1 line-clamp-2">
+                        {member.content}
+                      </p>
                     )}
                     <div className="text-xs text-text-tertiary mt-1 ml-1">
-                      {member.alert_created_at ? new Date(member.alert_created_at).toLocaleString() : ''}
+                      {member.alert_created_at
+                        ? new Date(member.alert_created_at).toLocaleString()
+                        : ''}
                     </div>
                   </div>
                 ))}
@@ -336,14 +414,16 @@ export default function AlertCorrelationGroups() {
             {/* 操作按钮 */}
             <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-border">
               {groupDetail.group?.status === 'open' && (
-                <button onClick={() => resolveGroup.mutate(groupDetail.group.id)}
+                <button
+                  onClick={() => resolveGroup.mutate(groupDetail.group.id)}
                   className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-lg hover:bg-emerald-500/20 transition-all text-sm flex items-center gap-2"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   标记已解决
                 </button>
               )}
-              <button onClick={() => deleteGroup.mutate(groupDetail.group.id)}
+              <button
+                onClick={() => deleteGroup.mutate(groupDetail.group.id)}
                 className="px-4 py-2 bg-status-failed/10 border border-status-failed/30 text-status-failed rounded-lg hover:bg-status-failed/20 transition-all text-sm flex items-center gap-2"
               >
                 <Trash2 className="w-4 h-4" />

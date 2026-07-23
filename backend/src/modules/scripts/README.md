@@ -2,7 +2,7 @@
 
 > **DDD 限界上下文**：脚本 / 终端 / AI 命令（P1-6 从 infra 抽离）
 > **聚合根**：`Script`、`TerminalSession`
-> **最后刷新**：2026-07-22
+> **最后刷新**：2026-07-23（nav.autoExecution 第 5 轮：scriptRoutes 5 空 catch 加 logger + 前端 Scripts.tsx 补 P0 ReferenceError import）
 
 ## 职责
 运维脚本（scripts）CRUD + Web 终端会话（terminalService）+ 终端 AI 分析（terminalAiService）+ 多平台命令模板（commandDispatcher）。

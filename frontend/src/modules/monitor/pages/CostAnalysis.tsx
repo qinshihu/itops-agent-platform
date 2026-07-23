@@ -77,8 +77,9 @@ export default function CostAnalysis() {
   const fetchContainers = useCallback(async () => {
     setLoading(true);
     try {
+      // 后端返回 { success, data: { items, totalMonthly } }；axios 拦截器已解包
       const { data } = await api.get('/cost-analysis/containers');
-      setContainers(data || []);
+      setContainers(data?.items || []);
     } catch (err: unknown) {
       message.error(`加载容器成本失败：${getAxiosErrorMessage(err, '未知错误')}`);
     } finally { setLoading(false); }
@@ -88,7 +89,7 @@ export default function CostAnalysis() {
     setLoading(true);
     try {
       const { data } = await api.get('/cost-analysis/vms');
-      setVms(data || []);
+      setVms(data?.items || []);
     } catch (err: unknown) {
       message.error(`加载 VM 成本失败：${getAxiosErrorMessage(err, '未知错误')}`);
     } finally { setLoading(false); }
@@ -98,7 +99,7 @@ export default function CostAnalysis() {
     setLoading(true);
     try {
       const { data } = await api.get('/cost-analysis/recommendations');
-      setRecommendations(data || []);
+      setRecommendations(data?.items || []);
     } catch (err: unknown) {
       message.error(`加载优化建议失败：${getAxiosErrorMessage(err, '未知错误')}`);
     } finally { setLoading(false); }

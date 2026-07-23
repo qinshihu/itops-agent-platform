@@ -55,10 +55,12 @@ describe('auditLogRepository', () => {
     it('多过滤条件生成对应 WHERE 子句与参数', () => {
       const allSpy = vi.fn(() => []);
       mockDb.prepare = vi.fn((sql: string) => {
-        expect(sql).toContain('action = ?');
-        expect(sql).toContain('resource_type = ?');
-        expect(sql).toContain('created_at >= ?');
-        expect(sql).toContain('ORDER BY created_at DESC LIMIT ? OFFSET ?');
+        // 2026-07-23 改：list 改为 LEFT JOIN users 取 username，WHERE 用 al. 前缀
+        expect(sql).toContain('LEFT JOIN users');
+        expect(sql).toContain('al.action = ?');
+        expect(sql).toContain('al.resource_type = ?');
+        expect(sql).toContain('al.created_at >= ?');
+        expect(sql).toContain('ORDER BY al.created_at DESC LIMIT ? OFFSET ?');
         return { run: vi.fn(), get: vi.fn(), all: allSpy };
       });
 

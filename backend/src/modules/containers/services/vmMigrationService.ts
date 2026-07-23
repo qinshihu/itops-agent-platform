@@ -164,6 +164,18 @@ class VmMigrationService {
     return true;
   }
 
+  /** 关闭：清掉所有 active migrations 与 progress intervals（graceful restart） */
+  stopAll(): void {
+    this.progressIntervals.forEach((interval) => clearInterval(interval));
+    this.progressIntervals.clear();
+    for (const [id, ctrl] of this.pendingRequests) {
+      try { ctrl.abort(); } catch { /* ignore */ }
+      logger.info(`🛑 Aborted pending migration: ${id}`);
+    }
+    this.pendingRequests.clear();
+    this.activeMigrations.clear();
+  }
+
   getMigration(migrationId: string): MigrationTask | null {
     const row = vmMigrationRepository.getById(migrationId);
     if (!row) return null;

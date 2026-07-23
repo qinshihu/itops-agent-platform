@@ -14,7 +14,8 @@ router.get('/alert-correlation/groups', (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string, 10) || 50;
     const offset = parseInt(req.query.offset as string, 10) || 0;
     const { groups, total } = alertCorrelationService.getGroups({ status, limit, offset });
-    res.json({ success: true, data: groups, total });
+    // 把 total 嵌入 data 内（避免被前端 axios 拦截器剥掉兄弟字段）
+    res.json({ success: true, data: { groups, total } });
   } catch (err: unknown) {
     logger.error('Failed to get correlation groups:', err);
     res.status(500).json({ success: false, error: getErrorMessage(err) });

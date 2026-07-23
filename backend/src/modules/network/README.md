@@ -44,14 +44,19 @@ network/
 
 | 前缀 | 来源 | 说明 |
 |------|------|------|
-| `/vnc/*` | `vncRoutes.ts` | VNC WebSocket 代理 |
+| `/vnc/*` | `vncRoutes.ts` | VNC WebSocket 代理（vncProxyService 在 app.ts 启动时通过 socket.io 注入） |
 | `/network-devices/*` | `networkDeviceRoutes.ts` | 设备 CRUD（17 厂商适配器） |
 | `/network-advanced/*` | `networkAdvancedRoutes.ts` | 命令下发 / 配置备份 / 高级操作 |
-| `/network-subnets/*` | `networkSubnetRoutes.ts` | IP 子网规划 |
-| `/snmp/*` | `snmpRoutes.ts` | SNMP Get/Walk/Trap |
+| `/network-subnets/*` | `networkSubnetRoutes.ts` | IP 子网规划（routes 全部加了 logger.error） |
+| `/snmp/*` | `snmpRoutes.ts` | SNMP Get/Walk/Trap（2026-07-23 改用 {success, data, message} 格式与全局对齐） |
 | `/topology/*` | `topologyRoutes.ts` | 拓扑可视化数据 |
 
 > 注：`networkDiscoveryRouter` 作为命名导出被外部（mcp 或其他模块）独立挂载（不在 `router.use()` 默认链中）。
+
+### 最近变更（2026-07-23）
+- **snmpRoutes** 全部端点响应格式 `{code, data, message}` → `{success, data, message}`，与项目 23 个模块对齐；前端 axios 拦截器（lib/api.ts:57）正确解包。
+- **networkSubnetRoutes** 7 处 `catch {}` 补 `logger.error('...', error)` 调用。
+- **useNetworkDevices.handleSnmpInspect** 改用 `response.data.reachable || response.data.success` 双兼容判断。
 
 ## 依赖关系
 - 依赖 `auth/`（JWT 鉴权中间件）

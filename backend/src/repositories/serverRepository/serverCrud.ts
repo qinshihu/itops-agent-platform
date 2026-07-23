@@ -174,6 +174,10 @@ export const serversRepo = {
   update(id: string, input: ServerUpdateInput): void {
     const passwordVal = input.password !== undefined ? input.password : undefined;
     const privateKeyVal = input.private_key !== undefined ? input.private_key : undefined;
+    // description: undefined=不更新 / null=清空 / string=更新（与 password 模式一致）
+    const descriptionVal = input.description !== undefined ? input.description : undefined;
+    // tags: undefined=不更新 / null=清空 / string=更新
+    const tagsVal = input.tags !== undefined ? input.tags : undefined;
 
     db.prepare(
       `UPDATE servers
@@ -184,8 +188,8 @@ export const serversRepo = {
            password = CASE WHEN ? IS NOT NULL THEN ? ELSE password END,
            private_key = CASE WHEN ? IS NOT NULL THEN ? ELSE private_key END,
            use_ssh_key = COALESCE(?, use_ssh_key),
-           description = COALESCE(?, description),
-           tags = COALESCE(?, tags),
+           description = CASE WHEN ? IS NOT NULL THEN ? ELSE description END,
+           tags = CASE WHEN ? IS NOT NULL THEN ? ELSE tags END,
            enabled = COALESCE(?, enabled),
            os_type = COALESCE(?, os_type),
            ssh_key_id = COALESCE(?, ssh_key_id),
@@ -201,8 +205,10 @@ export const serversRepo = {
       privateKeyVal,
       privateKeyVal,
       input.use_ssh_key ?? null,
-      input.description ?? null,
-      input.tags ?? null,
+      descriptionVal,
+      descriptionVal,
+      tagsVal,
+      tagsVal,
       input.enabled ?? null,
       input.os_type ?? null,
       input.ssh_key_id ?? null,

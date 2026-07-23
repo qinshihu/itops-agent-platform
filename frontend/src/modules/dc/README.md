@@ -1,9 +1,11 @@
 # 数据中心模块（前端）
 
 ## 职责
+
 数据中心基础设施管理：3D 机房可视化、机柜管理、设备管理、PDU 管理、Netbox 集成。
 
 ## 内部结构
+
 ```
 dc/
 ├── routes.ts                             # 模块路由
@@ -38,7 +40,13 @@ dc/
 ```
 
 ## 对应后端
+
 `backend/src/modules/dc/`
 
 ## 刷新记录
+
+- **2026-07-23**：
+  - backend 侧：`slots/routes` 业务规则下沉到 `dcSlotService`（前后端现在使用同一份 U 位冲突/容量/u_height 继承/生命周期逻辑）
+  - backend 侧：13 个 routes 文件补 RBAC（POST/PUT → admin,operator；DELETE → admin）
+  - backend 侧：13 个 routes 文件 catch 加 logger.error
 - **2026-07-22**：核对 13 Tab + DataRoom3D 子模块

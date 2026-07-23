@@ -19,7 +19,10 @@ import type {
 } from './types';
 import { generateFallbackChartData, SERVER_COLORS, SERVER_METRICS_RANDOM_VALUES } from './types';
 
-const RETRY_CONFIG = { retry: 3, retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 5000) };
+const RETRY_CONFIG = {
+  retry: 3,
+  retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 5000),
+};
 
 export function useBigScreenData() {
   const navigate = useNavigate();
@@ -37,6 +40,8 @@ export function useBigScreenData() {
   const containerRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const criticalAlertSoundPlayedRef = useRef(false);
+  // 2026-07-23 P1：保存 setTimeout id 用于 unmount cleanup
+  const criticalAlertSoundTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
@@ -91,12 +96,17 @@ export function useBigScreenData() {
     queryKey: ['dashboard-full', refreshKey],
     queryFn: async () => {
       const { data } = await api.get('/dashboard/full');
-      return data as {
-        stats: DashboardStats;
-        recentTasks: Task[];
-        recentAlerts: Alert[];
-        servers: ServerType[];
-      };
+      // 2026-07-23 P2：axios 拦截器已解包 response.data；但当后端返回 { success: false, error: '...' }
+      // 时 data 是 error 字符串，类型断言绕过检查会导致 .map 崩。
+      // 此处返回结构化对象，isArray 兜底放在使用方 tasks/recentTasks/recentAlerts
+      return data && typeof data === 'object'
+        ? (data as {
+            stats: DashboardStats;
+            recentTasks: Task[];
+            recentAlerts: Alert[];
+            servers: ServerType[];
+          })
+        : null;
     },
     refetchInterval: 30000,
     ...RETRY_CONFIG,
@@ -110,7 +120,8 @@ export function useBigScreenData() {
     queryKey: ['tasks', { limit: 10 }, refreshKey],
     queryFn: async () => {
       const { data } = await api.get('/tasks', { params: { limit: 10 } });
-      return data as Task[];
+      // 2026-07-23 P2：拦截器失败路径兜底
+      return Array.isArray(data) ? (data as Task[]) : [];
     },
     refetchInterval: 15000,
     ...RETRY_CONFIG,
@@ -128,23 +139,39 @@ export function useBigScreenData() {
         progress = 100;
       } else if (task.status === 'failed') {
         try {
-          const results = task.node_results ? (JSON.parse(task.node_results) as Record<string, { status: string }>) : {};
-          const completedCount = Object.values(results).filter((r) => r.status === 'completed').length;
+          const results = task.node_results
+            ? (JSON.parse(task.node_results) as Record<string, { status: string }>)
+            : {};
+          const completedCount = Object.values(results).filter(
+            (r) => r.status === 'completed',
+          ).length;
           totalNodes = Object.keys(results).length;
           completedNodes = completedCount;
           progress = totalNodes > 0 ? Math.round((completedCount / totalNodes) * 100) : 0;
-        } catch {
+        } catch (err) {
+          logger.warn('big-screen: parse failed-task node_results JSON failed', {
+            taskId: task.id,
+            err,
+          });
           progress = 0;
         }
       } else if (task.status === 'running') {
         try {
-          const execOrder = task.execution_order ? (JSON.parse(task.execution_order) as string[]) : [];
-          const results = task.node_results ? (JSON.parse(task.node_results) as Record<string, { status: string }>) : {};
+          const execOrder = task.execution_order
+            ? (JSON.parse(task.execution_order) as string[])
+            : [];
+          const results = task.node_results
+            ? (JSON.parse(task.node_results) as Record<string, { status: string }>)
+            : {};
           totalNodes = execOrder.length;
           completedNodes = Object.values(results).filter((r) => r.status === 'completed').length;
           executingNode = task.current_node_id || '';
           progress = totalNodes > 0 ? Math.round((completedNodes / totalNodes) * 100) : 0;
-        } catch {
+        } catch (err) {
+          logger.warn('big-screen: parse running-task node_results/execution_order JSON failed', {
+            taskId: task.id,
+            err,
+          });
           progress = 0;
         }
       }
@@ -157,7 +184,8 @@ export function useBigScreenData() {
     queryKey: ['alert-trends', refreshKey],
     queryFn: async () => {
       const { data } = await api.get('/dashboard/alert-trends');
-      return data as AlertTrendPoint[];
+      // 2026-07-23 P2：拦截器失败路径兜底
+      return Array.isArray(data) ? (data as AlertTrendPoint[]) : [];
     },
     refetchInterval: 60000,
     ...RETRY_CONFIG,
@@ -167,7 +195,8 @@ export function useBigScreenData() {
     queryKey: ['task-trends', refreshKey],
     queryFn: async () => {
       const { data } = await api.get('/dashboard/task-trends');
-      return data as TaskTrendPoint[];
+      // 2026-07-23 P2：拦截器失败路径兜底
+      return Array.isArray(data) ? (data as TaskTrendPoint[]) : [];
     },
     refetchInterval: 60000,
     ...RETRY_CONFIG,
@@ -177,15 +206,18 @@ export function useBigScreenData() {
     queryKey: ['agent-stats', refreshKey],
     queryFn: async () => {
       const { data } = await api.get('/dashboard/agent-stats');
-      return data as {
-        agents: AgentStat[];
-        overall: {
-          totalExecutions: number;
-          totalSuccess: number;
-          overallSuccessRate: number;
-          todayExecutions: number;
-        };
-      };
+      // 2026-07-23 P2：拦截器失败路径兜底
+      return data && typeof data === 'object'
+        ? (data as {
+            agents: AgentStat[];
+            overall: {
+              totalExecutions: number;
+              totalSuccess: number;
+              overallSuccessRate: number;
+              todayExecutions: number;
+            };
+          })
+        : null;
     },
     refetchInterval: 60000,
     ...RETRY_CONFIG,
@@ -195,10 +227,13 @@ export function useBigScreenData() {
     queryKey: ['task-distribution', refreshKey],
     queryFn: async () => {
       const { data } = await api.get('/dashboard/task-distribution');
-      return data as {
-        byStatus: Array<{ status: string; count: number }>;
-        byWorkflow: Array<{ name: string; count: number }>;
-      };
+      // 2026-07-23 P2：拦截器失败路径兜底
+      return data && typeof data === 'object'
+        ? (data as {
+            byStatus: Array<{ status: string; count: number }>;
+            byWorkflow: Array<{ name: string; count: number }>;
+          })
+        : null;
     },
     refetchInterval: 60000,
     ...RETRY_CONFIG,
@@ -275,16 +310,35 @@ export function useBigScreenData() {
   useEffect(() => {
     const newCriticalCount = stats?.alerts.critical || 0;
 
-    if (newCriticalCount > prevCriticalCountRef.current && newCriticalCount > 0 && !criticalAlertSoundPlayedRef.current) {
+    if (
+      newCriticalCount > prevCriticalCountRef.current &&
+      newCriticalCount > 0 &&
+      !criticalAlertSoundPlayedRef.current
+    ) {
       playCriticalAlertSound();
       criticalAlertSoundPlayedRef.current = true;
-      setTimeout(() => {
+      // 2026-07-23 P1：保存 timer id；上一轮的 timer 若还在，先 clear 避免泄漏
+      if (criticalAlertSoundTimerRef.current) {
+        clearTimeout(criticalAlertSoundTimerRef.current);
+      }
+      criticalAlertSoundTimerRef.current = setTimeout(() => {
         criticalAlertSoundPlayedRef.current = false;
+        criticalAlertSoundTimerRef.current = null;
       }, 30000);
     }
 
     prevCriticalCountRef.current = newCriticalCount;
   }, [stats?.alerts.critical, playCriticalAlertSound]);
+
+  // 2026-07-23 P1：组件卸载或依赖变化时清理 pending timer
+  useEffect(() => {
+    return () => {
+      if (criticalAlertSoundTimerRef.current) {
+        clearTimeout(criticalAlertSoundTimerRef.current);
+        criticalAlertSoundTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const hasCriticalAlerts = (stats?.alerts.critical || 0) > 0;
   const hasHighAlerts = (stats?.alerts.high || 0) > 0;
@@ -292,13 +346,21 @@ export function useBigScreenData() {
 
   // Chart data
   const [cpuData, setCpuData] = useState<DataPoint[]>(() => generateFallbackChartData(30, 45, 30));
-  const [memoryData, setMemoryData] = useState<DataPoint[]>(() => generateFallbackChartData(30, 65, 20));
-  const [networkData, setNetworkData] = useState<DataPoint[]>(() => generateFallbackChartData(30, 100, 80));
-  const [diskIOData, setDiskIOData] = useState<DataPoint[]>(() => generateFallbackChartData(30, 50, 40));
+  const [memoryData, setMemoryData] = useState<DataPoint[]>(() =>
+    generateFallbackChartData(30, 65, 20),
+  );
+  const [networkData, setNetworkData] = useState<DataPoint[]>(() =>
+    generateFallbackChartData(30, 100, 80),
+  );
+  const [diskIOData, setDiskIOData] = useState<DataPoint[]>(() =>
+    generateFallbackChartData(30, 50, 40),
+  );
 
   useEffect(() => {
     if (serverMetricsData?.has_real_data && serverMetricsData.cpu_history.length > 0) {
-      const aggregateMetric = (history: Array<{ server_id: string; value: number; timestamp: string }>) => {
+      const aggregateMetric = (
+        history: Array<{ server_id: string; value: number; timestamp: string }>,
+      ) => {
         const timeMap = new Map<string, number[]>();
         history.forEach((h) => {
           if (!timeMap.has(h.timestamp)) timeMap.set(h.timestamp, []);
@@ -321,10 +383,22 @@ export function useBigScreenData() {
     } else {
       const interval = setInterval(() => {
         const now = Date.now();
-        setCpuData((prev) => [...prev.slice(-29), { timestamp: now, value: 40 + Math.random() * 35 }]);
-        setMemoryData((prev) => [...prev.slice(-29), { timestamp: now, value: 60 + Math.random() * 25 }]);
-        setNetworkData((prev) => [...prev.slice(-29), { timestamp: now, value: 80 + Math.random() * 100 }]);
-        setDiskIOData((prev) => [...prev.slice(-29), { timestamp: now, value: 40 + Math.random() * 50 }]);
+        setCpuData((prev) => [
+          ...prev.slice(-29),
+          { timestamp: now, value: 40 + Math.random() * 35 },
+        ]);
+        setMemoryData((prev) => [
+          ...prev.slice(-29),
+          { timestamp: now, value: 60 + Math.random() * 25 },
+        ]);
+        setNetworkData((prev) => [
+          ...prev.slice(-29),
+          { timestamp: now, value: 80 + Math.random() * 100 },
+        ]);
+        setDiskIOData((prev) => [
+          ...prev.slice(-29),
+          { timestamp: now, value: 40 + Math.random() * 50 },
+        ]);
       }, 3000);
       return () => clearInterval(interval);
     }
@@ -370,11 +444,27 @@ export function useBigScreenData() {
       const validDisk = serverMetricsData.servers.filter((s) => s.disk_usage !== null);
 
       return {
-        cpu: validCpu.length > 0 ? validCpu.reduce((sum, s) => sum + (s.cpu_usage ?? 0), 0) / validCpu.length : null,
-        memory: validMem.length > 0 ? validMem.reduce((sum, s) => sum + (s.memory_usage ?? 0), 0) / validMem.length : null,
-        networkIn: validNetIn.length > 0 ? validNetIn.reduce((sum, s) => sum + (s.network_in_mbps ?? 0), 0) / validNetIn.length : null,
-        networkOut: validNetOut.length > 0 ? validNetOut.reduce((sum, s) => sum + (s.network_out_mbps ?? 0), 0) / validNetOut.length : null,
-        disk: validDisk.length > 0 ? validDisk.reduce((sum, s) => sum + (s.disk_usage ?? 0), 0) / validDisk.length : null,
+        cpu:
+          validCpu.length > 0
+            ? validCpu.reduce((sum, s) => sum + (s.cpu_usage ?? 0), 0) / validCpu.length
+            : null,
+        memory:
+          validMem.length > 0
+            ? validMem.reduce((sum, s) => sum + (s.memory_usage ?? 0), 0) / validMem.length
+            : null,
+        networkIn:
+          validNetIn.length > 0
+            ? validNetIn.reduce((sum, s) => sum + (s.network_in_mbps ?? 0), 0) / validNetIn.length
+            : null,
+        networkOut:
+          validNetOut.length > 0
+            ? validNetOut.reduce((sum, s) => sum + (s.network_out_mbps ?? 0), 0) /
+              validNetOut.length
+            : null,
+        disk:
+          validDisk.length > 0
+            ? validDisk.reduce((sum, s) => sum + (s.disk_usage ?? 0), 0) / validDisk.length
+            : null,
       };
     }
     return {

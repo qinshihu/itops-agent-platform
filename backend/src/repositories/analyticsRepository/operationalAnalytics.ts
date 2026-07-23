@@ -16,44 +16,76 @@ import type {
 
 /** 修复策略统计 */
 export function getRemediationStats(): RemediationStats {
-  const policyCount = db.prepare('SELECT COUNT(*) as count FROM remediation_policies').get() as { count: number };
-  const enabledPolicyCount = db.prepare('SELECT COUNT(*) as count FROM remediation_policies WHERE enabled = 1').get() as { count: number };
+  const policyCount = db.prepare('SELECT COUNT(*) as count FROM remediation_policies').get() as {
+    count: number;
+  };
+  const enabledPolicyCount = db
+    .prepare('SELECT COUNT(*) as count FROM remediation_policies WHERE enabled = 1')
+    .get() as { count: number };
 
-  const todayExecutions = db.prepare(`
+  const todayExecutions = db
+    .prepare(
+      `
     SELECT COUNT(*) as count FROM remediation_executions
     WHERE created_at >= datetime('now', 'start of day')
-  `).get() as { count: number };
+  `,
+    )
+    .get() as { count: number };
 
-  const todaySuccess = db.prepare(`
+  const todaySuccess = db
+    .prepare(
+      `
     SELECT COUNT(*) as count FROM remediation_executions
     WHERE status = 'success' AND created_at >= datetime('now', 'start of day')
-  `).get() as { count: number };
+  `,
+    )
+    .get() as { count: number };
 
-  const todayFailed = db.prepare(`
+  const todayFailed = db
+    .prepare(
+      `
     SELECT COUNT(*) as count FROM remediation_executions
     WHERE status = 'failed' AND created_at >= datetime('now', 'start of day')
-  `).get() as { count: number };
+  `,
+    )
+    .get() as { count: number };
 
-  const waitingApproval = db.prepare(`
+  const waitingApproval = db
+    .prepare(
+      `
     SELECT COUNT(*) as count FROM remediation_executions
     WHERE status = 'waiting_approval'
-  `).get() as { count: number };
+  `,
+    )
+    .get() as { count: number };
 
-  const rolledBack = db.prepare(`
+  const rolledBack = db
+    .prepare(
+      `
     SELECT COUNT(*) as count FROM remediation_executions
     WHERE status = 'rolled_back' AND created_at >= datetime('now', 'start of day')
-  `).get() as { count: number };
+  `,
+    )
+    .get() as { count: number };
 
-  const avgDuration = db.prepare(`
+  const avgDuration = db
+    .prepare(
+      `
     SELECT AVG(execution_duration_ms) as avg_ms FROM remediation_executions
     WHERE execution_duration_ms IS NOT NULL AND created_at >= datetime('now', 'start of day')
-  `).get() as { avg_ms: number | null };
+  `,
+    )
+    .get() as { avg_ms: number | null };
 
   const total = todayExecutions?.count || 0;
   const successCount = todaySuccess?.count || 0;
-  const successRate = total > 0 ? parseFloat(((successCount / total) * 100).toFixed(1)) : 0;
+  const _rawSR = total > 0 ? parseFloat(((successCount / total) * 100).toFixed(1)) : 0;
+  // 2026-07-23 P2：Number.isFinite 兜底
+  const successRate = Number.isFinite(_rawSR) ? _rawSR : 0;
 
-  const recentExecutions = db.prepare(`
+  const recentExecutions = db
+    .prepare(
+      `
     SELECT re.id, re.status, re.status_reason, re.created_at,
            rp.name as policy_name, rp.execution_mode,
            a.title as alert_title, a.severity as alert_severity
@@ -62,7 +94,9 @@ export function getRemediationStats(): RemediationStats {
     LEFT JOIN alerts a ON re.alert_id = a.id
     ORDER BY re.created_at DESC
     LIMIT 10
-  `).all() as Array<AnalyticsRow>;
+  `,
+    )
+    .all() as Array<AnalyticsRow>;
 
   return {
     total_policies: policyCount?.count || 0,
@@ -82,23 +116,35 @@ export function getRemediationStats(): RemediationStats {
 
 /** SLA 统计 */
 export function getSlaStats(): SlaStats {
-  const completedTasks = db.prepare(`
+  const completedTasks = db
+    .prepare(
+      `
     SELECT AVG(
       CAST(julianday(end_time) - julianday(created_at) AS REAL) * 24 * 60
     ) as avg_minutes
     FROM tasks
     WHERE status = 'completed' AND end_time IS NOT NULL
     AND created_at >= datetime('now', '-7 days')
-  `).get() as { avg_minutes: number | null };
+  `,
+    )
+    .get() as { avg_minutes: number | null };
 
-  const totalServers = db.prepare('SELECT COUNT(*) as count FROM servers WHERE enabled = 1').get() as { count: number };
-  const activeServers = db.prepare(`
+  const totalServers = db
+    .prepare('SELECT COUNT(*) as count FROM servers WHERE enabled = 1')
+    .get() as { count: number };
+  const activeServers = db
+    .prepare(
+      `
     SELECT COUNT(*) as count FROM servers
     WHERE enabled = 1 AND last_connected IS NOT NULL
     AND last_connected >= datetime('now', '-5 minutes')
-  `).get() as { count: number };
+  `,
+    )
+    .get() as { count: number };
 
-  const avgResponseTime = db.prepare(`
+  const avgResponseTime = db
+    .prepare(
+      `
     SELECT AVG(
       CAST(julianday(updated_at) - julianday(created_at) AS REAL) * 24 * 60 * 60
     ) as avg_seconds
@@ -106,35 +152,51 @@ export function getSlaStats(): SlaStats {
     WHERE status IN ('confirmed', 'resolved', 'resolved_auto')
     AND updated_at IS NOT NULL
     AND created_at >= datetime('now', '-24 hours')
-  `).get() as { avg_seconds: number | null };
+  `,
+    )
+    .get() as { avg_seconds: number | null };
 
-  const todayAlerts = db.prepare(`
+  const todayAlerts = db
+    .prepare(
+      `
     SELECT COUNT(*) as count FROM alerts
     WHERE created_at >= datetime('now', 'start of day')
-  `).get() as { count: number };
+  `,
+    )
+    .get() as { count: number };
 
-  const resolvedToday = db.prepare(`
+  const resolvedToday = db
+    .prepare(
+      `
     SELECT COUNT(*) as count FROM alerts
     WHERE status IN ('confirmed', 'resolved', 'resolved_auto')
     AND created_at >= datetime('now', 'start of day')
-  `).get() as { count: number };
+  `,
+    )
+    .get() as { count: number };
 
   const totalAlerts = todayAlerts?.count || 0;
   const resolvedCount = resolvedToday?.count || 0;
-  const alertResolutionRate = totalAlerts > 0
-    ? parseFloat(((resolvedCount / totalAlerts) * 100).toFixed(1))
-    : 100;
+  const _rawARR =
+    totalAlerts > 0 ? parseFloat(((resolvedCount / totalAlerts) * 100).toFixed(1)) : 100;
+  const alertResolutionRate = Number.isFinite(_rawARR) ? _rawARR : 100;
 
-  const uptime = totalServers.count > 0
-    ? parseFloat((((activeServers?.count || 0) / totalServers.count) * 100).toFixed(2))
-    : 100;
+  const _rawUptime =
+    totalServers.count > 0
+      ? parseFloat((((activeServers?.count || 0) / totalServers.count) * 100).toFixed(2))
+      : 100;
+  const uptime = Number.isFinite(_rawUptime) ? _rawUptime : 100;
 
   const mttr = completedTasks?.avg_minutes
-    ? parseFloat(completedTasks.avg_minutes.toFixed(1))
+    ? Number.isFinite(completedTasks.avg_minutes)
+      ? parseFloat(completedTasks.avg_minutes.toFixed(1))
+      : 0
     : 0;
 
   const avgResponseSeconds = avgResponseTime?.avg_seconds
-    ? parseFloat(avgResponseTime.avg_seconds.toFixed(1))
+    ? Number.isFinite(avgResponseTime.avg_seconds)
+      ? parseFloat(avgResponseTime.avg_seconds.toFixed(1))
+      : 0
     : 0;
 
   return {
@@ -163,12 +225,17 @@ function getLocalHostname(): string {
  */
 export function getServerMetricsDashboard(
   serverId?: string,
-  options?: { autoSelectLocal?: boolean }
-): ServerMetricsDashboard & { selected_server_id?: string; available_servers: Array<{ id: string; name: string; hostname: string; is_local: boolean }> } {
+  options?: { autoSelectLocal?: boolean },
+): ServerMetricsDashboard & {
+  selected_server_id?: string;
+  available_servers: Array<{ id: string; name: string; hostname: string; is_local: boolean }>;
+} {
   const localHostname = getLocalHostname();
 
   // 加载所有启用服务器（含 hostname），用于下拉选择器
-  const allEnabledServers = db.prepare('SELECT id, name, hostname FROM servers WHERE enabled = 1 ORDER BY name LIMIT 10').all() as Array<{ id: string; name: string; hostname: string }>;
+  const allEnabledServers = db
+    .prepare('SELECT id, name, hostname FROM servers WHERE enabled = 1 ORDER BY name LIMIT 10')
+    .all() as Array<{ id: string; name: string; hostname: string }>;
   const availableServers = allEnabledServers.map((s) => ({
     id: s.id,
     name: s.name,
@@ -198,23 +265,31 @@ export function getServerMetricsDashboard(
       };
     }
 
-    const latestMetric = db.prepare(`
+    const latestMetric = db
+      .prepare(
+        `
       SELECT cpu_usage, memory_usage, disk_usage,
              network_in_mbps, network_out_mbps, load_1min, collected_at
       FROM server_metrics
       WHERE server_id = ?
       ORDER BY collected_at DESC LIMIT 1
-    `).get(targetServerId) as {
-      cpu_usage: number | null;
-      memory_usage: number | null;
-      disk_usage: number | null;
-      network_in_mbps: number | null;
-      network_out_mbps: number | null;
-      load_1min: number | null;
-      collected_at: string | null;
-    } | undefined;
+    `,
+      )
+      .get(targetServerId) as
+      | {
+          cpu_usage: number | null;
+          memory_usage: number | null;
+          disk_usage: number | null;
+          network_in_mbps: number | null;
+          network_out_mbps: number | null;
+          load_1min: number | null;
+          collected_at: string | null;
+        }
+      | undefined;
 
-    const historyRows = db.prepare(`
+    const historyRows = db
+      .prepare(
+        `
       SELECT cpu_usage, memory_usage, disk_usage,
              COALESCE(network_in_mbps, 0) + COALESCE(network_out_mbps, 0) as network_value,
              collected_at as timestamp
@@ -222,7 +297,9 @@ export function getServerMetricsDashboard(
       WHERE server_id = ?
         AND collected_at >= datetime('now', '-30 minutes')
       ORDER BY collected_at ASC
-    `).all(targetServerId) as Array<{
+    `,
+      )
+      .all(targetServerId) as Array<{
       cpu_usage: number | null;
       memory_usage: number | null;
       disk_usage: number | null;
@@ -245,10 +322,30 @@ export function getServerMetricsDashboard(
     return {
       servers: [latest],
       has_real_data: latestMetric?.cpu_usage !== null && latestMetric?.cpu_usage !== undefined,
-      cpu_history: historyRows.filter((h) => h.cpu_usage !== null).map((h) => ({ server_id: targetServer.id, value: h.cpu_usage as number, timestamp: h.timestamp })),
-      memory_history: historyRows.filter((h) => h.memory_usage !== null).map((h) => ({ server_id: targetServer.id, value: h.memory_usage as number, timestamp: h.timestamp })),
-      network_history: historyRows.map((h) => ({ server_id: targetServer.id, value: h.network_value, timestamp: h.timestamp })),
-      disk_history: historyRows.map((h) => ({ server_id: targetServer.id, value: h.disk_usage ?? 0, timestamp: h.timestamp })),
+      cpu_history: historyRows
+        .filter((h) => h.cpu_usage !== null)
+        .map((h) => ({
+          server_id: targetServer.id,
+          value: h.cpu_usage as number,
+          timestamp: h.timestamp,
+        })),
+      memory_history: historyRows
+        .filter((h) => h.memory_usage !== null)
+        .map((h) => ({
+          server_id: targetServer.id,
+          value: h.memory_usage as number,
+          timestamp: h.timestamp,
+        })),
+      network_history: historyRows.map((h) => ({
+        server_id: targetServer.id,
+        value: h.network_value,
+        timestamp: h.timestamp,
+      })),
+      disk_history: historyRows.map((h) => ({
+        server_id: targetServer.id,
+        value: h.disk_usage ?? 0,
+        timestamp: h.timestamp,
+      })),
       available_servers: availableServers,
       selected_server_id: targetServer.id,
     };
@@ -269,10 +366,12 @@ export function getServerMetricsDashboard(
     };
   }
 
-  const serverIds = enabledServers.map(s => s.id);
+  const serverIds = enabledServers.map((s) => s.id);
   const idPlaceholders = serverIds.map(() => '?').join(',');
 
-  const latestMetricsRaw = db.prepare(`
+  const latestMetricsRaw = db
+    .prepare(
+      `
     SELECT sm.server_id, s.name as server_name,
            sm.cpu_usage, sm.memory_usage, sm.disk_usage,
            sm.network_in_mbps, sm.network_out_mbps, sm.load_1min, sm.collected_at
@@ -282,7 +381,9 @@ export function getServerMetricsDashboard(
       AND sm.collected_at = (
         SELECT MAX(sm2.collected_at) FROM server_metrics sm2 WHERE sm2.server_id = sm.server_id
       )
-  `).all(...serverIds) as Array<{
+  `,
+    )
+    .all(...serverIds) as Array<{
     server_id: string;
     server_name: string;
     cpu_usage: number | null;
@@ -294,10 +395,10 @@ export function getServerMetricsDashboard(
     collected_at: string | null;
   }>;
 
-  const latestMetricsMap = new Map<string, typeof latestMetricsRaw[0]>();
-  latestMetricsRaw.forEach(m => latestMetricsMap.set(m.server_id, m));
+  const latestMetricsMap = new Map<string, (typeof latestMetricsRaw)[0]>();
+  latestMetricsRaw.forEach((m) => latestMetricsMap.set(m.server_id, m));
 
-  const latestMetrics: ServerMetricLatest[] = enabledServers.map(server => {
+  const latestMetrics: ServerMetricLatest[] = enabledServers.map((server) => {
     const metric = latestMetricsMap.get(server.id);
     return {
       server_id: server.id,
@@ -312,7 +413,9 @@ export function getServerMetricsDashboard(
     };
   });
 
-  const allHistory = db.prepare(`
+  const allHistory = db
+    .prepare(
+      `
     SELECT server_id, cpu_usage, memory_usage, disk_usage,
            COALESCE(network_in_mbps, 0) + COALESCE(network_out_mbps, 0) as network_value,
            collected_at as timestamp
@@ -320,7 +423,9 @@ export function getServerMetricsDashboard(
     WHERE server_id IN (${idPlaceholders})
       AND collected_at >= datetime('now', '-30 minutes')
     ORDER BY server_id, collected_at ASC
-  `).all(...serverIds) as Array<{
+  `,
+    )
+    .all(...serverIds) as Array<{
     server_id: string;
     cpu_usage: number | null;
     memory_usage: number | null;
@@ -334,16 +439,18 @@ export function getServerMetricsDashboard(
   const networkHistory: Array<{ server_id: string; value: number; timestamp: string }> = [];
   const diskHistory: Array<{ server_id: string; value: number; timestamp: string }> = [];
 
-  allHistory.forEach(h => {
-    if (h.cpu_usage !== null) cpuHistory.push({ server_id: h.server_id, value: h.cpu_usage, timestamp: h.timestamp });
-    if (h.memory_usage !== null) memoryHistory.push({ server_id: h.server_id, value: h.memory_usage, timestamp: h.timestamp });
+  allHistory.forEach((h) => {
+    if (h.cpu_usage !== null)
+      cpuHistory.push({ server_id: h.server_id, value: h.cpu_usage, timestamp: h.timestamp });
+    if (h.memory_usage !== null)
+      memoryHistory.push({ server_id: h.server_id, value: h.memory_usage, timestamp: h.timestamp });
     diskHistory.push({ server_id: h.server_id, value: h.disk_usage ?? 0, timestamp: h.timestamp });
     networkHistory.push({ server_id: h.server_id, value: h.network_value, timestamp: h.timestamp });
   });
 
   return {
     servers: latestMetrics,
-    has_real_data: latestMetrics.some(m => m.cpu_usage !== null),
+    has_real_data: latestMetrics.some((m) => m.cpu_usage !== null),
     cpu_history: cpuHistory,
     memory_history: memoryHistory,
     network_history: networkHistory,
@@ -354,7 +461,9 @@ export function getServerMetricsDashboard(
 
 /** 告警来源统计（按 source 聚合 + webhook 日志） */
 export function getAlertSourceStats(): AlertSourceStats {
-  const sourceStats = db.prepare(`
+  const sourceStats = db
+    .prepare(
+      `
     SELECT
       source,
       COUNT(*) as total_alerts,
@@ -370,9 +479,13 @@ export function getAlertSourceStats(): AlertSourceStats {
     FROM alerts
     GROUP BY source
     ORDER BY total_alerts DESC
-  `).all() as Array<AnalyticsRow>;
+  `,
+    )
+    .all() as Array<AnalyticsRow>;
 
-  const webhookLogs = db.prepare(`
+  const webhookLogs = db
+    .prepare(
+      `
     SELECT
       source,
       COUNT(*) as total_webhooks,
@@ -384,9 +497,13 @@ export function getAlertSourceStats(): AlertSourceStats {
     WHERE created_at >= datetime('now', '-24 hours')
     GROUP BY source
     ORDER BY total_webhooks DESC
-  `).all() as Array<AnalyticsRow>;
+  `,
+    )
+    .all() as Array<AnalyticsRow>;
 
-  const last24h = db.prepare(`
+  const last24h = db
+    .prepare(
+      `
     SELECT
       source,
       COUNT(*) as count,
@@ -394,10 +511,17 @@ export function getAlertSourceStats(): AlertSourceStats {
     FROM alerts
     WHERE created_at >= datetime('now', '-24 hours')
     GROUP BY source
-  `).all() as Array<AnalyticsRow>;
+  `,
+    )
+    .all() as Array<AnalyticsRow>;
 
-  const totalAlerts = db.prepare('SELECT COUNT(*) as count FROM alerts').get() as { count: number } | undefined;
-  const activeAlerts = db.prepare("SELECT COUNT(*) as count FROM alerts WHERE status IN ('new', 'confirmed', 'in_progress')").get() as { count: number } | undefined;
+  const totalAlerts = db.prepare('SELECT COUNT(*) as count FROM alerts').get() as
+    { count: number } | undefined;
+  const activeAlerts = db
+    .prepare(
+      "SELECT COUNT(*) as count FROM alerts WHERE status IN ('new', 'confirmed', 'in_progress')",
+    )
+    .get() as { count: number } | undefined;
 
   return {
     source_stats: sourceStats,
@@ -410,23 +534,33 @@ export function getAlertSourceStats(): AlertSourceStats {
 
 /** 报告分析数据（告警趋势 + 分析统计 + 修复统计 + 热门诊断） */
 export function getReportAnalytics(): ReportAnalytics {
-  const alertTrends = db.prepare(`
+  const alertTrends = db
+    .prepare(
+      `
     SELECT DATE(created_at) as date, severity, COUNT(*) as count
     FROM alerts
     WHERE created_at >= DATE('now', '-7 days', 'localtime')
     GROUP BY DATE(created_at), severity
     ORDER BY date
-  `).all() as Array<AnalyticsRow>;
+  `,
+    )
+    .all() as Array<AnalyticsRow>;
 
-  const analysisStats = db.prepare(`
+  const analysisStats = db
+    .prepare(
+      `
     SELECT
       COUNT(*) as total,
       SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
       SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
     FROM alert_auto_analysis
-  `).get() as { total: number; completed: number; failed: number } | undefined;
+  `,
+    )
+    .get() as { total: number; completed: number; failed: number } | undefined;
 
-  const remediationStats = db.prepare(`
+  const remediationStats = db
+    .prepare(
+      `
     SELECT
       COUNT(*) as total,
       SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count,
@@ -434,21 +568,33 @@ export function getReportAnalytics(): ReportAnalytics {
       SUM(CASE WHEN status = 'rolled_back' THEN 1 ELSE 0 END) as rolled_back
     FROM remediation_executions
     WHERE created_at >= DATE('now', '-30 days', 'localtime')
-  `).get() as { total: number; success_count: number; failed_count: number; rolled_back: number } | undefined;
+  `,
+    )
+    .get() as
+    { total: number; success_count: number; failed_count: number; rolled_back: number } | undefined;
 
-  const topDiagnoses = db.prepare(`
+  const topDiagnoses = db
+    .prepare(
+      `
     SELECT summary, COUNT(*) as count
     FROM alert_auto_analysis
     WHERE summary IS NOT NULL AND summary != ''
     GROUP BY summary
     ORDER BY count DESC
     LIMIT 10
-  `).all() as Array<AnalyticsRow>;
+  `,
+    )
+    .all() as Array<AnalyticsRow>;
 
   return {
     alertTrends,
     analysisStats: analysisStats || { total: 0, completed: 0, failed: 0 },
-    remediationStats: remediationStats || { total: 0, success_count: 0, failed_count: 0, rolled_back: 0 },
+    remediationStats: remediationStats || {
+      total: 0,
+      success_count: 0,
+      failed_count: 0,
+      rolled_back: 0,
+    },
     topDiagnoses,
   };
 }

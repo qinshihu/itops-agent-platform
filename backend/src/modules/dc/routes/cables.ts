@@ -5,6 +5,8 @@ import { Router } from 'express';
 import crypto from 'crypto';
 
 import { getErrorMessage } from '../../../utils/errorHelpers';
+import { requireRole } from '../../../middleware/auth';
+import { logger } from '../../../utils/logger';
 
 const router = Router();
 
@@ -18,9 +20,10 @@ router.get('/', (req: Request, res: Response) => {
     const list = dcCrudService.cables.list({ deviceId, status });
     res.json({ success: true, data: list });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc cables', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
-  }
-});
+    }
+  });
 
 /**
  * GET /cables/scene — 获取带 3D 坐标的全部线缆（供 DataRoom3D Scene 使用）
@@ -81,6 +84,7 @@ router.get('/scene', (_req: Request, res: Response) => {
 
     res.json({ success: true, data: result });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc cables', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
@@ -100,6 +104,7 @@ router.get('/topology/:rackId', (req: Request, res: Response) => {
     }
     res.json({ success: true, data: { devices, cables } });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc cables', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
@@ -107,7 +112,7 @@ router.get('/topology/:rackId', (req: Request, res: Response) => {
 /**
  * POST /cables — 创建线缆连接
  */
-router.post('/', (req: Request, res: Response) => {
+router.post('/', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { name, cable_type, cable_color, length_m, status,
             a_device_id, a_device_type, a_port_name,
@@ -123,6 +128,7 @@ router.post('/', (req: Request, res: Response) => {
     });
     res.json({ success: true, data: { id } });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc cables', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
@@ -130,12 +136,13 @@ router.post('/', (req: Request, res: Response) => {
 /**
  * PUT /cables/:id — 更新线缆
  */
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { name, cable_type, cable_color, length_m, status, description } = req.body;
     dcCrudService.cables.update(req.params.id, { name, cable_type, cable_color, length_m, status, description });
     res.json({ success: true });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc cables', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });
@@ -143,11 +150,12 @@ router.put('/:id', (req: Request, res: Response) => {
 /**
  * DELETE /cables/:id — 删除线缆
  */
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', requireRole('admin'), (req: Request, res: Response) => {
   try {
     dcCrudService.cables.delete(req.params.id);
     res.json({ success: true });
   } catch (error: unknown) {
+    logger.error('Failed to operate dc cables', error);
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }
 });

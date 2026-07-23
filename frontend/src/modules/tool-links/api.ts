@@ -69,7 +69,7 @@ export const toolLinksApi = {
 
   /** 上传工具链接图标 */
   async uploadToolLinkIcon(id: string, formData: FormData): Promise<ToolLink> {
-    const { data } = await api.post(`/tool-links/${id}/upload-icon`, formData, {
+    const { data } = await api.post(`/tool-links/${id}/icon`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return data;

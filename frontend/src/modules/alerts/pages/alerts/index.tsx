@@ -87,8 +87,9 @@ export default function Alerts() {
       return data;
     },
     onSuccess: (data) => {
-      if (data?.data) {
-        setProcessResult(data.data);
+      // axios 拦截器已解包 → data 本身就是后端 data 字段
+      if (data) {
+        setProcessResult(data);
       }
       refetch();
     },

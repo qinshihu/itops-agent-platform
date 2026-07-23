@@ -8,6 +8,7 @@ import TopologyGraph from '../../../modules/network/components/TopologyGraph';
 import type { TopologyNode, TopologyEdge } from '../../../modules/network/components/TopologyGraph';
 import { useToast } from '../../../contexts/ToastContext';
 import { getAxiosErrorMessage } from '@/lib/errorHandler';
+import { logger } from '@/lib/logger';
 
 interface Dependency {
   id?: string;
@@ -57,7 +58,7 @@ const statusLabels: Record<string, string> = {
 function DeleteDependencyButton({ dependencyId }: { dependencyId: string }) {
   const queryClient = useQueryClient();
   const toast = useToast();
-  
+
   const deleteMutation = useMutation({
     mutationFn: async () => {
       const { data } = await api.delete(`/topology/dependency/${dependencyId}`);
@@ -96,7 +97,11 @@ export default function Topology() {
   });
   const [isDiscovering, setIsDiscovering] = useState(false);
 
-  const { data: topologyData, isLoading: topologyLoading, refetch: refetchTopology } = useQuery({
+  const {
+    data: topologyData,
+    isLoading: topologyLoading,
+    refetch: refetchTopology,
+  } = useQuery({
     queryKey: ['topology', 'global'],
     queryFn: async () => {
       const { data } = await api.get('/topology/global');
@@ -147,18 +152,23 @@ export default function Topology() {
       toast.warning('没有可发现依赖的服务器');
       return;
     }
-    
+
     setIsDiscovering(true);
     try {
+      let failedCount = 0;
       for (const server of servers) {
         try {
           await api.post(`/topology/discover/${server.id}`);
-        } catch {
-          // 单个服务器失败不影响其他服务器
+        } catch (err: unknown) {
+          failedCount++;
+          // 单个服务器失败不影响其他服务器，但记录以便定位
+          logger.warn(`[topology] discover failed for server ${server.id}`, err);
         }
       }
       queryClient.invalidateQueries({ queryKey: ['topology'] });
-      toast.success('依赖发现完成');
+      toast.success(
+        failedCount > 0 ? `依赖发现完成（${failedCount} 台失败，请查看日志）` : '依赖发现完成',
+      );
     } catch (err: unknown) {
       toast.error(getAxiosErrorMessage(err, '依赖发现失败'));
     } finally {
@@ -193,7 +203,7 @@ export default function Topology() {
             <ArrowDown className={clsx('w-4 h-4', isDiscovering && 'animate-spin')} />
             发现依赖
           </button>
-          <button 
+          <button
             onClick={() => setIsAddModalOpen(true)}
             className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 flex items-center gap-2 text-sm font-medium transition-colors"
           >
@@ -219,7 +229,9 @@ export default function Topology() {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">源服务器</label>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  源服务器
+                </label>
                 <select
                   value={formData.source_server_id}
                   onChange={(e) => setFormData({ ...formData, source_server_id: e.target.value })}
@@ -227,13 +239,17 @@ export default function Topology() {
                 >
                   <option value="">请选择源服务器</option>
                   {servers?.map((server) => (
-                    <option key={server.id} value={server.id}>{server.name}</option>
+                    <option key={server.id} value={server.id}>
+                      {server.name}
+                    </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">目标服务器</label>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  目标服务器
+                </label>
                 <select
                   value={formData.target_server_id}
                   onChange={(e) => setFormData({ ...formData, target_server_id: e.target.value })}
@@ -241,13 +257,17 @@ export default function Topology() {
                 >
                   <option value="">请选择目标服务器</option>
                   {servers?.map((server) => (
-                    <option key={server.id} value={server.id}>{server.name}</option>
+                    <option key={server.id} value={server.id}>
+                      {server.name}
+                    </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">依赖类型</label>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  依赖类型
+                </label>
                 <input
                   type="text"
                   value={formData.dependency_type}
@@ -295,7 +315,12 @@ export default function Topology() {
                 </button>
                 <button
                   onClick={() => addDependencyMutation.mutate(formData)}
-                  disabled={addDependencyMutation.isPending || !formData.source_server_id || !formData.target_server_id || !formData.dependency_type}
+                  disabled={
+                    addDependencyMutation.isPending ||
+                    !formData.source_server_id ||
+                    !formData.target_server_id ||
+                    !formData.dependency_type
+                  }
                   className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
                 >
                   {addDependencyMutation.isPending ? '添加中...' : '添加'}
@@ -336,7 +361,9 @@ export default function Topology() {
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-left px-4 py-3 font-medium text-text-secondary">源服务</th>
-                    <th className="text-left px-4 py-3 font-medium text-text-secondary">目标服务</th>
+                    <th className="text-left px-4 py-3 font-medium text-text-secondary">
+                      目标服务
+                    </th>
                     <th className="text-left px-4 py-3 font-medium text-text-secondary">类型</th>
                     <th className="text-left px-4 py-3 font-medium text-text-secondary">协议</th>
                     <th className="text-left px-4 py-3 font-medium text-text-secondary">状态</th>
@@ -352,23 +379,36 @@ export default function Topology() {
                         key={dep.id || idx}
                         className="border-b border-border/50 hover:bg-background/50 transition-colors"
                       >
-                        <td className="px-4 py-3 text-text-primary font-medium">{sourceServer?.name || dep.source}</td>
-                        <td className="px-4 py-3 text-text-primary">{targetServer?.name || dep.target}</td>
+                        <td className="px-4 py-3 text-text-primary font-medium">
+                          {sourceServer?.name || dep.source}
+                        </td>
+                        <td className="px-4 py-3 text-text-primary">
+                          {targetServer?.name || dep.target}
+                        </td>
                         <td className="px-4 py-3 text-text-secondary">{dep.type}</td>
                         <td className="px-4 py-3">
-                          <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium', protocolColors[dep.protocol?.toLowerCase()] || 'bg-gray-100 text-gray-700')}>
+                          <span
+                            className={clsx(
+                              'px-2 py-0.5 rounded-full text-xs font-medium',
+                              protocolColors[dep.protocol?.toLowerCase()] ||
+                                'bg-gray-100 text-gray-700',
+                            )}
+                          >
                             {(dep.protocol || '').toUpperCase()}
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium', statusColors[dep.status] || 'bg-gray-100 text-gray-700')}>
+                          <span
+                            className={clsx(
+                              'px-2 py-0.5 rounded-full text-xs font-medium',
+                              statusColors[dep.status] || 'bg-gray-100 text-gray-700',
+                            )}
+                          >
                             {statusLabels[dep.status] || dep.status}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {dep.id && (
-                            <DeleteDependencyButton dependencyId={dep.id} />
-                          )}
+                          {dep.id && <DeleteDependencyButton dependencyId={dep.id} />}
                         </td>
                       </tr>
                     );

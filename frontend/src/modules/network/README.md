@@ -7,7 +7,6 @@
 ```
 network/
 ├── routes.ts                             # 模块路由
-├── api.ts                                # API 类型与调用 (492 行)
 ├── pages/
 │   ├── NetworkDevices.tsx                # 网络设备入口（re-export 到 network-devices/）
 │   ├── Networks.tsx                      # 网络管理（v2.28 拆分后精简主入口 132 行）
@@ -37,7 +36,6 @@ network/
 │       └── BatchInspectModal.tsx         # 批量巡检弹窗
 ├── components/
 │   ├── NetworkDeviceCard.tsx             # 设备卡片
-│   ├── SnmpCredentials.tsx               # SNMP 凭据
 │   ├── SnmpInspectionResult.tsx          # SNMP 巡检结果
 │   └── TopologyGraph.tsx                 # 拓扑图渲染
 └── index.ts
@@ -47,4 +45,8 @@ network/
 `backend/src/modules/network/`
 
 ## 刷新记录
+- **2026-07-23**：
+  - 删除 `api.ts`（死代码，零调用方；已统一走 `import api from '@/lib/api'`）
+  - 删除 `components/SnmpCredentials.tsx`（死代码，与 `pages/snmp/SnmpCredentialsTab.tsx` 功能重复）
+  - `useNetworkDevices.handleSnmpInspect` 适配后端 `{success, data, message}` 格式
 - **2026-07-22**：核对 5 主页面 + 4 子模块（snmp/network-devices）

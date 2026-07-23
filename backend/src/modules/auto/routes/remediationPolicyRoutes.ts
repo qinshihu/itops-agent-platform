@@ -90,7 +90,7 @@ router.delete('/:id', requireRole('admin', 'operator'), (req: Request, res: Resp
   }
 });
 
-router.patch('/:id/toggle', (req: Request, res: Response) => {
+router.patch('/:id/toggle', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const policy = remediationService.togglePolicy(req.params.id);
     res.json({ success: true, data: policy });
