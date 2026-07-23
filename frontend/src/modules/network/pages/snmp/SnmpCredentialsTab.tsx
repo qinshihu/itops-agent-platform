@@ -20,7 +20,7 @@ export function SnmpCredentialsTab({ searchQuery, setSearchQuery }: SnmpCredenti
   // ── 凭证列表 ──
   const { data: credentials = [], isLoading: credsLoading } = useQuery({
     queryKey: ['snmp-credentials'],
-    queryFn: () => api.get('/snmp/credentials').then(r => r.data.data || []),
+    queryFn: () => api.get('/snmp/credentials').then(r => r.data || []),
   });
 
   // ── 新建/编辑 表单 ──

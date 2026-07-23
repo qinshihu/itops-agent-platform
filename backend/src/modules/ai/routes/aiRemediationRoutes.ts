@@ -73,4 +73,34 @@ router.get('/alert/:alertId', authenticateToken, (req: Request, res: Response) =
   }
 });
 
+// 批准 AI 修复方案（前端 2026-07-06 接入）
+router.post('/:id/approve', authenticateToken, (req: Request, res: Response) => {
+  try {
+    const record = aiRemediationService.getRecord(req.params.id);
+    if (!record) {
+      return res.status(404).json({ success: false, message: 'AI remediation not found' });
+    }
+    aiRemediationService.updateStatus(req.params.id, 'approved');
+    res.json({ success: true, message: 'AI 修复方案已批准', data: { id: req.params.id, status: 'approved' } });
+  } catch (error) {
+    logger.error('Failed to approve AI remediation:', error);
+    res.status(500).json({ success: false, message: 'Failed to approve AI remediation' });
+  }
+});
+
+// 拒绝 AI 修复方案（前端 2026-07-06 接入）
+router.post('/:id/reject', authenticateToken, (req: Request, res: Response) => {
+  try {
+    const record = aiRemediationService.getRecord(req.params.id);
+    if (!record) {
+      return res.status(404).json({ success: false, message: 'AI remediation not found' });
+    }
+    aiRemediationService.updateStatus(req.params.id, 'rejected');
+    res.json({ success: true, message: 'AI 修复方案已拒绝', data: { id: req.params.id, status: 'rejected' } });
+  } catch (error) {
+    logger.error('Failed to reject AI remediation:', error);
+    res.status(500).json({ success: false, message: 'Failed to reject AI remediation' });
+  }
+});
+
 export default router;

@@ -78,6 +78,26 @@ router.delete('/:id', (req: Request, res: Response) => {
   }
 });
 
+// 重发通知（2026-07-06 增）
+router.post('/:id/retry', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await notificationCrudService.retryNotification(id);
+    if (result === null) {
+      return res.status(404).json({
+        success: false,
+        error: 'Notification not found',
+      });
+    }
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message,
+    });
+  }
+});
+
 // 获取通知统计
 router.get('/stats/summary', (_req: Request, res: Response) => {
   try {

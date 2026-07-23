@@ -42,16 +42,16 @@ export default function RemoteDesktop() {
   useEffect(() => {
     const loadServers = async () => {
       try {
-        const res = await fetch('/api/servers', {
-          headers: { 'Authorization': `Bearer ${token}` }
+        const res = await fetch('/api/v1/servers', {
+          headers: { Authorization: `Bearer ${token}` },
         });
         const result = await res.json();
         if (result.success) {
-          const vncServers = result.data.filter((s: Server) => 
-            s.os_type === 'windows' || s.vnc_port
+          const vncServers = result.data.filter(
+            (s: Server) => s.os_type === 'windows' || s.vnc_port,
           );
           setServers(vncServers);
-          
+
           if (serverId && vncServers.some((s: Server) => s.id === serverId)) {
             setSelectedServer(serverId);
           }
@@ -68,8 +68,8 @@ export default function RemoteDesktop() {
   // 加载服务器 VNC 配置
   const loadVncConfig = async (id: string) => {
     try {
-      const res = await fetch(`/api/vnc/config/${id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const res = await fetch(`/api/v1/vnc/config/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
       const result = await res.json();
       if (result.success) {
@@ -107,7 +107,7 @@ export default function RemoteDesktop() {
           serverId: id,
           vncHost: config.hostname,
           vncPort: config.vnc_port,
-          password: config.vnc_password
+          password: config.vnc_password,
         });
       });
 
@@ -130,7 +130,7 @@ export default function RemoteDesktop() {
       const MAX_LOG = 20;
       const renderRfbStatus = () => {
         if (!containerRef.current) return;
-        const rfbVer = (rfbLog.find(l => l.startsWith('RFB ')) || '').slice(0, 32);
+        const rfbVer = (rfbLog.find((l) => l.startsWith('RFB ')) || '').slice(0, 32);
         const lastBytes = rfbBytes;
         containerRef.current.innerHTML = `
           <div class="w-full h-full flex flex-col items-center justify-center bg-gray-900 text-gray-300 p-6 overflow-auto">
@@ -154,8 +154,12 @@ export default function RemoteDesktop() {
         rfbBytes += chunk.byteLength;
         if (rfbLog.length < MAX_LOG) {
           // 提取前 12 字节 ASCII 用于显示 RFB 版本
-          const view = new Uint8Array(chunk instanceof ArrayBuffer ? chunk : (chunk as Uint8Array).buffer);
-          const head = Array.from(view.slice(0, 12)).map(b => (b >= 32 && b < 127) ? String.fromCharCode(b) : '.').join('');
+          const view = new Uint8Array(
+            chunk instanceof ArrayBuffer ? chunk : (chunk as Uint8Array).buffer,
+          );
+          const head = Array.from(view.slice(0, 12))
+            .map((b) => (b >= 32 && b < 127 ? String.fromCharCode(b) : '.'))
+            .join('');
           rfbLog.push(`[${rfbBytes}B] ${head}`);
         }
         // 通知后端已接收（可选，用于流控）
@@ -163,7 +167,6 @@ export default function RemoteDesktop() {
       });
 
       renderRfbStatus();
-
     } catch (err) {
       logger.error('Failed to connect:', err);
       setError('连接失败: ' + (err instanceof Error ? err.message : 'Unknown error'));
@@ -227,9 +230,7 @@ export default function RemoteDesktop() {
               <MonitorPlay className="w-6 h-6" />
               远程桌面
             </h1>
-            <p className="text-text-secondary mt-1">
-              通过 VNC 连接远程服务器桌面
-            </p>
+            <p className="text-text-secondary mt-1">通过 VNC 连接远程服务器桌面</p>
           </div>
         </div>
       </div>
@@ -245,7 +246,7 @@ export default function RemoteDesktop() {
               style={{ minWidth: '300px' }}
             >
               <option value="">选择服务器</option>
-              {servers.map(server => (
+              {servers.map((server) => (
                 <option key={server.id} value={server.id}>
                   {server.name} ({server.hostname})
                 </option>
@@ -287,7 +288,10 @@ export default function RemoteDesktop() {
                 Windows 服务器需要先安装并启动 VNC 服务器（推荐 TightVNC 或 RealVNC）。
               </p>
               <p className="text-sm text-blue-300 mt-2">
-                如需完整的 noVNC 集成，请运行 <code className="bg-blue-500/20 px-2 py-0.5 rounded text-blue-300">npm install @novnc/novnc</code>
+                如需完整的 noVNC 集成，请运行{' '}
+                <code className="bg-blue-500/20 px-2 py-0.5 rounded text-blue-300">
+                  npm install @novnc/novnc
+                </code>
               </p>
             </div>
           </div>

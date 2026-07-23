@@ -21,6 +21,19 @@ export const toolLinkCrudService = {
     return toolLinksRepo.list();
   },
 
+  /** 按 category 分组聚合（前端 ToolLinks 页消费） */
+  listLinksByCategory() {
+    const links = toolLinksRepo.list();
+    const grouped = new Map<string, typeof links>();
+    for (const link of links) {
+      const cat = link.category || '未分类';
+      const arr = grouped.get(cat);
+      if (arr) arr.push(link);
+      else grouped.set(cat, [link]);
+    }
+    return Array.from(grouped.entries()).map(([category, tools]) => ({ category, tools }));
+  },
+
   getLinkById(id: string) {
     return toolLinksRepo.getById(id);
   },
@@ -35,7 +48,10 @@ export const toolLinkCrudService = {
 
   // ── 更新 ──
 
-  updateLink(id: string, input: { name?: string; url?: string; description?: string; category?: string }): { success: true; data: unknown } | { success: false; error: string } {
+  updateLink(
+    id: string,
+    input: { name?: string; url?: string; description?: string; category?: string },
+  ): { success: true; data: unknown } | { success: false; error: string } {
     const changes = toolLinksRepo.update(id, input);
     if (changes === 0) {
       return { success: false, error: 'No fields to update' };
@@ -53,6 +69,14 @@ export const toolLinkCrudService = {
 
   updateIcon(id: string, iconUrl: string) {
     toolLinksRepo.updateIcon(id, iconUrl);
+    return toolLinksRepo.getById(id);
+  },
+
+  /** 清空图标（DB 字段置 NULL） */
+  clearIcon(id: string) {
+    const exists = toolLinksRepo.getById(id);
+    if (!exists) return null;
+    toolLinksRepo.updateIcon(id, ''); // 空字符串表示"未设置"，与 SQL 行为兼容
     return toolLinksRepo.getById(id);
   },
 };

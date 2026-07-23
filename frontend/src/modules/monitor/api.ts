@@ -405,14 +405,15 @@ export const monitorApi = {
     payload: Record<string, unknown>,
   ): Promise<T[]> {
     const { data } = await api.post(`/monitor/zabbix/${endpoint}`, payload);
-    const body = data as { success: boolean; data?: ZabbixResponse<T>; error?: string };
-    if (!body.success || !body.data) {
-      throw new Error(body.error || 'Zabbix 请求失败');
+    // axios 拦截器已解包 → data 本身就是 ZabbixResponse
+    const body = data as ZabbixResponse<T>;
+    if (!body) {
+      throw new Error('Zabbix 请求失败：响应为空');
     }
-    if (body.data.error) {
-      throw new Error(body.data.error);
+    if (body.error) {
+      throw new Error(body.error);
     }
-    return body.data.result ?? [];
+    return body.result ?? [];
   },
 };
 

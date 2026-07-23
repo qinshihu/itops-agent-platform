@@ -70,13 +70,20 @@ export default function Scripts() {
     setShowExecuteModal(true);
   };
 
-  const runScript = () => {
+  const runScript = async () => {
     if (!executingScript) return;
     setIsExecuting(true);
-    setTimeout(() => {
-      setExecuteResult(`脚本 "${executingScript.name}" 执行模拟成功！\n\n（实际使用时会连接到真实服务器执行）`);
+    try {
+      // 调用后端 execute 端点（2026-07-23 补：之前是前端 setTimeout mock）
+      const { data } = await api.post(`/scripts/${executingScript.id}/execute`, {
+        params: executeParams,
+      });
+      setExecuteResult(data?.output ?? `脚本 "${executingScript.name}" 已提交执行`);
+    } catch (err) {
+      message.error(getAxiosErrorMessage(err, '执行失败'));
+    } finally {
       setIsExecuting(false);
-    }, 1000);
+    }
   };
 
   return (

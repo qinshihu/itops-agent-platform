@@ -5,7 +5,13 @@ import { useToast } from '../../../../contexts/ToastContext';
 import { getAxiosErrorMessage } from '@/lib/errorHandler';
 import api from '../../../../lib/api';
 import { useEscapeKey } from '../../../../hooks/useEscapeKey';
-import type { NetworkDevice, InspectionResultData, SnmpInspectionData, TimelineItem, DeviceTimelineEntry } from './types';
+import type {
+  NetworkDevice,
+  InspectionResultData,
+  SnmpInspectionData,
+  TimelineItem,
+  DeviceTimelineEntry,
+} from './types';
 
 /**
  * 网络设备页面状态管理 Hook
@@ -37,17 +43,39 @@ export function useNetworkDevices() {
   const [deleteConfirmDevice, setDeleteConfirmDevice] = useState<NetworkDevice | null>(null);
 
   // ── ESC 键关闭模态框 ──
-  useEscapeKey({ onEscape: () => { setShowInspectionModal(false); setInspectingDevice(null); }, enabled: showInspectionModal });
+  useEscapeKey({
+    onEscape: () => {
+      setShowInspectionModal(false);
+      setInspectingDevice(null);
+    },
+    enabled: showInspectionModal,
+  });
   useEscapeKey({ onEscape: () => setShowBatchModal(false), enabled: showBatchModal });
-  useEscapeKey({ onEscape: () => { setDeleteConfirmDevice(null); }, enabled: !!deleteConfirmDevice });
-  useEscapeKey({ onEscape: () => { setInspectionResult(null); setInspectingDevice(null); }, enabled: !!inspectionResult });
-  useEscapeKey({ onEscape: () => { setSnmpInspectionResult(null); }, enabled: !!snmpInspectionResult });
+  useEscapeKey({
+    onEscape: () => {
+      setDeleteConfirmDevice(null);
+    },
+    enabled: !!deleteConfirmDevice,
+  });
+  useEscapeKey({
+    onEscape: () => {
+      setInspectionResult(null);
+      setInspectingDevice(null);
+    },
+    enabled: !!inspectionResult,
+  });
+  useEscapeKey({
+    onEscape: () => {
+      setSnmpInspectionResult(null);
+    },
+    enabled: !!snmpInspectionResult,
+  });
   useEscapeKey({ onEscape: () => setShowHistory(null), enabled: !!showHistory });
 
   // ── 设备列表 ──
   const { data: devices = [], isLoading } = useQuery({
     queryKey: ['network-devices'],
-    queryFn: () => api.get('/network-devices').then(res => res.data),
+    queryFn: () => api.get('/network-devices').then((res) => res.data),
   });
 
   // ── 设备时间轴 ──
@@ -60,8 +88,12 @@ export function useNetworkDevices() {
       items.forEach((item: TimelineItem) => {
         if (!item.device_id) return;
         if (!map[item.device_id]) map[item.device_id] = {};
-        if (item.source === 'analysis' && !map[item.device_id].lastAnalysis) map[item.device_id].lastAnalysis = item;
-        if (item.source === 'inspection' && !map[item.device_id].lastInspection) map[item.device_id].lastInspection = item;
+        if (item.source === 'analysis' && !map[item.device_id].lastAnalysis) {
+          map[item.device_id].lastAnalysis = item;
+        }
+        if (item.source === 'inspection' && !map[item.device_id].lastInspection) {
+          map[item.device_id].lastInspection = item;
+        }
       });
       return map;
     },
@@ -93,7 +125,10 @@ export function useNetworkDevices() {
     setIsAddModalOpen(true);
   };
 
-  const handleInspect = (device: NetworkDevice, type: 'standard' | 'custom' | 'full' = 'standard') => {
+  const handleInspect = (
+    device: NetworkDevice,
+    type: 'standard' | 'custom' | 'full' = 'standard',
+  ) => {
     setInspectingDevice(device);
     setInspectionType(type);
     setCustomDescription('');
@@ -103,7 +138,8 @@ export function useNetworkDevices() {
   const handleSnmpInspect = async (device: NetworkDevice) => {
     try {
       const response = await api.post(`/network-devices/${device.id}/inspect-snmp`);
-      const data = response.data.data;
+      // axios 拦截器已解包 → response.data 才是业务对象
+      const data = response.data as { _deviceName?: string } & Record<string, unknown>;
       data._deviceName = device.name;
       setSnmpInspectionResult(data);
       queryClient.invalidateQueries({ queryKey: ['network-devices'] });
@@ -138,10 +174,17 @@ export function useNetworkDevices() {
       toast.info(`正在测试 ${device.name} 的连接...`);
       const response = await api.post(`/network-devices/${device.id}/test-connection`);
       const result = response.data;
-      if (result.success) {
-        toast.success(`连接成功 (${result.data.latency}ms)`);
+      // axios 拦截器已解包 → result 是 {success, latency?, message?}
+      const payload = result as unknown as {
+        data?: { latency?: number; message?: string };
+        success?: boolean;
+        latency?: number;
+        message?: string;
+      };
+      if (payload.success) {
+        toast.success(`连接成功 (${payload.latency ?? payload.data?.latency}ms)`);
       } else {
-        toast.error(`连接失败: ${result.data.message}`);
+        toast.error(`连接失败: ${payload.message ?? payload.data?.message ?? '未知错误'}`);
       }
     } catch {
       toast.error('测试连接失败');
@@ -158,7 +201,7 @@ export function useNetworkDevices() {
         inspectionType,
         customDescription: inspectionType === 'custom' ? customDescription : undefined,
       });
-      setInspectionResult(response.data.data);
+      setInspectionResult(response.data);
       toast.success('巡检完成');
       queryClient.invalidateQueries({ queryKey: ['network-devices'] });
     } catch (error: unknown) {
@@ -176,7 +219,7 @@ export function useNetworkDevices() {
         deviceIds: Array.from(selectedDevices),
         inspectionType: 'standard',
       });
-      toast.success(`批量巡检完成，共 ${response.data.data.length} 台设备`);
+      toast.success(`批量巡检完成，共 ${(response.data as unknown[])?.length ?? 0} 台设备`);
       queryClient.invalidateQueries({ queryKey: ['network-devices'] });
       setSelectedDevices(new Set());
       setShowBatchModal(false);
@@ -215,24 +258,40 @@ export function useNetworkDevices() {
     deviceTimeline,
     selectedDevices,
     // 筛选
-    selectedVendor, setSelectedVendor,
-    searchQuery, setSearchQuery,
+    selectedVendor,
+    setSelectedVendor,
+    searchQuery,
+    setSearchQuery,
     // 模态框
-    isAddModalOpen, setIsAddModalOpen,
-    editingDevice, setEditingDevice,
-    showInspectionModal, setShowInspectionModal,
-    inspectingDevice, setInspectingDevice,
-    inspectionType, setInspectionType,
-    customDescription, setCustomDescription,
-    isInspecting, setIsInspecting,
-    inspectionResult, setInspectionResult,
-    snmpInspectionResult, setSnmpInspectionResult,
-    showBatchModal, setShowBatchModal,
-    isBatchInspecting, setIsBatchInspecting,
-    showHistory, setShowHistory,
-    deleteConfirmDevice, setDeleteConfirmDevice,
+    isAddModalOpen,
+    setIsAddModalOpen,
+    editingDevice,
+    setEditingDevice,
+    showInspectionModal,
+    setShowInspectionModal,
+    inspectingDevice,
+    setInspectingDevice,
+    inspectionType,
+    setInspectionType,
+    customDescription,
+    setCustomDescription,
+    isInspecting,
+    setIsInspecting,
+    inspectionResult,
+    setInspectionResult,
+    snmpInspectionResult,
+    setSnmpInspectionResult,
+    showBatchModal,
+    setShowBatchModal,
+    isBatchInspecting,
+    setIsBatchInspecting,
+    showHistory,
+    setShowHistory,
+    deleteConfirmDevice,
+    setDeleteConfirmDevice,
     // 操作
-    handleDelete, confirmDelete,
+    handleDelete,
+    confirmDelete,
     handleEdit,
     handleInspect,
     handleSnmpInspect,
@@ -241,7 +300,10 @@ export function useNetworkDevices() {
     handleHistory,
     executeInspection,
     executeBatchInspection,
-    toggleDeviceSelection, clearSelection, setSelectAll, handleBatchInspect,
+    toggleDeviceSelection,
+    clearSelection,
+    setSelectAll,
+    handleBatchInspect,
     refreshDevices: () => queryClient.invalidateQueries({ queryKey: ['network-devices'] }),
     // 其他
     navigate,

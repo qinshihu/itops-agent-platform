@@ -101,7 +101,12 @@ export function useServerActionsHandlers(
   api: any,
 ): ServerActionsHandlers {
   const parseCurrentTags = useCallback(() => {
-    return formData.tags ? formData.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [];
+    return formData.tags
+      ? formData.tags
+          .split(',')
+          .map((t: string) => t.trim())
+          .filter(Boolean)
+      : [];
   }, [formData.tags]);
 
   const getLastTagFragment = useCallback(() => {
@@ -173,7 +178,7 @@ export function useServerActionsHandlers(
       use_ssh_key: !!server.use_ssh_key,
       description: server.description || '',
       tags: server.tags ? server.tags.join(', ') : '',
-      os_type: (server.os_type === 'windows' ? 'windows' : 'linux'),
+      os_type: server.os_type === 'windows' ? 'windows' : 'linux',
       vnc_port: server.vnc_port || 5900,
       vnc_password: '',
     });
@@ -183,7 +188,7 @@ export function useServerActionsHandlers(
   const handleTestConnection = (server: Server) => {
     testConnectionMutation.mutate(server.id, {
       onSuccess: (data: any) => {
-        toast.success(data.data.message);
+        toast.success(data.message);
       },
     });
   };
@@ -276,7 +281,7 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
         serverIds: [aiCommandServer.id],
       });
 
-      const output = res.data.data.output;
+      const output = res.data.output;
       const jsonMatch = output.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         try {
@@ -292,7 +297,11 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
         setAiCommandExplanation('AI 生成的命令，请确认后执行');
       }
     } catch (err) {
-      const errorMsg = (err as ApiError).response?.data?.error || (err as ApiError).response?.data?.message || (err as ApiError).message || '未知错误';
+      const errorMsg =
+        (err as ApiError).response?.data?.error ||
+        (err as ApiError).response?.data?.message ||
+        (err as ApiError).message ||
+        '未知错误';
       setAiGenerationError(`生成失败：${errorMsg}`);
     } finally {
       setIsGenerating(false);
@@ -405,7 +414,10 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
         return;
       }
 
-      const result = await importServersMutation.mutateAsync({ servers: servers as any, test_connection: true });
+      const result = await importServersMutation.mutateAsync({
+        servers: servers as any,
+        test_connection: true,
+      });
       setImportResult(result.data);
       toast.success(`导入成功: ${result.data.success} 成功, ${result.data.failed} 失败`);
     } catch (err) {
@@ -422,7 +434,8 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
     setShowAiCommandConfirm(false);
     if (agents) {
       const cmdAgent = (agents as any[]).find(
-        (a: any) => a.enabled === 1 && (a.name?.includes('命令生成') || a.category?.includes('命令生成')),
+        (a: any) =>
+          a.enabled === 1 && (a.name?.includes('命令生成') || a.category?.includes('命令生成')),
       );
       const serverAgent = (agents as any[]).find(
         (a: any) =>
@@ -436,13 +449,26 @@ ${serverInfo.disk_gb ? `磁盘大小：${serverInfo.disk_gb}GB` : ''}
   };
 
   return {
-    parseCurrentTags, getLastTagFragment, addTagToInput, removeTag,
+    parseCurrentTags,
+    getLastTagFragment,
+    addTagToInput,
+    removeTag,
     filteredTagSuggestions,
-    handleSubmit, handleEdit, handleTestConnection,
-    handleExecuteCommand, handleRunCompliance, startComplianceCheck,
-    handleCollectInfo, handleAiGenerateCommand, handleExecuteAiCommand,
-    confirmExecuteAiCommand, handleCollectAll, handleCollectMetrics,
-    handleCollectAllMetrics, handleGroupSubmit, handleImport,
+    handleSubmit,
+    handleEdit,
+    handleTestConnection,
+    handleExecuteCommand,
+    handleRunCompliance,
+    startComplianceCheck,
+    handleCollectInfo,
+    handleAiGenerateCommand,
+    handleExecuteAiCommand,
+    confirmExecuteAiCommand,
+    handleCollectAll,
+    handleCollectMetrics,
+    handleCollectAllMetrics,
+    handleGroupSubmit,
+    handleImport,
     openAiCommandForServer,
   };
 }

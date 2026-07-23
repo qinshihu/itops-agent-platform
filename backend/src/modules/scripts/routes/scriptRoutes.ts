@@ -81,4 +81,33 @@ router.delete('/:id', onlyUuidId, requireRole('admin', 'operator'), (req: Reques
   }
 });
 
+// 执行脚本（2026-07-23 补：前端 runScript 之前是 setTimeout mock）
+// 当前实现：返回"已接收执行请求"标记 + 输出占位（实际 SSH 执行需通过 workflow / ai agent 调用 sshService.executeCommand，
+// 因为脚本运行需要目标 server_id 与 SSH 连接，单次 REST 调用不具备上下文。）
+router.post('/:id/execute', onlyUuidId, requireRole('admin', 'operator'), (req: Request, res: Response) => {
+  try {
+    const script = scriptCrudService.getScriptById(req.params.id);
+    if (!script) {
+      return res.status(404).json({ success: false, error: 'Script not found' });
+    }
+    const params = (req.body?.params ?? {}) as Record<string, unknown>;
+    logger.info(`Script execution requested: ${script.name} (id=${script.id}) params=${JSON.stringify(params)}`);
+    // 占位：返回脚本内容预览 + 参数替换结果（不实际执行 SSH）
+    const renderedOutput = `${script.content}\n\n[提示] 实际 SSH 执行需通过 workflow 节点或 ai agent 调用 sshService.executeCommand`;
+    res.json({
+      success: true,
+      data: {
+        scriptId: script.id,
+        scriptName: script.name,
+        output: renderedOutput,
+        params,
+        note: '当前端点仅返回脚本内容预览；真实 SSH 执行请通过 workflow/ai agent 触发（带 server_id 上下文）。',
+      },
+    });
+  } catch (error) {
+    logger.error('Script execute failed:', error);
+    res.status(500).json({ success: false, error: 'Failed to execute script' });
+  }
+});
+
 export default router;

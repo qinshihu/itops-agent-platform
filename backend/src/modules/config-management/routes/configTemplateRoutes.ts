@@ -25,7 +25,8 @@ router.get('/', (req: Request, res: Response) => {
         search: search || undefined,
       },
     });
-    res.json({ success: true, data, total });
+    // 把 total 嵌入 data 内（避免被前端 axios 拦截器剥掉兄弟字段）
+    res.json({ success: true, data: { items: data, total } });
   } catch (error: unknown) {
     res.status(500).json({ success: false, message: getErrorMessage(error) });
   }

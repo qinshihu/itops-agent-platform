@@ -31,7 +31,7 @@ export default function SnmpCredentials() {
 
   const { data: credentials = [], isLoading: credsLoading } = useQuery({
     queryKey: ['snmp-credentials'],
-    queryFn: () => api.get('/snmp/credentials').then(r => r.data.data || []),
+    queryFn: () => api.get('/snmp/credentials').then(r => r.data || []),
   });
 
   const [showForm, setShowForm] = useState(false);

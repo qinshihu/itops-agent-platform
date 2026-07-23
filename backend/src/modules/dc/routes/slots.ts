@@ -17,6 +17,19 @@ router.get('/', (_req: Request, res: Response) => {
   }
 });
 
+// GET /slots/batch — DataRoom 3D 聚合接口：一次性返回 slots + racks + rooms
+// 前端 useDataRoom.ts L92 消费；必须在 /:rackId 之前声明（Express 路由按声明顺序匹配）
+router.get('/batch', (_req: Request, res: Response) => {
+  try {
+    const slots = dcCrudService.slots.listWithDeviceInfo();
+    const racks = dcCrudService.racks.list();
+    const rooms = dcCrudService.rooms.list();
+    res.json({ success: true, data: { slots, racks, rooms } });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, message: getErrorMessage(error) });
+  }
+});
+
 // GET /slots/:rackId — 按机柜获取U位
 router.get('/:rackId', (req: Request, res: Response) => {
   try {
@@ -30,7 +43,16 @@ router.get('/:rackId', (req: Request, res: Response) => {
 // POST /slots — 分配U位
 router.post('/', (req: Request, res: Response) => {
   try {
-    const { rack_id, device_id, device_type, device_type_id, start_u, end_u, position_face, lifecycle_notes } = req.body;
+    const {
+      rack_id,
+      device_id,
+      device_type,
+      device_type_id,
+      start_u,
+      end_u,
+      position_face,
+      lifecycle_notes,
+    } = req.body;
 
     // 检查冲突
     const conflict = dcCrudService.slots.findConflict(rack_id, start_u, end_u);
@@ -41,7 +63,9 @@ router.post('/', (req: Request, res: Response) => {
     // 检查总U数
     const rack = dcCrudService.racks.getById(rack_id);
     if (rack && end_u > (rack.total_u ?? 42)) {
-      return res.status(400).json({ success: false, message: `超出机柜容量(最大${rack.total_u}U)` });
+      return res
+        .status(400)
+        .json({ success: false, message: `超出机柜容量(最大${rack.total_u}U)` });
     }
 
     // 如果有 device_type_id，自动从型号继承 u_height
@@ -55,13 +79,26 @@ router.post('/', (req: Request, res: Response) => {
 
     const id = crypto.randomUUID();
     dcCrudService.slots.create({
-      id, rack_id, device_id, device_type, device_type_id, start_u, end_u: resolvedEndU, position_face,
+      id,
+      rack_id,
+      device_id,
+      device_type,
+      device_type_id,
+      start_u,
+      end_u: resolvedEndU,
+      position_face,
     });
 
     // 生命周期记录
     dcCrudService.devices.createLifecycle({
-      id: crypto.randomUUID(), device_id, device_type, action: 'mounted',
-      to_rack_id: rack_id, to_slot_start: start_u, to_slot_end: end_u, notes: lifecycle_notes || '',
+      id: crypto.randomUUID(),
+      device_id,
+      device_type,
+      action: 'mounted',
+      to_rack_id: rack_id,
+      to_slot_start: start_u,
+      to_slot_end: end_u,
+      notes: lifecycle_notes || '',
     });
 
     res.json({ success: true, data: { id } });
@@ -79,12 +116,22 @@ router.put('/:id', (req: Request, res: Response) => {
 
     // 检查冲突（排除自身）
     const effectiveRackId = rack_id || oldSlot.rack_id;
-    const conflict = dcCrudService.slots.findConflict(effectiveRackId, start_u, end_u, req.params.id);
+    const conflict = dcCrudService.slots.findConflict(
+      effectiveRackId,
+      start_u,
+      end_u,
+      req.params.id,
+    );
     if (conflict) {
       return res.status(409).json({ success: false, message: 'U位冲突' });
     }
 
-    dcCrudService.slots.update(req.params.id, { rack_id: effectiveRackId, start_u, end_u, position_face });
+    dcCrudService.slots.update(req.params.id, {
+      rack_id: effectiveRackId,
+      start_u,
+      end_u,
+      position_face,
+    });
 
     // 记录生命周期
     if (rack_id && rack_id !== oldSlot.rack_id) {

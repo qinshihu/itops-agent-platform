@@ -114,4 +114,15 @@ router.get('/alert-source-stats', (_req: Request, res: Response) => {
   }
 });
 
+// 报告分析（前端 monitorApi.getReportAnalytics 消费）
+router.get('/report-analytics', (_req: Request, res: Response) => {
+  try {
+    const data = dashboardCrudService.getReportAnalytics();
+    res.json({ success: true, data });
+  } catch (error) {
+    logger.error('Report analytics error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch report analytics' });
+  }
+});
+
 export default router;
