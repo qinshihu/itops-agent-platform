@@ -416,6 +416,8 @@ export function registerAllServices(): void {
           containerLogService.stopAll();
           vmSnapshotSchedulerService.stopAll();
           vmMigrationService.stopAll();
+          // 2026-07-23: autoScaleService 也注册 shutdown，清 setInterval
+          autoScaleService.shutdown();
         },
       };
     },

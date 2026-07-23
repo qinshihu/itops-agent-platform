@@ -8,7 +8,7 @@
  */
 import clsx from 'clsx';
 import { AlertTriangle, Trash2 } from 'lucide-react';
-import { SshKey } from '../../api';
+import { SshKey } from './types';
 
 export interface DeleteSSHKeyModalProps {
   keyData: SshKey | null;

@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { kubernetesService } from '../services/kubernetesService';
 import { requireRole } from '../../../middleware/auth';
 import { getErrorMessage } from '../../../utils/errorHelpers';
+import { logger } from '../../../utils/logger';
 
 const router = Router();
 

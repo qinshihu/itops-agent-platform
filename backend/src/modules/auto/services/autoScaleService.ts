@@ -61,14 +61,26 @@ class AutoScaleService {
     this.startChecker();
   }
 
+  /**
+   * 关闭时清理定时器 + cooldown map（注册到 serviceRegistry shutdownAll）
+   */
+  shutdown() {
+    if (this.checkInterval) {
+      clearInterval(this.checkInterval);
+      this.checkInterval = null;
+    }
+    this.cooldowns.clear();
+    logger.info('[autoScaleService] Shutdown complete');
+  }
+
   private startChecker() {
     this.checkInterval = setInterval(() => {
-      this.checkRules().catch(err => logger.error('Auto-scale check error:', err));
+      this.checkRules().catch((err) => logger.error('Auto-scale check error:', err));
     }, 60000);
   }
 
   private async checkRules() {
-    const rules = this.listRules().filter(r => r.enabled);
+    const rules = this.listRules().filter((r) => r.enabled);
     for (const rule of rules) {
       try {
         await this.evaluateRule(rule);
@@ -108,9 +120,7 @@ class AutoScaleService {
       try {
         const containers = await dockerService.listContainers(true);
         const prefix = this.getContainerNamePrefix(rule);
-        return containers.filter(c =>
-          c.name.startsWith(prefix) && c.state === 'running'
-        ).length;
+        return containers.filter((c) => c.name.startsWith(prefix) && c.state === 'running').length;
       } catch (err) {
         logger.warn(`countInstances: docker 列表失败，回退到 1:`, err);
         return 1;
@@ -160,7 +170,7 @@ class AutoScaleService {
       if (rule.targetType === 'container') {
         const stats = await dockerService.getContainerStats(rule.targetId);
         if (rule.metricType === 'cpu') {
-          currentMetric = parseFloat(stats.cpuPercent as string);
+          currentMetric = Number(parseFloat(stats.cpuPercent as string));
         } else if (rule.metricType === 'memory') {
           const memPct = (stats.memory as { percent?: string | number }).percent;
           currentMetric = typeof memPct === 'string' ? parseFloat(memPct) : Number(memPct || 0);
@@ -173,7 +183,9 @@ class AutoScaleService {
         try {
           const stats = await vmManagementService.getVMStats(rule.targetId, rule.targetId);
           // 平台 ID 形如 `${platformId}/${vmId}`，纠正：仅取 vmId 调 stats
-          const vmId = rule.targetId.includes('/') ? rule.targetId.split('/').pop()! : rule.targetId;
+          const vmId = rule.targetId.includes('/')
+            ? rule.targetId.split('/').pop()!
+            : rule.targetId;
           const realStats = await vmManagementService.getVMStats(rule.targetId, vmId);
           const vmStats: any = realStats || stats;
           if (rule.metricType === 'cpu' && vmStats?.cpuUsage !== undefined) {
@@ -195,21 +207,22 @@ class AutoScaleService {
           try {
             const [contextId, namespace, depName] = rule.targetId.split('/');
             if (contextId && namespace && depName) {
-              const { kubernetesService } = await import('../../kubernetes/services/kubernetesService');
-              const metrics = await kubernetesService.getDeploymentMetrics(namespace, depName, contextId);
+              const { kubernetesService } =
+                await import('../../kubernetes/services/kubernetesService');
+              const metrics = await kubernetesService.getDeploymentMetrics(
+                namespace,
+                depName,
+                contextId,
+              );
               if (metrics) {
                 // 计算"平均每个副本"的使用率（相对 request）
                 //   简化：使用率 = 总量 / (replicas × 1000m cpu) × 100 = 平均单副本使用率
                 if (rule.metricType === 'cpu') {
                   const requestedTotal = currentInstances * 1000; // 假设每个副本 request 1000 millicores
-                  currentMetric = requestedTotal > 0
-                    ? (metrics.cpu / requestedTotal) * 100
-                    : 0;
+                  currentMetric = requestedTotal > 0 ? (metrics.cpu / requestedTotal) * 100 : 0;
                 } else {
                   const requestedTotal = currentInstances * 512; // 假设每个副本 request 512 MiB
-                  currentMetric = requestedTotal > 0
-                    ? (metrics.memory / requestedTotal) * 100
-                    : 0;
+                  currentMetric = requestedTotal > 0 ? (metrics.memory / requestedTotal) * 100 : 0;
                 }
               } else {
                 // metrics-server 不可用 → 跳过本次评估
@@ -234,10 +247,7 @@ class AutoScaleService {
         return;
       }
       await this.executeScaleUp(rule, currentMetric, currentInstances);
-    } else if (
-      currentMetric < rule.targetValue * 0.5 &&
-      currentInstances > rule.minInstances
-    ) {
+    } else if (currentMetric < rule.targetValue * 0.5 && currentInstances > rule.minInstances) {
       if (this.isInCooldown(rule, 'down')) {
         logger.debug(`Rule ${rule.name} 缩容冷却中，跳过`);
         return;
@@ -288,7 +298,13 @@ class AutoScaleService {
     } catch (err: unknown) {
       this.setCooldown(rule, 'up');
       this.logHistory(
-        rule, 'scale_up', currentCount, currentCount, metricValue, 'failed', getErrorMessage(err)
+        rule,
+        'scale_up',
+        currentCount,
+        currentCount,
+        metricValue,
+        'failed',
+        getErrorMessage(err),
       );
       logger.error(`❌ Scale up failed: ${rule.name}`, err);
     }
@@ -302,7 +318,7 @@ class AutoScaleService {
         const prefix = this.getContainerNamePrefix(rule);
         // 优先缩掉"最老的"运行中副本（FIFO）
         const candidates = containers
-          .filter(c => c.name.startsWith(prefix) && c.state === 'running')
+          .filter((c) => c.name.startsWith(prefix) && c.state === 'running')
           .sort((a, b) => a.created - b.created);
         if (candidates.length > 0) {
           await dockerService.removeContainer(candidates[0].id, true);
@@ -315,7 +331,7 @@ class AutoScaleService {
         // 缩容：找到名字以 prefix 开头且不在 hypervisor 中作为"模板"的 vm
         const prefix = `${rule.targetName || rule.targetId}-replica-`;
         const candidates = vms
-          .filter(vm => vm.name?.startsWith(prefix))
+          .filter((vm) => vm.name?.startsWith(prefix))
           .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
         if (candidates.length > 0) {
           await vmManagementService.powerOffVM(platformId, candidates[0].id);
@@ -337,34 +353,62 @@ class AutoScaleService {
     } catch (err: unknown) {
       this.setCooldown(rule, 'down');
       this.logHistory(
-        rule, 'scale_down', currentCount, currentCount, metricValue, 'failed', getErrorMessage(err)
+        rule,
+        'scale_down',
+        currentCount,
+        currentCount,
+        metricValue,
+        'failed',
+        getErrorMessage(err),
       );
       logger.error(`❌ Scale down failed: ${rule.name}`, err);
     }
   }
 
-  private logHistory(rule: ScaleRule, action: string, previous: number, current: number, metricValue: number, result: string, reason?: string) {
+  private logHistory(
+    rule: ScaleRule,
+    action: string,
+    previous: number,
+    current: number,
+    metricValue: number,
+    result: string,
+    reason?: string,
+  ) {
     const id = randomUUID();
     autoScaleRepository.createHistory({
-      id, rule_id: rule.id, rule_name: rule.name,
-      target_type: rule.targetType, target_id: rule.targetId,
-      action, previous_count: previous, current_count: current,
-      metric_value: metricValue, result, reason: reason || null,
+      id,
+      rule_id: rule.id,
+      rule_name: rule.name,
+      target_type: rule.targetType,
+      target_id: rule.targetId,
+      action,
+      previous_count: previous,
+      current_count: current,
+      metric_value: metricValue,
+      result,
+      reason: reason || null,
     });
   }
 
   listRules(): ScaleRule[] {
     const rows = autoScaleRepository.listRules();
-    return rows.map(r => ({
-      id: r.id, name: r.name, targetType: r.target_type as ScaleRule['targetType'],
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      targetType: r.target_type as ScaleRule['targetType'],
       targetId: r.target_id,
       targetName: r.target_name || '',
       metricType: r.metric_type as ScaleRule['metricType'],
-      threshold: r.threshold, targetValue: r.target_value,
-      minInstances: r.min_instances, maxInstances: r.max_instances,
-      scaleUpCooldown: r.scale_up_cooldown, scaleDownCooldown: r.scale_down_cooldown,
-      enabled: r.enabled === 1, lastScaleTime: r.last_scale_time || undefined,
-      createdAt: r.created_at, updatedAt: r.updated_at,
+      threshold: r.threshold,
+      targetValue: r.target_value,
+      minInstances: r.min_instances,
+      maxInstances: r.max_instances,
+      scaleUpCooldown: r.scale_up_cooldown,
+      scaleDownCooldown: r.scale_down_cooldown,
+      enabled: r.enabled === 1,
+      lastScaleTime: r.last_scale_time || undefined,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
     }));
   }
 
@@ -372,26 +416,40 @@ class AutoScaleService {
     const row = autoScaleRepository.getRuleById(ruleId);
     if (!row) return null;
     return {
-      id: row.id, name: row.name, targetType: row.target_type as ScaleRule['targetType'],
+      id: row.id,
+      name: row.name,
+      targetType: row.target_type as ScaleRule['targetType'],
       targetId: row.target_id,
       targetName: row.target_name || '',
       metricType: row.metric_type as ScaleRule['metricType'],
-      threshold: row.threshold, targetValue: row.target_value,
-      minInstances: row.min_instances, maxInstances: row.max_instances,
-      scaleUpCooldown: row.scale_up_cooldown, scaleDownCooldown: row.scale_down_cooldown,
-      enabled: row.enabled === 1, lastScaleTime: row.last_scale_time || undefined,
-      createdAt: row.created_at, updatedAt: row.updated_at,
+      threshold: row.threshold,
+      targetValue: row.target_value,
+      minInstances: row.min_instances,
+      maxInstances: row.max_instances,
+      scaleUpCooldown: row.scale_up_cooldown,
+      scaleDownCooldown: row.scale_down_cooldown,
+      enabled: row.enabled === 1,
+      lastScaleTime: row.last_scale_time || undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
     };
   }
 
   createRule(data: Omit<ScaleRule, 'id' | 'createdAt' | 'updatedAt'>): ScaleRule {
     const id = randomUUID();
     autoScaleRepository.createRule({
-      id, name: data.name, target_type: data.targetType, target_id: data.targetId,
-      target_name: data.targetName, metric_type: data.metricType,
-      threshold: data.threshold, target_value: data.targetValue,
-      min_instances: data.minInstances, max_instances: data.maxInstances,
-      scale_up_cooldown: data.scaleUpCooldown, scale_down_cooldown: data.scaleDownCooldown,
+      id,
+      name: data.name,
+      target_type: data.targetType,
+      target_id: data.targetId,
+      target_name: data.targetName,
+      metric_type: data.metricType,
+      threshold: data.threshold,
+      target_value: data.targetValue,
+      min_instances: data.minInstances,
+      max_instances: data.maxInstances,
+      scale_up_cooldown: data.scaleUpCooldown,
+      scale_down_cooldown: data.scaleDownCooldown,
       enabled: data.enabled ? 1 : 0,
     });
     return this.getRule(id)!;
@@ -411,7 +469,9 @@ class AutoScaleService {
     if (updates.minInstances !== undefined) fields.min_instances = updates.minInstances;
     if (updates.maxInstances !== undefined) fields.max_instances = updates.maxInstances;
     if (updates.scaleUpCooldown !== undefined) fields.scale_up_cooldown = updates.scaleUpCooldown;
-    if (updates.scaleDownCooldown !== undefined) fields.scale_down_cooldown = updates.scaleDownCooldown;
+    if (updates.scaleDownCooldown !== undefined) {
+      fields.scale_down_cooldown = updates.scaleDownCooldown;
+    }
     if (updates.enabled !== undefined) fields.enabled = updates.enabled ? 1 : 0;
     autoScaleRepository.updateRule(ruleId, fields);
     return this.getRule(ruleId)!;
@@ -422,15 +482,25 @@ class AutoScaleService {
   }
 
   getHistory(page = 1, pageSize = 20, ruleId?: string): { data: ScaleHistory[]; total: number } {
-    const { rows, total } = autoScaleRepository.listHistory({ rule_id: ruleId, page, limit: pageSize });
+    const { rows, total } = autoScaleRepository.listHistory({
+      rule_id: ruleId,
+      page,
+      limit: pageSize,
+    });
     return {
-      data: rows.map(r => ({
-        id: r.id, ruleId: r.rule_id || '', ruleName: r.rule_name || '',
-        targetType: r.target_type || '', targetId: r.target_id || '',
+      data: rows.map((r) => ({
+        id: r.id,
+        ruleId: r.rule_id || '',
+        ruleName: r.rule_name || '',
+        targetType: r.target_type || '',
+        targetId: r.target_id || '',
         action: r.action as ScaleHistory['action'],
-        previousCount: r.previous_count || 0, currentCount: r.current_count || 0,
-        metricValue: r.metric_value || 0, result: r.result as ScaleHistory['result'],
-        reason: r.reason || undefined, timestamp: r.timestamp,
+        previousCount: r.previous_count || 0,
+        currentCount: r.current_count || 0,
+        metricValue: r.metric_value || 0,
+        result: r.result as ScaleHistory['result'],
+        reason: r.reason || undefined,
+        timestamp: r.timestamp,
       })),
       total,
     };
@@ -441,7 +511,12 @@ class AutoScaleService {
     const todayUp = autoScaleRepository.countTodayByAction('scale_up');
     const todayDown = autoScaleRepository.countTodayByAction('scale_down');
     const totalManaged = autoScaleRepository.sumMaxInstances();
-    return { activeRules, todayScaleUp: todayUp, todayScaleDown: todayDown, totalManagedInstances: totalManaged };
+    return {
+      activeRules,
+      todayScaleUp: todayUp,
+      todayScaleDown: todayDown,
+      totalManagedInstances: totalManaged,
+    };
   }
 
   /**
@@ -450,14 +525,18 @@ class AutoScaleService {
    * - vm: 遍历所有 hypervisor 平台下的 VM
    * - k8s_deployment: 遍历所有 K8s context 的 deployment
    */
-  async listScaleTargets(type: 'container' | 'vm' | 'k8s_deployment'): Promise<Array<{ id: string; name: string; [key: string]: unknown }>> {
+  async listScaleTargets(
+    type: 'container' | 'vm' | 'k8s_deployment',
+  ): Promise<Array<{ id: string; name: string; [key: string]: unknown }>> {
     if (type === 'container') {
       if (!dockerService.isAvailable()) return [];
       try {
         const list = await dockerService.listContainers(true);
-        return list.map(c => ({ id: c.id, name: c.name }));
+        return list.map((c) => ({ id: c.id, name: c.name }));
       } catch (err) {
-        logger.debug(`[autoScaleService] listScaleTargets(container) error: ${getErrorMessage(err)}`);
+        logger.debug(
+          `[autoScaleService] listScaleTargets(container) error: ${getErrorMessage(err)}`,
+        );
         return [];
       }
     }
@@ -465,7 +544,8 @@ class AutoScaleService {
     if (type === 'vm') {
       const { vmPlatformRepository } = await import('../../../repositories');
       const platforms = vmPlatformRepository.list();
-      const result: Array<{ id: string; name: string; platformId: string; platformName: string }> = [];
+      const result: Array<{ id: string; name: string; platformId: string; platformName: string }> =
+        [];
       for (const p of platforms) {
         try {
           const vms = await vmManagementService.listVMs(p.id);
@@ -478,7 +558,9 @@ class AutoScaleService {
             });
           }
         } catch (err) {
-          logger.debug(`[autoScaleService] listScaleTargets(vm) platform ${p.id} error: ${getErrorMessage(err)}`);
+          logger.debug(
+            `[autoScaleService] listScaleTargets(vm) platform ${p.id} error: ${getErrorMessage(err)}`,
+          );
         }
       }
       return result;
@@ -488,10 +570,19 @@ class AutoScaleService {
       try {
         const { kubernetesService } = await import('../../kubernetes/services/kubernetesService');
         const contexts = kubernetesService.listContexts();
-        const result: Array<{ id: string; name: string; namespace: string; contextId: string; contextName: string }> = [];
+        const result: Array<{
+          id: string;
+          name: string;
+          namespace: string;
+          contextId: string;
+          contextName: string;
+        }> = [];
         for (const ctx of contexts) {
           try {
-            const deployments = await kubernetesService.listDeployments(ctx.namespace || 'default', ctx.id);
+            const deployments = await kubernetesService.listDeployments(
+              ctx.namespace || 'default',
+              ctx.id,
+            );
             for (const dep of deployments) {
               result.push({
                 id: `${ctx.id}/${dep.namespace}/${dep.name}`,
@@ -502,11 +593,14 @@ class AutoScaleService {
               });
             }
           } catch (err) {
-            logger.debug(`[autoScaleService] listScaleTargets(k8s) context ${ctx.id} error: ${getErrorMessage(err)}`);
+            logger.debug(
+              `[autoScaleService] listScaleTargets(k8s) context ${ctx.id} error: ${getErrorMessage(err)}`,
+            );
           }
         }
         return result;
-      } catch (_err) { // eslint-disable-line @typescript-eslint/no-unused-vars
+      } catch (_err) {
+        // eslint-disable-line @typescript-eslint/no-unused-vars
         return [];
       }
     }

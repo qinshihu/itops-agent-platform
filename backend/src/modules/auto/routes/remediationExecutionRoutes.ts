@@ -4,7 +4,7 @@ import { Router } from 'express';
 import { remediationService } from '../services/remediationService';
 import { logger } from '../../../utils/logger';
 import { remediationExecutionService } from '../services/remediationExecutionService';
-import { authenticateToken as authenticate } from '../../../middleware/auth';
+import { requireRole, authenticateToken as authenticate } from '../../../middleware/auth';
 
 const router = Router();
 
@@ -15,7 +15,7 @@ router.get('/', (req: Request, res: Response) => {
       alert_id: req.query.alert_id as string | undefined,
       status: req.query.status as string | undefined,
       page: req.query.page ? parseInt(req.query.page as string, 10) : undefined,
-      limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined
+      limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,
     };
 
     const result = remediationService.listExecutions(filters);
@@ -24,7 +24,7 @@ router.get('/', (req: Request, res: Response) => {
     logger.error('Failed to list remediation executions:', error);
     res.status(500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Failed to list executions'
+      message: error instanceof Error ? error.message : 'Failed to list executions',
     });
   }
 });
@@ -37,12 +37,12 @@ router.get('/:id', (req: Request, res: Response) => {
     logger.error('Failed to get remediation execution:', error);
     res.status(404).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Execution not found'
+      message: error instanceof Error ? error.message : 'Execution not found',
     });
   }
 });
 
-router.post('/:id/approve', (req: Request, res: Response) => {
+router.post('/:id/approve', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     const { action, comment } = req.body;
     const userId = (req as any).user?.id || 'system';
@@ -50,7 +50,7 @@ router.post('/:id/approve', (req: Request, res: Response) => {
     if (action !== 'approve' && action !== 'reject') {
       return res.status(400).json({
         success: false,
-        message: 'Invalid action. Must be "approve" or "reject"'
+        message: 'Invalid action. Must be "approve" or "reject"',
       });
     }
 
@@ -60,12 +60,12 @@ router.post('/:id/approve', (req: Request, res: Response) => {
     logger.error('Failed to approve execution:', error);
     res.status(500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Failed to approve execution'
+      message: error instanceof Error ? error.message : 'Failed to approve execution',
     });
   }
 });
 
-router.post('/:id/retry', (req: Request, res: Response) => {
+router.post('/:id/retry', requireRole('admin', 'operator'), (req: Request, res: Response) => {
   try {
     remediationService.retryExecution(req.params.id);
     res.json({ success: true, message: 'Execution retried' });
@@ -73,91 +73,111 @@ router.post('/:id/retry', (req: Request, res: Response) => {
     logger.error('Failed to retry execution:', error);
     res.status(500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Failed to retry execution'
+      message: error instanceof Error ? error.message : 'Failed to retry execution',
     });
   }
 });
 
-router.post('/', authenticate, async (req: Request, res: Response) => {
-  try {
-    const { rca_id, policy_id, server_id, risk_level } = req.body;
+router.post(
+  '/',
+  authenticate,
+  requireRole('admin', 'operator'),
+  async (req: Request, res: Response) => {
+    try {
+      const { rca_id, policy_id, server_id, risk_level } = req.body;
 
-    if (!server_id || !risk_level) {
-      return res.status(400).json({
+      if (!server_id || !risk_level) {
+        return res.status(400).json({
+          success: false,
+          message: 'server_id and risk_level are required',
+        });
+      }
+
+      const audit = remediationService.createAudit({
+        rca_id,
+        policy_id,
+        server_id,
+        risk_level,
+      });
+
+      res.json({ success: true, data: audit, message: 'Remediation audit created' });
+    } catch (error) {
+      logger.error('Failed to create remediation audit:', error);
+      res.status(500).json({
         success: false,
-        message: 'server_id and risk_level are required'
+        message: error instanceof Error ? error.message : 'Failed to create remediation audit',
       });
     }
+  },
+);
 
-    const audit = remediationService.createAudit({
-      rca_id,
-      policy_id,
-      server_id,
-      risk_level
-    });
-
-    res.json({ success: true, data: audit, message: 'Remediation audit created' });
-  } catch (error) {
-    logger.error('Failed to create remediation audit:', error);
-    res.status(500).json({
-      success: false,
-      message: error instanceof Error ? error.message : 'Failed to create remediation audit'
-    });
-  }
-});
-
-router.post('/:id/execute', authenticate, async (req: Request, res: Response) => {
-  try {
-    const result = await remediationService.executeAudit(req.params.id);
-    res.json({ success: true, data: result, message: 'Remediation executed' });
-  } catch (error) {
-    logger.error('Failed to execute remediation audit:', error);
-    res.status(500).json({
-      success: false,
-      message: error instanceof Error ? error.message : 'Failed to execute remediation'
-    });
-  }
-});
-
-router.post('/:id/rollback', authenticate, async (req: Request, res: Response) => {
-  try {
-    const audit = remediationExecutionService.getAuditExists(req.params.id);
-    if (!audit) {
-      return res.status(404).json({
+router.post(
+  '/:id/execute',
+  authenticate,
+  requireRole('admin', 'operator'),
+  async (req: Request, res: Response) => {
+    try {
+      const result = await remediationService.executeAudit(req.params.id);
+      res.json({ success: true, data: result, message: 'Remediation executed' });
+    } catch (error) {
+      logger.error('Failed to execute remediation audit:', error);
+      res.status(500).json({
         success: false,
-        message: 'Audit not found'
+        message: error instanceof Error ? error.message : 'Failed to execute remediation',
       });
     }
+  },
+);
 
-    if ((audit.status as string) !== 'success' && (audit.status as string) !== 'failed') {
-      return res.status(400).json({
+router.post(
+  '/:id/rollback',
+  authenticate,
+  requireRole('admin', 'operator'),
+  async (req: Request, res: Response) => {
+    try {
+      const audit = remediationExecutionService.getAuditExists(req.params.id);
+      if (!audit) {
+        return res.status(404).json({
+          success: false,
+          message: 'Audit not found',
+        });
+      }
+
+      if ((audit.status as string) !== 'success' && (audit.status as string) !== 'failed') {
+        return res.status(400).json({
+          success: false,
+          message: 'Audit must be completed before rollback',
+        });
+      }
+
+      await remediationService.rollbackAudit(req.params.id);
+      res.json({ success: true, message: 'Remediation rolled back' });
+    } catch (error) {
+      logger.error('Failed to rollback remediation audit:', error);
+      res.status(500).json({
         success: false,
-        message: 'Audit must be completed before rollback'
+        message: error instanceof Error ? error.message : 'Failed to rollback remediation',
       });
     }
+  },
+);
 
-    await remediationService.rollbackAudit(req.params.id);
-    res.json({ success: true, message: 'Remediation rolled back' });
-  } catch (error) {
-    logger.error('Failed to rollback remediation audit:', error);
-    res.status(500).json({
-      success: false,
-      message: error instanceof Error ? error.message : 'Failed to rollback remediation'
-    });
-  }
-});
-
-router.post('/:id/verify', authenticate, async (req: Request, res: Response) => {
-  try {
-    const result = await remediationService.verifyAudit(req.params.id);
-    res.json({ success: true, data: result, message: 'Remediation verified' });
-  } catch (error) {
-    logger.error('Failed to verify remediation audit:', error);
-    res.status(500).json({
-      success: false,
-      message: error instanceof Error ? error.message : 'Failed to verify remediation'
-    });
-  }
-});
+router.post(
+  '/:id/verify',
+  authenticate,
+  requireRole('admin', 'operator'),
+  async (req: Request, res: Response) => {
+    try {
+      const result = await remediationService.verifyAudit(req.params.id);
+      res.json({ success: true, data: result, message: 'Remediation verified' });
+    } catch (error) {
+      logger.error('Failed to verify remediation audit:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to verify remediation',
+      });
+    }
+  },
+);
 
 export default router;

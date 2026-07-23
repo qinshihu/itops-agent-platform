@@ -7,6 +7,7 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { logger } from '../../../utils/logger';
+import { requireRole } from '../../../middleware/auth';
 import { configRepairService } from '../services/configRepairService';
 import { configBackupService } from '../services/configBackupService';
 
@@ -62,7 +63,7 @@ router.get('/templates/:templateId', (req: Request, res: Response) => {
 router.post('/analyze', async (req: Request, res: Response) => {
   try {
     const { deviceId, configPath, content, templateId } = req.body;
-    
+
     if (!deviceId || !configPath || !content) {
       return res.status(400).json({
         success: false,
@@ -78,7 +79,7 @@ router.post('/analyze', async (req: Request, res: Response) => {
       deviceId,
       configPath,
       content,
-      templateId
+      templateId,
     );
 
     res.json({
@@ -97,10 +98,10 @@ router.post('/analyze', async (req: Request, res: Response) => {
 /**
  * 生成修复方案
  */
-router.post('/plan', async (req: Request, res: Response) => {
+router.post('/plan', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const { deviceId, configPath, issues, content, _templateId } = req.body;
-    
+
     if (!deviceId || !configPath || !issues || !content) {
       return res.status(400).json({
         success: false,
@@ -117,7 +118,7 @@ router.post('/plan', async (req: Request, res: Response) => {
       deviceIp,
       configPath,
       issues,
-      content
+      content,
     );
 
     res.json({
@@ -139,7 +140,7 @@ router.post('/plan', async (req: Request, res: Response) => {
 router.post('/execute', async (req: Request, res: Response) => {
   try {
     const { deviceId, configPath, repairPlan, templateId, content, approver } = req.body;
-    
+
     if (!deviceId || !configPath || !repairPlan) {
       return res.status(400).json({
         success: false,
@@ -152,13 +153,7 @@ router.post('/execute', async (req: Request, res: Response) => {
 
     // 如果有内容，先备份
     if (content) {
-      await configBackupService.createBackup(
-        deviceId,
-        deviceName,
-        deviceIp,
-        configPath,
-        content
-      );
+      await configBackupService.createBackup(deviceId, deviceName, deviceIp, configPath, content);
     }
 
     const record = await configRepairService.executeRepair(
@@ -168,7 +163,7 @@ router.post('/execute', async (req: Request, res: Response) => {
       configPath,
       repairPlan,
       templateId,
-      approver
+      approver,
     );
 
     res.json({
@@ -193,7 +188,7 @@ router.post('/execute', async (req: Request, res: Response) => {
 router.post('/rollback', async (req: Request, res: Response) => {
   try {
     const { recordId } = req.body;
-    
+
     if (!recordId) {
       return res.status(400).json({
         success: false,
@@ -248,7 +243,7 @@ router.get('/records', (req: Request, res: Response) => {
   try {
     const deviceId = req.query.deviceId as string | undefined;
     const limit = parseInt(req.query.limit as string) || 50;
-    
+
     const records = configRepairService.listRepairRecords(deviceId, limit);
     res.json({
       success: true,
@@ -271,14 +266,14 @@ router.get('/backups', (req: Request, res: Response) => {
     const deviceId = req.query.deviceId as string;
     const configPath = req.query.configPath as string | undefined;
     const limit = parseInt(req.query.limit as string) || 20;
-    
+
     if (!deviceId) {
       return res.status(400).json({
         success: false,
         error: '缺少 deviceId',
       });
     }
-    
+
     const backups = configBackupService.listBackups(deviceId, configPath, limit);
     res.json({
       success: true,
@@ -321,22 +316,26 @@ router.get('/backups/:backupId', (req: Request, res: Response) => {
 /**
  * 从备份恢复
  */
-router.post('/backups/:backupId/restore', async (req: Request, res: Response) => {
-  try {
-    const result = await configBackupService.restoreBackup(req.params.backupId);
-    res.json({
-      success: result.success,
-      data: {
-        message: result.message,
-      },
-    });
-  } catch (error) {
-    logger.error('❌ 恢复备份失败:', error);
-    res.status(500).json({
-      success: false,
-      error: '恢复备份失败',
-    });
-  }
-});
+router.post(
+  '/backups/:backupId/restore',
+  requireRole('admin', 'operator'),
+  async (req: Request, res: Response) => {
+    try {
+      const result = await configBackupService.restoreBackup(req.params.backupId);
+      res.json({
+        success: result.success,
+        data: {
+          message: result.message,
+        },
+      });
+    } catch (error) {
+      logger.error('❌ 恢复备份失败:', error);
+      res.status(500).json({
+        success: false,
+        error: '恢复备份失败',
+      });
+    }
+  },
+);
 
 export default router;

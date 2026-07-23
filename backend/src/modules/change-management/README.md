@@ -2,7 +2,7 @@
 
 > **DDD 限界上下文**：IT 变更与审批
 > **聚合根**：`Change`、`ApprovalTicket`
-> **最后刷新**：2026-07-22
+> **最后刷新**：2026-07-23（nav.autoExecution 第 5 轮：changeRoutes 全 RBAC + approvalRoutes 5 catch logger + audit user_id 真实用户）
 
 ## 职责
 IT 变更管理与审批控制：变更记录、审批流转、变更历史、与工作流引擎联动（resume / reject）。

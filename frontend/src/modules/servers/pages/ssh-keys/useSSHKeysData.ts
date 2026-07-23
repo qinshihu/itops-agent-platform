@@ -17,7 +17,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../../lib/api';
 import { getAxiosErrorMessage } from '../../../../lib/errorHandler';
 import { useToast } from '../../../../contexts/ToastContext';
-import type { SshKey } from '../../api';
+import type { SshKey } from './types';
 import { useEscapeKey } from '../../../../hooks/useEscapeKey';
 import { DEFAULT_FORM_DATA, type SSHKeyFormData, type UsageServer } from './types';
 

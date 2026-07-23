@@ -16,6 +16,23 @@ export interface UsageServer {
 
 export type AuthType = 'key' | 'password';
 
+// 2026-07-23：原来从 '../api' 导入 SshKey；api.ts 已删除，本地定义一次
+export interface SshKey {
+  id: string;
+  name: string;
+  auth_type: AuthType;
+  key_type?: string; // ssh-rsa / ssh-ed25519 / ecdsa-sha2-nistp256 ...
+  username?: string;
+  password?: string;
+  private_key?: string;
+  public_key?: string;
+  fingerprint?: string;
+  description?: string;
+  usage_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface SSHKeyFormData {
   name: string;
   auth_type: AuthType;

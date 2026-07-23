@@ -2,22 +2,24 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { requireRole } from '../../../middleware/auth';
 import * as aiModelService from '../services/models/aiModelService';
+import { logger } from '../../../utils/logger';
 
 const router = Router();
 
 router.get('/', (req: Request, res: Response) => {
   try {
     const { enabled } = req.query;
-    
+
     let models;
     if (enabled === 'true') {
       models = aiModelService.getEnabledModels();
     } else {
       models = aiModelService.getAllModels();
     }
-    
+
     res.json({ success: true, data: models });
-  } catch (_error) {
+  } catch (error: unknown) {
+    logger.error('GET /ai-models failed:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch models' });
   }
 });
@@ -31,7 +33,8 @@ router.get('/default', (req: Request, res: Response) => {
     }
 
     res.json({ success: true, data: defaultModel });
-  } catch (_error) {
+  } catch (error: unknown) {
+    logger.error('GET /ai-models/default failed:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch default model' });
   }
 });
@@ -45,7 +48,8 @@ router.get('/:id', (req: Request, res: Response) => {
     }
 
     res.json({ success: true, data: model });
-  } catch (_error) {
+  } catch (error: unknown) {
+    logger.error('GET /ai-models/:id failed:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch model' });
   }
 });
@@ -53,21 +57,21 @@ router.get('/:id', (req: Request, res: Response) => {
 router.post('/', requireRole('admin'), (req: Request, res: Response) => {
   try {
     const { name, provider_type, model_id, api_key, api_base, tags } = req.body;
-    
+
     if (!name || !provider_type || !model_id) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'name, provider_type, and model_id are required' 
+      return res.status(400).json({
+        success: false,
+        error: 'name, provider_type, and model_id are required'
       });
     }
-    
+
     if (provider_type !== 'local' && !api_key) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'api_key is required for non-local providers' 
+      return res.status(400).json({
+        success: false,
+        error: 'api_key is required for non-local providers'
       });
     }
-    
+
     const model = aiModelService.createModel({
       name,
       provider_type,
@@ -76,9 +80,10 @@ router.post('/', requireRole('admin'), (req: Request, res: Response) => {
       api_base: api_base || undefined,
       tags: tags || []
     });
-    
+
     res.status(201).json({ success: true, data: model });
-  } catch (error) {
+  } catch (error: unknown) {
+    logger.error('POST /ai-models failed:', error);
     const message = error instanceof Error ? error.message : 'Failed to create model';
     res.status(500).json({ success: false, error: message });
   }
@@ -87,18 +92,19 @@ router.post('/', requireRole('admin'), (req: Request, res: Response) => {
 router.put('/reorder', requireRole('admin'), (req: Request, res: Response) => {
   try {
     const { modelIds } = req.body;
-    
+
     if (!Array.isArray(modelIds)) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'modelIds must be an array' 
+      return res.status(400).json({
+        success: false,
+        error: 'modelIds must be an array'
       });
     }
-    
+
     aiModelService.reorderModels(modelIds);
-    
+
     res.json({ success: true, message: 'Models reordered successfully' });
-  } catch (error) {
+  } catch (error: unknown) {
+    logger.error('PUT /ai-models/reorder failed:', error);
     const message = error instanceof Error ? error.message : 'Failed to reorder models';
     res.status(500).json({ success: false, error: message });
   }
@@ -107,7 +113,7 @@ router.put('/reorder', requireRole('admin'), (req: Request, res: Response) => {
 router.put('/:id', requireRole('admin'), (req: Request, res: Response) => {
   try {
     const { name, provider_type, model_id, api_key, api_base, enabled, is_default, tags } = req.body;
-    
+
     const model = aiModelService.updateModel(req.params.id, {
       name,
       provider_type,
@@ -118,9 +124,10 @@ router.put('/:id', requireRole('admin'), (req: Request, res: Response) => {
       is_default: is_default !== undefined ? (is_default ? 1 : 0) : undefined,
       tags
     });
-    
+
     res.json({ success: true, data: model });
-  } catch (error) {
+  } catch (error: unknown) {
+    logger.error('PUT /ai-models/:id failed:', error);
     const message = error instanceof Error ? error.message : 'Failed to update model';
     res.status(500).json({ success: false, error: message });
   }
@@ -129,18 +136,19 @@ router.put('/:id', requireRole('admin'), (req: Request, res: Response) => {
 router.delete('/:id', requireRole('admin'), (req: Request, res: Response) => {
   try {
     aiModelService.deleteModel(req.params.id);
-    
+
     res.json({ success: true, message: 'Model deleted successfully' });
-  } catch (error) {
+  } catch (error: unknown) {
+    logger.error('DELETE /ai-models/:id failed:', error);
     const message = error instanceof Error ? error.message : 'Failed to delete model';
     res.status(500).json({ success: false, error: message });
   }
 });
 
-router.post('/:id/test', async (req: Request, res: Response) => {
+router.post('/:id/test', requireRole('admin', 'operator'), async (req: Request, res: Response) => {
   try {
     const result = await aiModelService.testModelConnectivity(req.params.id);
-    
+
     res.json({
       success: result.success,
       data: {
@@ -149,7 +157,8 @@ router.post('/:id/test', async (req: Request, res: Response) => {
         message: result.message
       }
     });
-  } catch (error) {
+  } catch (error: unknown) {
+    logger.error('POST /ai-models/:id/test failed:', error);
     const message = error instanceof Error ? error.message : 'Failed to test model';
     res.status(500).json({ success: false, error: message });
   }

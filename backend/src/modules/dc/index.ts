@@ -7,4 +7,5 @@
 
 export { default as routes } from './routes';
 // 2026-07-23：暴露 services 给可能的后台 worker / scheduler 调用
-export { dcCrudService, dcSlotService } from './services/dcCrudService';
+export { dcCrudService } from './services/dcCrudService';
+export { dcSlotService } from './services/dcSlotService';

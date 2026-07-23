@@ -10,7 +10,7 @@ import clsx from 'clsx';
 import {
   Eye, EyeOff, Edit, Trash2, Server, Lock, Key, Copy, Fingerprint, X,
 } from 'lucide-react';
-import { SshKey } from '../../api';
+import { SshKey } from './types';
 import { getKeyTypeColor, getKeyTypeText } from './constants';
 import type { UsageServer } from './types';
 

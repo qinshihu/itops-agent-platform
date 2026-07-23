@@ -45,7 +45,7 @@ export const changeManagementApi = {
   async listApprovals(params?: { status?: string }): Promise<ApprovalRequest[]> {
     const query = params?.status && params.status !== 'all' ? `?status=${params.status}` : '';
     const { data } = await api.get(`/approvals${query}`);
-    return data.data;
+    return data;
   },
 
   /** 通过审批 */
