@@ -210,6 +210,7 @@ generate_compose_file() {
 services:
   backend:
     image: ${BACKEND_IMAGE}
+    platform: linux/amd64
     container_name: itops-backend
     restart: unless-stopped
     ports:
@@ -240,6 +241,7 @@ services:
 
   frontend:
     image: ${FRONTEND_IMAGE}
+    platform: linux/amd64
     container_name: itops-frontend
     restart: unless-stopped
     ports:
@@ -288,7 +290,9 @@ retry_pull() {
         retry=$((retry + 1))
 
         # docker pull 在某些错误下也会写 stdout，用 if 捕获退出码
-        if docker pull "$image"; then
+        # 指定 linux/amd64：该镜像仓库未提供 arm64 manifest，
+        # Apple Silicon Mac 需通过 Rosetta/QEMU 模拟运行 amd64 镜像
+        if docker pull --platform linux/amd64 "$image"; then
             return 0
         fi
 
