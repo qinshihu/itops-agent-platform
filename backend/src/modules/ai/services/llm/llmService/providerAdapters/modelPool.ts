@@ -33,17 +33,18 @@ export function buildProviderConfig(model: AIModel): LLMProviderConfig {
   };
 
   const providerName = providerNameMap[model.provider_type] || model.provider_type;
+  const settingPrefix = model.provider_type === 'local' ? 'LOCAL_AI' : providerName.toUpperCase();
   const defaultApiBase = defaultApiBaseMap[model.provider_type] || '';
 
   return {
     providerName,
-    apiKeySetting: `${providerName.toUpperCase()}_API_KEY`,
-    apiKeyEnv: `${providerName.toUpperCase()}_API_KEY`,
-    apiBaseSetting: `${providerName.toUpperCase()}_API_BASE`,
-    apiBaseEnv: `${providerName.toUpperCase()}_API_BASE`,
+    apiKeySetting: `${settingPrefix}_API_KEY`,
+    apiKeyEnv: `${settingPrefix}_API_KEY`,
+    apiBaseSetting: `${settingPrefix}_API_BASE`,
+    apiBaseEnv: `${settingPrefix}_API_BASE`,
     defaultApiBase: defaultApiBase,
-    modelSetting: `${providerName.toUpperCase()}_MODEL`,
-    modelEnv: `${providerName.toUpperCase()}_MODEL`,
+    modelSetting: `${settingPrefix}_MODEL`,
+    modelEnv: `${settingPrefix}_MODEL`,
     defaultModel: model.model_id,
     placeholderKey: model.provider_type === 'local' ? '' : `your-${model.provider_type}-api-key-here`,
     // 把 AIModel 自带的配置塞进 override 字段，确保与 testModelConnectivity 行为一致
