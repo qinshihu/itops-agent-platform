@@ -16,7 +16,12 @@ import { logger } from '../../../../../utils/logger';
 import { getApiKey, getModelId, getApiBase, buildApiEndpoint } from '../../../../../utils/apiConfig';
 import * as aiModelService from '../../models/aiModelService';
 import type { AIModel } from '../../models/aiModelService';
-import { getCircuitBreaker, callWithRetry, circuitBreakers } from './circuitBreaker';
+import {
+  getCircuitBreaker,
+  callWithRetry,
+  circuitBreakers,
+  RequestCancelledError,
+} from './circuitBreaker';
 import {
   type ChatMessage,
   type LLMTool,
@@ -171,7 +176,9 @@ export async function callLLMAPIWithTools(
       throw new Error('API returned empty choices');
     }
   } catch (error: unknown) {
-    circuitBreakers.get(config.providerName)?.recordFailure();
+    if (!(error instanceof RequestCancelledError)) {
+      circuitBreakers.get(config.providerName)?.recordFailure();
+    }
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error(`❌ [${agentName}] API with tools failed:`, errorMessage);
     throw error;
