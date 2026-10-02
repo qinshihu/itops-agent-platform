@@ -267,13 +267,6 @@ export async function testModelConnectivity(modelId: string): Promise<{
       message: 'API Key 未配置，请在模型配置或全局设置中配置'
     };
   }
-  // 防止 TS strict null 检查报错
-  if (!apiKey) {
-    return {
-      success: false,
-      message: 'API Key 未配置'
-    };
-  }
   
   const startTime = Date.now();
   
@@ -295,7 +288,7 @@ export async function testModelConnectivity(modelId: string): Promise<{
       {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {}),
         },
         timeout: 30000
       }
