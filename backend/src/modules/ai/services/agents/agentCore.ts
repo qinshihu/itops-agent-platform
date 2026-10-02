@@ -36,7 +36,7 @@ export function extractToolCallFromResponse(response: string): {
   toolId?: string;
   args?: Record<string, any>;
 } {
-  const toolCallRegex = /\[TOOL_CALL\]\s*(\w+)\s*:\s*(\{[\s\S]*\})/;
+  const toolCallRegex = /\[TOOL_CALL\]\s*([\w.-]+)\s*:\s*(\{[\s\S]*\})/;
   const match = response.match(toolCallRegex);
 
   if (match) {
