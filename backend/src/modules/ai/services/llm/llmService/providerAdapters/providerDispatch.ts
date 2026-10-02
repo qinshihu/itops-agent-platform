@@ -10,7 +10,12 @@
 import axios from 'axios';
 import { logger } from '../../../../../../utils/logger';
 import { getApiKey, getModelId, getApiBase, buildApiEndpoint } from '../../../../../../utils/apiConfig';
-import { getCircuitBreaker, callWithRetry, circuitBreakers } from '../circuitBreaker';
+import {
+  getCircuitBreaker,
+  callWithRetry,
+  circuitBreakers,
+  RequestCancelledError,
+} from '../circuitBreaker';
 import { recordAgentExecution } from './executionStats';
 import type { ChatMessage, LLMProviderConfig } from './types';
 
@@ -112,7 +117,9 @@ export async function callLLMAPI(
       throw new Error('API returned empty choices');
     }
   } catch (error: unknown) {
-    circuitBreakers.get(config.providerName)?.recordFailure();
+    if (!(error instanceof RequestCancelledError)) {
+      circuitBreakers.get(config.providerName)?.recordFailure();
+    }
 
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error(`❌ [${agentName}] ${config.providerName} API call failed:`, errorMessage);

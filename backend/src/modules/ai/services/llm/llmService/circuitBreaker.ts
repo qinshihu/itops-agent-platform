@@ -168,6 +168,14 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/** Keep caller cancellation distinguishable from provider failures. */
+export class RequestCancelledError extends Error {
+  constructor() {
+    super('Request cancelled by deadline signal');
+    this.name = 'RequestCancelledError';
+  }
+}
+
 /** 带重试 + 熔断的 API 调用包装 */
 export async function callWithRetry<T>(
   fn: (signal?: AbortSignal) => Promise<T>,
@@ -181,7 +189,7 @@ export async function callWithRetry<T>(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     if (signal?.aborted) {
-      throw new Error('Request cancelled by deadline signal');
+      throw new RequestCancelledError();
     }
     if (breaker && !breaker.canCall()) {
       logger.error('🔌 Circuit breaker is OPEN, aborting retries');
@@ -196,7 +204,7 @@ export async function callWithRetry<T>(
       return result;
     } catch (error: unknown) {
       if ((error instanceof Error && error.name === 'CanceledError') || signal?.aborted) {
-        throw new Error('Request cancelled by deadline signal');
+        throw new RequestCancelledError();
       }
       lastError = error as Error;
       logger.warn(`⚠️ Request attempt ${attempt} failed: ${lastError.message}`);
