@@ -38,9 +38,9 @@ export async function callLLMAPI(
     throw new Error(errorMsg);
   }
 
-  // 检查熔断器
+  // callWithRetry checks admission once per HTTP attempt, including half-open probes.
   const breaker = getCircuitBreaker(config.providerName);
-  if (!breaker.canCall()) {
+  if (!breaker.canCall(false)) {
     const errorMsg = 'Circuit breaker is OPEN, rejecting request - service temporarily unavailable';
     logger.error(`🔌 [${agentName}] ${errorMsg}`);
     throw new Error(errorMsg);

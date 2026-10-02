@@ -72,8 +72,9 @@ export async function callLLMAPIWithTools(
     throw new Error(errorMsg);
   }
 
+  // callWithRetry checks admission once per HTTP attempt, including half-open probes.
   const breaker = getCircuitBreaker(config.providerName);
-  if (!breaker.canCall()) {
+  if (!breaker.canCall(false)) {
     throw new Error('Circuit breaker is OPEN');
   }
 

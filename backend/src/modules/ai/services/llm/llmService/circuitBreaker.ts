@@ -37,7 +37,7 @@ class CircuitBreaker {
     private readonly resetTimeout = 60000
   ) {}
 
-  canCall(): boolean {
+  canCall(consumeHalfOpenAttempt = true): boolean {
     this.state.lastUsedTime = Date.now();
 
     if (this.state.isOpen) {
@@ -48,7 +48,9 @@ class CircuitBreaker {
           return false;
         }
         logger.info('🔄 Circuit breaker half-open, allowing test request');
-        this.state.halfOpenAttempts++;
+        if (consumeHalfOpenAttempt) {
+          this.state.halfOpenAttempts++;
+        }
         return true;
       }
       return false;
