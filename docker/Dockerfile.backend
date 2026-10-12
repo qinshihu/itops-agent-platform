@@ -18,7 +18,7 @@ ARG NO_PROXY=localhost,127.0.0.1
 # ============================================================
 # Stage 1: Builder
 # ============================================================
-FROM node:20.19.5-slim AS builder
+FROM node:26.11.1-slim AS builder
 
 ARG APT_MIRROR
 ARG HTTP_PROXY
@@ -60,7 +60,7 @@ COPY backend/ ./
 # ============================================================
 # Stage 2: Production
 # ============================================================
-FROM node:20.19.5-slim
+FROM node:26.11.1-slim
 
 ARG APT_MIRROR
 ARG HTTP_PROXY
